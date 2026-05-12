@@ -1,0 +1,29 @@
+{
+  "name": "cn-academic-ppt-marketplace",
+  "version": "1.0.0",
+  "description": "Claude plugin metadata for Chinese academic PPT generation and editable academic diagram workflows.",
+  "owner": {
+    "name": "Yuecheng Wang"
+  },
+  "plugins": [
+    {
+      "name": "cn-academic-ppt-skills",
+      "version": "1.0.0",
+      "source": "./",
+      "description": "A reusable Claude-oriented academic skill bundle covering paper-to-PPT generation and academic workflow / conceptual framework diagram authoring.",
+      "author": {
+        "name": "Yuecheng Wang"
+      },
+      "keywords": [
+        "academic",
+        "ppt",
+        "paper2ppt",
+        "workflow",
+        "diagram",
+        "chinese",
+        "research"
+      ],
+      "category": "academic"
+    }
+  ]
+}

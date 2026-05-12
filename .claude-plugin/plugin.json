@@ -1,0 +1,21 @@
+{
+  "name": "cn-academic-ppt-skills",
+  "description": "A Claude-friendly skill collection for Chinese academic PPT production, including full paper-to-PPT generation and editable academic workflow / conceptual diagram generation.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Yuecheng Wang",
+    "email": "wyc_mochi@tongji.edu.cn"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/wycmochi/CN-Academic-PPT-Skills",
+  "repository": "https://github.com/wycmochi/CN-Academic-PPT-Skills",
+  "keywords": [
+    "academic",
+    "ppt",
+    "paper2ppt",
+    "workflow",
+    "diagram",
+    "chinese",
+    "claude"
+  ]
+}

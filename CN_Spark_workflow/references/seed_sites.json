@@ -1,0 +1,18 @@
+[{
+  "comment": "此处为学术文献搜索网站列表（可自定义）；编辑 'sites' 数组以添加/移除站点",
+  "sites": [
+    {
+      "name": "ScienceDirect",
+      "search_template": "https://www.sciencedirect.com/search?qs={q}"
+    },
+    {
+      "name": "GoogleScholar",
+      "search_template": "https://scholar.google.com/scholar?q={q}"
+    },
+    {
+      "name": "CNKI",
+      "search_template": "https://search.cnki.net/search.aspx?q={q}"
+    }
+  ]
+}]
+
