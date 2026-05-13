@@ -1,240 +1,158 @@
 # CN-Academic-PPT-Skills
 
-面向中文学术汇报场景的可复用 skill 集合，核心目标是提升**学术内容的理解、组织与表达**，而不只是机械生成幻灯片。
+面向中文学术汇报场景的可复用 Claude / Codex skill 集合。核心目标是让模型**真正理解学术内容并把它讲清楚**，而不只是机械生成幻灯片。
 
-当前仓库包含两个子 skill：
-- `CN_Spark_paper2ppt`：把论文、开题、课程报告、文献综述等材料生成成一整套中文学术 `.pptx`
-- `CN_Spark_workflow`：生成可编辑的技术路线图、研究框架图、概念框架图、思维导图、网络图、时间演化图等
+仓库由两个子 skill 组成：
 
-本仓库适合：
+| 子 skill | 角色 | 流水线 |
+|---|---|---|
+| `CN_Spark_paper2ppt` | 把整篇论文 / 报告 / 综述 → 一整套中文学术 `.pptx` | `Source → Outline → SVG → DrawingML` |
+| `CN_Spark_technicalroute` | 把研究思路 → 一张高质量学术示意图（技术路线 / 研究框架 / 思考脉络） | `判类 → 文献样式检索 → Prompt → AI 生图 → 嵌入` |
+
+适合：
 - 论文答辩 / journal club / 组会汇报
 - 开题报告 / 课程报告 / 文献综述讲解
-- 需要把“学术内容”转化为“结构化、可讲清楚的 PPT 与图示”的场景
+- 把学术内容转化为**结构化、可讲清楚、可矢量编辑**的 PPT 与图示
 
 ---
 
-## Download
+## Install
 
-`CN-Academic-PPT-Skills` 本质上是一个由多个 `SKILL.md`、参考文档和脚本组成的可复用 skill 仓库。每一个二级文件夹CN_Spark_* 目录都构成一个可安装的单元。具体的安装方法取决于您使用的编程环境。
-
-
-### 1. Clone
-
-在终端使用git命令克隆仓库。
+仓库根目录（`CN-Academic-PPT-Skills/`）已经包含 Claude marketplace 与 Codex 可识别的目录结构。下面按 IDE 分别给最短安装命令。请把 `<repo>` 替换成你 `git clone` 后的本地路径。
 
 ```bash
 git clone https://github.com/wycmochi/CN-Academic-PPT-Skills.git
 cd CN-Academic-PPT-Skills
 ```
 
-### 2. Install for Codex
+### Claude Code（推荐）
 
-如果你希望把整个仓库作为本地 skill 使用，可以直接复制到 Codex skill 目录：
+把整个仓库放到 `~/.claude/skills/` 即可被 Claude Code 扫描到。**目录名必须是 `CN-Academic-PPT-Skills`**，路由 `SKILL.md` 在根目录。
+
+```bash
+# macOS / Linux
+mkdir -p ~/.claude/skills
+cp -R . ~/.claude/skills/CN-Academic-PPT-Skills
+
+# Windows (PowerShell)
+mkdir -Force $HOME\.claude\skills
+Copy-Item -Recurse . $HOME\.claude\skills\CN-Academic-PPT-Skills
+```
+
+如果你只要其中一个子 skill，也可以单独安装：
+
+```bash
+cp -R CN_Spark_paper2ppt        ~/.claude/skills/
+cp -R CN_Spark_technicalroute   ~/.claude/skills/
+```
+
+之后重启 Claude Code 会话即可。触发方式：
+
+```text
+帮我把这篇论文做成中文答辩 PPT，里面要含一张全文研究思路的技术路线图。
+请根据这段研究设计画一个思考路线类的研究框架图。
+```
+
+### Claude marketplace（可选）
+
+仓库根有 `.claude-plugin/plugin.json` 和 `marketplace.json`，可直接以仓库 URL 作为 plugin source：
+
+1. Claude → Customize → Connectors → GitHub Integration，把本仓库授权连上；
+2. Skills / Plugins 市场搜 `cn-academic-ppt-skills`；
+3. 安装即可。
+
+> 搜不到时，关键词也可以是 `paper2ppt` / `chinese academic` / `technicalroute`。
+
+### Codex
 
 ```bash
 mkdir -p ~/.codex/skills
-cp -R CN-Academic-PPT-Skills ~/.codex/skills/
+cp -R . ~/.codex/skills/CN-Academic-PPT-Skills
 ```
 
-如果你只想单独安装两个子 skill，也可以分别复制：
+Codex 默认会扫描 `~/.codex/skills/<name>/SKILL.md`。和 Claude Code 一样，你也可以只放子 skill：
 
 ```bash
-mkdir -p ~/.codex/skills
-cp -R CN_Spark_paper2ppt ~/.codex/skills/
-cp -R CN_Spark_workflow ~/.codex/skills/
+cp -R CN_Spark_paper2ppt        ~/.codex/skills/
+cp -R CN_Spark_technicalroute   ~/.codex/skills/
 ```
 
-完成后建议重启或重新打开 Codex 会话，让新 skill 被重新扫描。  
-之后你就可以自然地提出请求，例如：
+### 其他 agent / IDE
 
-```text
-帮我把这篇论文做成中文答辩 PPT。
-请根据这段研究设计画一个技术路线图。
-```
-
-### 3. Install for Claude
-
-这里给用户两种方式，二选一即可。
-
-#### 方式 A：在 Claude 的 Customize 里导入这个仓库
-
-这个仓库根目录已经包含 Claude 识别所需的元数据：
-- `.claude-plugin/plugin.json`
-- `.claude-plugin/marketplace.json`
-
-具体操作步骤：
-
-1. 在Customize-Connectors-GitHub Integration授权连接
-2. 打开 Claude 的 skill 市场 / 插件市场
-3. 搜索：
-
-```text
-cn-academic-ppt-skills
-```
-
-如果没搜到，再搜索这些关键词：
-
-```text
-paper2ppt
-academic ppt
-workflow diagram
-chinese academic
-```
-
-4. 安装或启用后，就可以在 Claude 里直接把它当成学术 PPT / 学术图示 skill 使用
-
-
-#### 方式 B：直接在 Claude 里作为本地 command 使用
-
-Claude Code 目前无法将 Codex 风格的 SKILL.md 文件夹加载为原生技能。其最接近的可复用基础组件包括：
-
-- 子代理：~/.claude/agents/ 或 .claude/agents/
-- 自定义命令：~/.claude/commands/ 或 .claude/commands/
-
-推荐子代理模式使用。
-
-**做法 1：作为本地 agent 使用**
-
-```bash
-mkdir -p ~/.claude/agents
-cp CN_Spark_paper2ppt/SKILL.md ~/.claude/agents/cn-spark-paper2ppt.md
-cp CN_Spark_workflow/SKILL.md ~/.claude/agents/cn-spark-workflow.md
-```
-
-然后在 Claude 里可以直接说：
-
-```text
-Use cn-spark-paper2ppt to turn this paper into a Chinese academic presentation.
-```
-
-或者：
-
-```text
-Use cn-spark-workflow to create a conceptual framework diagram for this literature review.
-```
-
-**做法 2：作为本地 command / prompt 使用**
-
-如果你更喜欢命令式触发，也可以把对应 `SKILL.md` 内容整理进 Claude 的 command 目录或项目级 prompt 目录。
-
-#### 用最通俗的话告诉用户
-
-如果用户问“我怎么在 Claude 里找到这个 skill”，你可以直接回答：
-
-**选法 1：市场里找**
-- 先把这个仓库接入 Claude 的 skill/plugin 来源
-- 在市场里搜 `cn-academic-ppt-skills`
-- 或搜 `paper2ppt`、`academic ppt`
-- 看到描述里写“Chinese academic PPT”或“workflow / diagram generation”的就是它
-
-**选法 2：本地直接用**
-- 不走市场也可以
-- 把 `CN_Spark_paper2ppt/SKILL.md` 和 `CN_Spark_workflow/SKILL.md` 放进 Claude 可读的本地 agents / commands 目录
-- 然后在 Claude 里直接点名调用
-
-#### 给普通用户的一句解释
-
-这个仓库不是“装完就只会生成一页图”的工具，而是一个面向中文学术汇报的 skill 包：
-- 一个负责整套 PPT
-- 一个负责技术路线图、研究框架图、综述概念图
-
-所以无论是在 Claude 市场里装，还是在本地 agent 里用，最终用户都应该把它理解成：
-
-```text
-一个专门帮我做中文学术 PPT 和学术图示的 Claude skill 包
-```
-
-### 4. Other agents or manual use
-
-如果你使用的不是 Codex 或 Claude，而是其他支持 reusable prompts、agent profiles、prompt library、project instructions 的工具，这个仓库通常也可以直接复用。
-
-最小可迁移单元是整个 skill 目录本身。只要你的工具支持“读取一份主提示词 + 若干参考文档 + 若干脚本说明”，这个仓库就能直接迁移过去。
-
-推荐保留的最小结构是：
-
-```text
-CN_Spark_paper2ppt/
-├── SKILL.md
-├── references/
-└── scripts/
-
-CN_Spark_workflow/
-├── SKILL.md
-├── references/
-└── scripts/
-```
-
-如果你的 agent 支持自定义 prompt / profile，可以按下面思路接入：
-
-1. 把整个子 skill 目录复制到你的 agent 项目或提示词库中；
-2. 保留 `SKILL.md` 与 `references/` 的相对结构，不要只拷贝一份主文件；
-3. 如果目标 agent 需要自己的 frontmatter、JSON manifest 或 YAML agent 定义，再在外层包一层适配文件即可；
-4. 只有在真正需要脚本执行时，再把 `scripts/` 一并挂载给对应运行环境。
-
-如果你只是想手工参考，也完全可以把它当成一份“中文学术 PPT 设计规范 + 学术图示规范”来使用：
-- 读 `CN_Spark_paper2ppt/SKILL.md` 和 `references/`，按 route 组织你的汇报；
-- 读 `CN_Spark_workflow/SKILL.md` 和 `references/diagram-templates.md`，按图示拓扑整理技术路线与综述框架。
+最小可迁移单元 = **一个子 skill 目录**（含 `SKILL.md` + `references/` + `scripts/` + 必要时 `templates/` / `workflows/`）。把它整体复制到目标工具的 prompt 库 / agent 配置目录即可。`scripts/*.py` 仅在工具确实会执行 shell 命令时才需要挂载。
 
 ---
 
-## Skill Index
+## 依赖与运行环境
 
-| Skill | Status | Purpose | Typical triggers |
-|---|---|---|---|
-| `CN_Spark_paper2ppt` | Active | 生成完整中文学术 PPTX，包括路线分流、版式、引文页脚、演讲词与公式页组织 | `论文PPT` `答辩PPT` `开题PPT` `课程汇报` `文献综述PPT` |
-| `CN_Spark_workflow` | Active | 生成可编辑学术图示，包括技术路线、研究框架、概念框架、思维导图、网络图、时间轴 | `技术路线图` `研究框架图` `概念图` `思维导图` `综述框架图` |
+`CN_Spark_paper2ppt` 复用了 ppt-master 的脚本栈，需要 Python ≥ 3.10 与若干第三方库（python-pptx / lxml / Pillow / PyMuPDF 等）：
+
+```bash
+cd CN_Spark_paper2ppt
+pip install -r requirements.txt
+cp .env.example .env   # 然后填 GEMINI_API_KEY / OPENAI_API_KEY 等
+```
+
+`CN_Spark_technicalroute` 默认调用 `CN_Spark_paper2ppt/scripts/image_gen.py`（多后端生图），默认 backend = **Gemini 3 Pro Image（nano banana pro）**。`.env` 中至少配 `IMAGE_BACKEND=gemini` 与 `GEMINI_API_KEY=...`。备选后端：Qwen Image 2.0 Pro、OpenAI gpt-image-2、Volcengine Seedream，全部通过环境变量切换。
 
 ---
 
 ## Skill Overview
 
-## `CN_Spark_paper2ppt`
+### `CN_Spark_paper2ppt`
 
-这个 skill 面向“完整汇报”的生成。
+面向"完整汇报"。
 
-它处理的不是单张图，而是一整套中文学术 `.pptx`。核心特性包括：
-- 支持学术论文、课程报告、开题报告、文献综述四条 route
-- 强调“论证主轴优先”，不是照搬原文目录
-- 生成可编辑的 PPT 结构，而不是只输出 markdown 提纲
-- 支持页脚 GB/T 7714 引文
-- 支持 speaker notes
-- 支持公式页的结构化表达
+- 输入：论文 PDF / DOCX、报告、读书笔记、综述提纲、`input/source.md`、对话粘贴文本、用户 `.pptx` 模板等任意一种或组合。
+- 流程（7 步，详见 [CN_Spark_paper2ppt/SKILL.md](CN_Spark_paper2ppt/SKILL.md)）：
+  1. 源材料 → Markdown（PyMuPDF / pandoc / docx）
+  2. 项目初始化（`project_manager.py init`）
+  3. 模板选择（学院风默认 `academic_defense`）
+  4. Strategist 八项确认 + 路线分流（Route A/B/C/D）+ 大纲 → `design_spec.md` / `spec_lock.md`
+  5. 图片获取（用户 / AI / web 三路）
+  6. Executor 逐页生成 SVG（用 `executor-academic.md`），每页含底部横幅 + 引文页脚 + 演讲词
+  7. 后处理 `finalize_svg.py` → 导出 `svg_to_pptx.py` 得原生 DrawingML `.pptx`
+- 学术硬约束（强制满足）：
+  - GB/T 7714 引文页脚 + 中英文混合字体 tspan
+  - 备注区演讲词（每页 100–180 字）
+  - 底部横幅一句话主旨
+  - 论证主轴优先于章节顺序
+  - 不编造未在材料中出现的数据 / 文献
 
-公式页规则已经内置为：
-- 默认优先“模块化步骤公式页”
-- 需要大量流程说明时再切换为“标题分段公式页”
+### `CN_Spark_technicalroute`
 
-适合：
-- journal club
-- 学位答辩
-- 组会汇报
-- 开题答辩
-- 文献综述讲解
+面向"单张学术示意图"。
 
-## `CN_Spark_workflow`
+- 三类拓扑（详见 [CN_Spark_technicalroute/SKILL.md](CN_Spark_technicalroute/SKILL.md)）：
+  - **思考路线类** — 研究背景 / 问题 / 理论 / 意义；4 panel + 红色横幅承载核心问题
+  - **技术方法类** — 单模型的核心思想 + Step + 公式 + 假设；左中右横向 + 底部 3 假设卡
+  - **全文思路类** — 数据 → 预处理 → 提取 → 方法的横向 ML pipeline + 多层圆柱体 + SHAP
+- 流程（6 步）：
+  1. 类别判定 + 内容要点收集（`content.yaml`）
+  2. **从公开学术文献中检索 ≥ 5 张同主题技术路线 / 框架图**（`seed_sites.json` 驱动，IDE 用 `WebSearch` + `WebFetch`；无网络时降级为用户上传 ≥ 3 张参考图）
+  3. 风格特征抽取（panel 数 / 配色 / 图标密度 / 流向）→ `style_profile.md`
+  4. Prompt 合成（英文骨架 + 中文 content 块 + negative）→ `prompt.md`
+  5. 调 `image_gen.py`（默认 Gemini 3 Pro Image，参考图作为风格 anchor）
+  6. 验收 → 可选嵌入 paper2ppt 某一页 SVG
+- 输出：`.png` 主图 + `_prompt.txt` 复现记录 + `style_refs/manifest.json` 文献元信息。
 
-这个 skill 面向“单页学术图示”的生成。
+---
 
-它负责把研究流程、框架关系和综述结构转成可编辑图形，而不是截图式位图。当前支持：
-- `pipeline`
-- `matrix_framework`
-- `mind_map`
-- `network`
-- `timeline`
+## 联合调用
 
-典型用途：
-- 技术路线页
-- 研究框架页
-- 文献综述概念框架页
-- 主题争议关系图
-- 方法演化时间轴
+最常见的场景：一份论文 → 整套中文学术 PPT，其中第 6 页是"全文研究思路"图。
 
-仓库中已经补齐了这些函数的可直接调用入口，包括：
-- `make_mind_map_slide`
-- `make_network_slide`
-- `make_timeline_slide`
-- `make_conceptual_framework_slide`
-- `add_citation_footer`
+```text
+帮我把这篇 PDF 做成 15 分钟的答辩 PPT，第 6 页要一张全文思路类的技术路线图。
+```
+
+执行顺序：
+
+1. `CN_Spark_paper2ppt` 解析 PDF → 出大纲 → Strategist 八项确认 → 在 `design_spec.md §IX` 中把 P6 标记为"技术路线，需要调 technicalroute"；
+2. 进入 P6 时 `CN_Spark_paper2ppt` 把内容要点（archetype + 节点 + 主题色）传给 `CN_Spark_technicalroute`；
+3. `CN_Spark_technicalroute` 走"文献检索 → prompt 合成 → image_gen.py" 得 PNG；
+4. 回到 `CN_Spark_paper2ppt` 用 `<image>` 标签把 PNG 嵌入 `svg_output/06_research_workflow.svg`；
+5. 后续 SVG → svg_to_pptx → 最终 `.pptx`。
 
 ---
 
@@ -242,41 +160,59 @@ CN_Spark_workflow/
 
 ```text
 CN-Academic-PPT-Skills/
-├── SKILL.md
+├── SKILL.md                      ← 路由
 ├── README.md
-├── GIT_UPLOAD_WORKFLOW.md
+├── LICENSE
 ├── .claude-plugin/
 │   ├── plugin.json
 │   └── marketplace.json
-├── CN_Spark_paper2ppt/
+├── CN_Spark_paper2ppt/           ← 完整 PPT 生成
 │   ├── SKILL.md
+│   ├── templates/                ← layouts / charts / icons（继承 ppt-master）
+│   ├── scripts/                  ← svg_to_pptx / finalize_svg / image_gen / ...
+│   ├── workflows/                ← topic-research / create-template / verify-charts / ...
 │   ├── references/
-│   └── scripts/
-└── CN_Spark_workflow/
+│   │   ├── *.md                  ← 通用 strategist / executor / image / animation 等
+│   │   └── academic/             ← ⭐ 中文学术专属
+│   ├── requirements.txt
+│   └── .env.example
+└── CN_Spark_technicalroute/      ← 单图 AI 生图
     ├── SKILL.md
     ├── references/
+    │   ├── archetype-thinking.md
+    │   ├── archetype-method.md
+    │   ├── archetype-workflow.md
+    │   ├── image-prompt-templates.md
+    │   ├── seed_sites.json
+    │   └── seed_urls.md
     └── scripts/
+        ├── literature_search.py
+        └── generate_route_image.py
 ```
 
 ---
 
 ## Notes
 
-- 本仓库强调“学术表达质量”，不是只追求自动化生成。
-- 公式、图示、框架、引文、speaker notes 都围绕“让学术内容更容易被理解和讲述”来设计。
-- 字体、主题色、版心等默认样式保留在脚本中作为 default，可根据用户需求替换。
+- 本仓库强调**学术表达质量**，不是只追求自动化生成。
+- 公式、图示、框架、引文、speaker notes 都围绕"让学术内容更容易被理解和讲述"来设计。
+- 字体、主题色、版心等默认样式可在 `CN_Spark_paper2ppt/templates/layouts/<chosen>/design_spec.md` 中改。
+- 想新增一份"实验室专属模板"，参见 [CN_Spark_paper2ppt/workflows/create-template.md](CN_Spark_paper2ppt/workflows/create-template.md)。
 
 ---
 
 ## Acknowledgement
 
-感谢 **Yuan1z0825** 开源的 `nature-skills` 项目。
+本仓库站在两位前辈的肩膀上：
 
-本仓库在设计时参考了 `nature-skills` 中 `paper2ppt` 相关部分的思路，并在此基础上结合中文学术汇报场景，进行了进一步的：
-- 路由细化
-- 学术图示补充
-- 公式页结构化表达补充
-- 引文页脚与概念框架接口补充
-- 中文答辩 / 课程汇报 / 开题 / 综述等场景化强化
+- **[Yuan1z0825](https://github.com/Yuan1z0825) · `nature-skills`** — 提供了"论文→PPT"分流与 GB/T 7714 引文等中文学术细节的最初灵感。
+- **`ppt-master` 项目作者** — 提供了"Source → Outline → SVG → DrawingML"的整套工程化流水线（templates / scripts / strategist / executor / svg_to_pptx）。`CN_Spark_paper2ppt` 的 `templates/` `scripts/` `workflows/` 与通用 `references/*.md` 主要参考并复用自该项目，并按中文学术场景叠加了 `references/academic/` 学术执行器与四路线版式。
 
-站在巨人的肩膀上，目标不是简单复制，而是在原有启发上，继续把中文学术 PPT 的理解、组织和表达做得更细、更稳、更可复用。
+在这两份工作之上，本仓库进一步做了：
+
+- **中文学术执行器**（[`executor-academic.md`](CN_Spark_paper2ppt/references/academic/executor-academic.md)）—— 底部横幅 / 引文页脚 / 模块化公式页 / 矩阵证据表的 SVG 写法。
+- **四路线版式分流** —— Route A 学术论文 / Route B 课程报告 / Route C 开题 / Route D 综述。
+- **技术路线 AI 生图链路** —— `CN_Spark_technicalroute` 区别于 ppt-master 的核心亮点：先从公开文献检索同主题 ≥ 5 张技术路线图作风格 anchor，再用 Gemini 3 Pro Image / Qwen Image 2.0 注入内容生成结构化学术 infographic。
+- **GB/T 7714 引文 + 混合字体 SVG `<tspan>` 写法** —— 中文走微软雅黑、数字 / 拉丁字符走 Times New Roman 的硬约束在 SVG 层面落地。
+
+目标不是简单复制，而是在原有启发上把中文学术 PPT 的理解、组织和表达做得更细、更稳、更可复用。

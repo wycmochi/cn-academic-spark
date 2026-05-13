@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <title>method / formula-grid</title>
+  <desc>
+    Layout: 2x2 grid of R5 formula_boxes (or 1xN row when ≤4).
+    Each box has verbatim formula_latex + R2 tag_pill in top-left containing label ("(1)" / "(a)" / ...).
+    Below each box: 14px muted note line.
+    NO arrows, NO banner. Pure grid.
+    Recipes used: R1, R2 (tag_pill), R5.
+    Slots: {{title}}, {{formulas[i].label}}, {{formulas[i].formula_latex}}, {{formulas[i].note}}.
+  </desc>
+  <style>
+    .cell { fill: #FFFFFF; stroke: var(--muted, #C7CED6); stroke-width: 1; }
+    .formula-box { fill: #F5F8FB; }
+    .formula-text { fill: #1A1A1A; font-family: "Times New Roman", serif; font-style: italic; }
+    .tag-pill { fill: var(--primary, #1F4E79); }
+    .tag-text { fill: #FFF; font-weight: bold; font-family: "Times New Roman", serif; }
+    .caption { fill: #555; font-family: "Microsoft YaHei", sans-serif; }
+    .title { fill: #1A1A1A; font-weight: bold; font-family: "Microsoft YaHei", sans-serif; }
+  </style>
+  <text x="640" y="40" text-anchor="middle" font-size="22" class="title">{{title}}</text>
+  <!-- (1) -->
+  <rect x="80"  y="100" width="540" height="240" rx="12" class="cell"/>
+  <rect x="100" y="118" width="60"  height="30"  rx="15" class="tag-pill"/>
+  <text x="130" y="139" text-anchor="middle" font-size="15" class="tag-text">{{formulas[0].label}}</text>
+  <rect x="120" y="170" width="480" height="100" class="formula-box"/>
+  <text x="360" y="232" text-anchor="middle" font-size="26" class="formula-text">{{formulas[0].formula_latex}}</text>
+  <text x="120" y="306" font-size="14" class="caption">{{formulas[0].note}}</text>
+  <!-- (2) -->
+  <rect x="660" y="100" width="540" height="240" rx="12" class="cell"/>
+  <rect x="680" y="118" width="60"  height="30"  rx="15" class="tag-pill"/>
+  <text x="710" y="139" text-anchor="middle" font-size="15" class="tag-text">{{formulas[1].label}}</text>
+  <rect x="700" y="170" width="480" height="100" class="formula-box"/>
+  <text x="940" y="232" text-anchor="middle" font-size="26" class="formula-text">{{formulas[1].formula_latex}}</text>
+  <text x="700" y="306" font-size="14" class="caption">{{formulas[1].note}}</text>
+  <!-- (3) -->
+  <rect x="80"  y="370" width="540" height="240" rx="12" class="cell"/>
+  <rect x="100" y="388" width="60"  height="30"  rx="15" class="tag-pill"/>
+  <text x="130" y="409" text-anchor="middle" font-size="15" class="tag-text">{{formulas[2].label}}</text>
+  <rect x="120" y="440" width="480" height="100" class="formula-box"/>
+  <text x="360" y="502" text-anchor="middle" font-size="26" class="formula-text">{{formulas[2].formula_latex}}</text>
+  <text x="120" y="576" font-size="14" class="caption">{{formulas[2].note}}</text>
+  <!-- (4) -->
+  <rect x="660" y="370" width="540" height="240" rx="12" class="cell"/>
+  <rect x="680" y="388" width="60"  height="30"  rx="15" class="tag-pill"/>
+  <text x="710" y="409" text-anchor="middle" font-size="15" class="tag-text">{{formulas[3].label}}</text>
+  <rect x="700" y="440" width="480" height="100" class="formula-box"/>
+  <text x="940" y="502" text-anchor="middle" font-size="26" class="formula-text">{{formulas[3].formula_latex}}</text>
+  <text x="700" y="576" font-size="14" class="caption">{{formulas[3].note}}</text>
+</svg>

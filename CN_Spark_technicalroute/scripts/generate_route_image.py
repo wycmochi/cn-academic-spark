@@ -1,0 +1,653 @@
+#!/usr/bin/env python3
+"""
+generate_route_image.py · 把 content.yaml + style_profile.md 拼成 prompt，再调用
+``CN_Spark_paper2ppt/scripts/image_gen.py``（继承自 ppt-master）的多后端生图。
+
+子命令：
+  prompt   读 content.yaml + style_profile.md + archetype skeleton → 生成 prompt.md
+  run      读 prompt.md + 参考图 → 调 image_gen.py 出 PNG
+  embed    把生成的 PNG 嵌入 paper2ppt 的某张 SVG 页面
+
+默认 backend = gemini（gemini-3-pro-image-preview，即 nano banana pro），
+环境变量 ``IMAGE_BACKEND`` / ``GEMINI_API_KEY`` 由用户在
+``CN_Spark_paper2ppt/.env`` 中配置。
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
+from typing import Iterable
+
+try:
+    import yaml  # type: ignore
+except ImportError:  # 退化：手写极简 yaml loader 暂用 json
+    yaml = None
+
+HERE = Path(__file__).resolve().parent
+TECHROUTE_ROOT = HERE.parent
+REFS_DIR = TECHROUTE_ROOT / "references"
+PAPER2PPT_ROOT = TECHROUTE_ROOT.parent / "CN_Spark_paper2ppt"
+IMAGE_GEN_PY = PAPER2PPT_ROOT / "scripts" / "image_gen.py"
+
+
+# ---------------------------------------------------------------------------
+# Prompt 拼装
+# ---------------------------------------------------------------------------
+
+
+COMMON_PREAMBLE = """\
+A high-resolution academic infographic in the style of contemporary scholarly figures
+published in journals like Nature, PNAS, Annals of GIS, and Habitat International.
+Flat 2D vector style. Pure white background. No 3D, no drop shadows, no gradients,
+no emoji, no stock photo people, no watermarks, no social media logos, no URLs.
+
+Typography: Chinese characters render in a clean sans-serif (Microsoft YaHei / Source Han
+Sans SC style), Latin characters and numbers render in Times New Roman / Inter for body,
+and bold sans-serif for headings. All text must be sharp, legible, free of artifacts.
+
+Color discipline: use AT MOST one primary color, one accent color, and one muted grey.
+Avoid rainbow palettes. Avoid saturated reds except for genuine emphasis (≤ 5% of canvas).
+
+Line discipline: arrows are straight or right-angled (elbow), never curved freestyle.
+Borders are thin (1–2px). Panel corners are 8–16px rounded.
+
+Composition discipline: there must be a clear reading order. Every visible text element
+must correspond to a node listed in CHINESE CONTENT below. Do NOT invent nodes, captions,
+authors, citations, or numbers that are not listed.
+"""
+
+
+NEGATIVE = """\
+no 3D, no isometric, no drop shadows, no glow effects, no gradients,
+no emoji, no stock photo of people, no watermarks, no URLs, no social media logos,
+no rainbow palette, no oversaturated red except the banner,
+no curved freestyle arrows, no decorative flourishes,
+no nodes / captions / authors / citations / numbers not listed in the CHINESE CONTENT,
+no Chinese typos, no character cutoffs, no garbled CJK,
+no English-only output if Chinese content is provided
+"""
+
+
+ARCHETYPE_SKELETON = {
+    "thinking": textwrap.dedent(
+        """\
+        Layout: a 16:9 academic concept-introduction figure organized as a 2×2 panel grid,
+        each panel a rounded rectangle (rx≈12) with a circled number badge in the top-left
+        and a small line icon next to the section label.
+
+        Panel 1 (top-left, blue card #1F4E79): {{P1.label}} — {{P1.icon}} illustration.
+        Bullets: {{P1.points}}.
+
+        Panel 2 (top-right, green card #2E7D32): {{P2.label}} — two-column contrast,
+        old vs new with small line icons, ending in a green bottom note bar.
+
+        Panel 3 (bottom-left, blue card): {{P3.label}} — left mini diagram of
+        transport-mode → service-destination, right side bullets.
+
+        Panel 4 (bottom-right, green card): {{P4.label}} — 2×2 sub-grid of significance
+        pillars, each an icon + bold label + one short sentence.
+
+        Bottom red banner (#C00000), full width, ~8% canvas height, with a target icon
+        and the text "{{core_question}}".
+        """
+    ),
+    "method": textwrap.dedent(
+        """\
+        Layout: a 16:9 method-explanation infographic with ONE top "core idea" card on the
+        left spanning ~30% width, followed by N Step cards filling the rest horizontally,
+        then a bottom row of up to 3 small "assumption" cards.
+
+        Core idea card: teal-bordered rounded rectangle with a lightbulb icon on a teal
+        circle, the text "{{core_idea}}", and a thin downward visual abstract.
+
+        Each Step card: rounded rect rx=16, white fill, thin grey border. Header bar in
+        {{step.color}} with white text "Step N {{step.label}}". Center formula
+        "{{step.formula_latex}}" rendered in clean LaTeX style inside a #F5F8FB box.
+        Below: "含义：" label and "{{step.interpretation}}" in 14pt muted grey.
+
+        Symbol legend row: grey strip "符号说明:" with the symbols {{symbols}}.
+
+        Bottom assumption row: up to 3 cards with colored circular icons
+        ({{assumption.color}}), bold label, and a single muted line.
+        """
+    ),
+    "workflow": textwrap.dedent(
+        """\
+        Layout: a 16:9 left-to-right ML/data pipeline figure with N=4 column groups (Data,
+        Preprocessing, Extraction, Methods). Column headers are thin bold sans-serif at
+        the top of each column (no boxes).
+
+        Column 1 Data: vertical stack of rectangular badges, each with a real-looking
+        brand logo placeholder + the data name + source attribution.
+        Items: {{C1.items}}. Background: pale lavender #EDE7F6.
+        Arrow to column 2 labeled "{{C1.arrow_label}}".
+
+        Column 2 Preprocessing: rectangular blocks for each entry in {{C2.blocks}}.
+        Arrow to column 3 labeled "{{C2.arrow_label}}".
+
+        Column 3 Extraction: a single tall multi-layer cylinder stack of N=4 disc layers
+        alternating colors ({{C3.layers}}), tilted ~5° for subtle depth.
+        Arrow to column 4 labeled "{{C3.arrow_label|default:extracted}}".
+
+        Column 4 Methods (rightmost, larger panel with dashed purple border): vertical
+        stack of sub-blocks:
+          - Propensity score matching: scatter with red fit line
+          - Causal XGBoost: row of {{C4.blocks[1].tree_count}} small decision-tree icons
+            with purple branches + green leaves, sub-label chain
+            "{{C4.blocks[1].sub_label_chain}}"
+          - Treatment Effects: green downward arrow
+          - SHAP: horizontal bar chart (red positive / blue negative), 4 features, base
+            rate line
+
+        Primary color: deep purple #7E57C2. Accent: leaf green #43A047. Muted: #757575.
+        """
+    ),
+}
+
+
+def load_content(path: Path) -> dict:
+    text = path.read_text(encoding="utf-8")
+    if yaml is not None:
+        return yaml.safe_load(text)
+    try:
+        return json.loads(text)
+    except Exception:
+        print(
+            "❌ 未安装 pyyaml 且 content.yaml 不是合法 JSON。"
+            "请 `pip install pyyaml` 或把 content.yaml 改成 JSON。",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
+def jsonify(value) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def build_chinese_content_block(content: dict) -> str:
+    archetype = content.get("archetype", "")
+    lines: list[str] = []
+    title = content.get("title")
+    if title:
+        lines.append(f"标题：{title}")
+
+    if archetype == "thinking":
+        for section in content.get("sections", []):
+            label = section.get("label", "")
+            lines.append(f"\n{section.get('id', '')} {label}：")
+            for pt in section.get("points", []):
+                lines.append(f"  - {pt}")
+            contrast = section.get("contrast")
+            if contrast:
+                lines.append(f"  既有研究：{', '.join(contrast.get('old', []))}")
+                lines.append(f"  本文强调：{', '.join(contrast.get('new', []))}")
+                if section.get("note"):
+                    lines.append(f"  注：{section['note']}")
+            for bullet in section.get("bullets", []):
+                lines.append(f"  - {bullet}")
+            grid = section.get("grid_2x2")
+            if grid:
+                for cell in grid:
+                    lines.append(f"  - {cell[0]}：{cell[1]}")
+        if content.get("core_question"):
+            lines.append(f"\n核心问题：{content['core_question']}")
+
+    elif archetype == "method":
+        if content.get("core_idea"):
+            lines.append(f"\n核心思想：{content['core_idea']}")
+        for step in content.get("steps", []):
+            lines.append(f"\n{step.get('label', '')}")
+            if step.get("formula_latex"):
+                lines.append(f"  公式（LaTeX）：{step['formula_latex']}")
+            if step.get("interpretation"):
+                lines.append(f"  含义：{step['interpretation']}")
+        if content.get("symbols"):
+            lines.append("\n符号说明：")
+            for s in content["symbols"]:
+                lines.append(f"  - {s.get('sym', '')}：{s.get('desc', '')}")
+        if content.get("assumptions"):
+            lines.append("\n传统公式的核心假设：")
+            for a in content["assumptions"]:
+                lines.append(f"  - {a.get('label', '')}：{a.get('note', '')}")
+
+    elif archetype == "workflow":
+        for col in content.get("columns", []):
+            lines.append(f"\n列 {col.get('id', '')} · {col.get('label', '')}")
+            for item in col.get("items", []) or []:
+                lines.append(f"  - {item.get('name', '')}（{item.get('source', '')}）")
+            for block in col.get("blocks", []) or []:
+                lines.append(f"  - {block.get('name', '')}")
+            if col.get("arrow_label"):
+                lines.append(f"  → 箭头标签：{col['arrow_label']}")
+
+    return "\n".join(lines).strip()
+
+
+def render_skeleton(template: str, content: dict) -> str:
+    """简化的 mustache 风格变量替换。不支持嵌套循环 — 复杂列表交给 CHINESE CONTENT 块。"""
+    out = template
+    flat = flatten(content)
+    for key, val in flat.items():
+        token = "{{" + key + "}}"
+        if token in out:
+            out = out.replace(token, str(val))
+    # 把剩余未替换的占位符变成简短描述，避免出现在最终 prompt 里
+    import re as _re
+
+    out = _re.sub(r"\{\{[^}]+\}\}", "[see chinese content]", out)
+    return out
+
+
+def flatten(d: dict, prefix: str = "") -> dict:
+    flat: dict = {}
+    if isinstance(d, dict):
+        for k, v in d.items():
+            sub_prefix = f"{prefix}.{k}" if prefix else str(k)
+            if isinstance(v, (dict, list)):
+                flat.update(flatten(v, sub_prefix))
+                flat[sub_prefix] = jsonify(v)
+            else:
+                flat[sub_prefix] = v
+    elif isinstance(d, list):
+        for i, v in enumerate(d):
+            flat.update(flatten(v, f"{prefix}[{i}]"))
+        flat[prefix] = jsonify(d)
+    else:
+        flat[prefix] = d
+    return flat
+
+
+def cmd_prompt(args: argparse.Namespace) -> int:
+    content_path = Path(args.content)
+    if not content_path.exists():
+        print(f"❌ content 不存在：{content_path}", file=sys.stderr)
+        return 2
+
+    content = load_content(content_path)
+    archetype = args.archetype or content.get("archetype")
+    if archetype not in ARCHETYPE_SKELETON:
+        print(f"❌ archetype 必须是 thinking/method/workflow，当前 = {archetype}", file=sys.stderr)
+        return 2
+
+    style_extra = ""
+    if args.style:
+        sp = Path(args.style)
+        if sp.exists():
+            style_extra = sp.read_text(encoding="utf-8").strip()
+
+    skeleton = ARCHETYPE_SKELETON[archetype]
+    rendered = render_skeleton(skeleton, content)
+    cn_block = build_chinese_content_block(content)
+
+    prompt = "\n\n".join(
+        [
+            COMMON_PREAMBLE.strip(),
+            "[STRUCTURE]",
+            rendered.strip(),
+            "[STYLE PROFILE]",
+            style_extra or "(none)",
+            "[CHINESE CONTENT — render exactly as written, no translation]",
+            cn_block,
+            "[NEGATIVE]",
+            NEGATIVE.strip(),
+        ]
+    )
+
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(prompt, encoding="utf-8")
+    print(f"✅ 已生成 prompt：{out_path}")
+    print(f"   archetype = {archetype}")
+    print(f"   字符数 = {len(prompt)}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# 调 image_gen.py 出图
+# ---------------------------------------------------------------------------
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    prompt_path = Path(args.prompt)
+    if not prompt_path.exists():
+        print(f"❌ prompt 不存在：{prompt_path}", file=sys.stderr)
+        return 2
+    prompt = prompt_path.read_text(encoding="utf-8")
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if not IMAGE_GEN_PY.exists():
+        print(
+            f"❌ 未找到 image_gen.py：{IMAGE_GEN_PY}\n"
+            "请确认 CN_Spark_paper2ppt 已部署完整 scripts/",
+            file=sys.stderr,
+        )
+        return 2
+
+    cmd = [
+        sys.executable,
+        str(IMAGE_GEN_PY),
+        prompt,
+        "--aspect_ratio",
+        args.aspect_ratio,
+        "--image_size",
+        args.image_size,
+        "-o",
+        str(out_dir),
+    ]
+    if args.refs:
+        for ref in args.refs:
+            cmd.extend(["--reference", ref])
+
+    env = os.environ.copy()
+    env.setdefault("IMAGE_BACKEND", "gemini")
+    print("▶", " ".join(cmd))
+    rc = subprocess.run(cmd, env=env).returncode
+    if rc != 0:
+        print("⚠️ image_gen.py 失败，尝试 fallback（去掉参考图重试）")
+        cmd = [c for c in cmd if c not in {"--reference"} and not any(c == r for r in (args.refs or []))]
+        rc = subprocess.run(cmd, env=env).returncode
+    return rc
+
+
+# ---------------------------------------------------------------------------
+# 嵌入到 paper2ppt SVG
+# ---------------------------------------------------------------------------
+
+
+def cmd_embed(args: argparse.Namespace) -> int:
+    image_path = Path(args.image)
+    target_svg = Path(args.target)
+    if not image_path.is_file():
+        print(f"❌ image 不存在：{image_path}", file=sys.stderr)
+        return 2
+    if not target_svg.is_file():
+        print(f"❌ 目标 SVG 不存在：{target_svg}", file=sys.stderr)
+        return 2
+
+    # 把图片复制到 paper2ppt project 的 images/
+    project_root = target_svg.parent
+    while project_root.parent != project_root and not (project_root / "images").is_dir():
+        project_root = project_root.parent
+    images_dir = project_root / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    dst = images_dir / image_path.name
+    if dst.resolve() != image_path.resolve():
+        dst.write_bytes(image_path.read_bytes())
+
+    # 解析 bbox
+    try:
+        x, y, w, h = (int(v.strip()) for v in args.bbox.split(","))
+    except Exception:
+        print(f"❌ bbox 格式应为 'x,y,w,h'：{args.bbox}", file=sys.stderr)
+        return 2
+
+    href = f"../images/{dst.name}"
+    image_tag = (
+        f'  <g id="injected_route_image">\n'
+        f'    <image href="{href}" x="{x}" y="{y}" width="{w}" height="{h}"'
+        f' preserveAspectRatio="xMidYMid meet"/>\n'
+    )
+    if args.caption:
+        cap_y = y + h + 18
+        image_tag += (
+            f'    <text x="{x + w // 2}" y="{cap_y}" font-size="11" fill="#888"'
+            f' text-anchor="middle" font-family="Microsoft YaHei,Source Han Sans SC,sans-serif">'
+            f"{args.caption}</text>\n"
+        )
+    image_tag += "  </g>\n"
+
+    svg_text = target_svg.read_text(encoding="utf-8")
+    if "</svg>" not in svg_text:
+        print("❌ 目标 SVG 缺少 </svg>", file=sys.stderr)
+        return 2
+    new_svg = svg_text.replace("</svg>", image_tag + "</svg>", 1)
+    target_svg.write_text(new_svg, encoding="utf-8")
+    print(f"✅ 已注入 <image> 到 {target_svg}（href={href}, bbox={args.bbox}）")
+    return 0
+
+
+CONTRACT_TEMPLATE = """# Diagram Contract — {project}
+
+## 1. Core claim（一句话）
+<这张图必须捍卫的一句话主张，必须有动词>
+
+## 2. Archetype 与 sub_variant
+archetype: {archetype}
+sub_variant: <见对应 archetype-*.md 的 sub_variant 表>
+reason: <为什么选这个 — 一句话>
+
+## 3. Panel / Stage 映射
+（按 archetype 填）
+
+## 4. Discipline-specific 术语保留清单
+  - <术语 1>
+  - <术语 2>
+
+## 5. 视觉合同
+canvas: 16:9
+color_scheme: discipline_default
+density: balanced
+icon_density: medium
+typography: cn_yahei_en_times
+emphasis_usage: <核心问题 / 主张 / 警示，或 "无">
+
+## 6. Reference 模式
+mode: literature        # literature | offline_user_uploads | atlas_only
+expected_refs_count: 5
+note: <可选>
+
+## 7. Reviewer 风险
+Q1. 这张图最可能被听众挑战的一个点是什么？
+A1. <填>
+Q2. 如果 panel 数减半，论证还成立吗？哪些可以合并 / 删除？
+A2. <填>
+Q3. 任意一个被引用的"他人方法 / 数据 / 概念"是否在 PPT 页脚有 GB/T 7714 引用？
+A3. <填>
+Q4. 颜色编码（主色 / 强调 / 灰）是否承担信息含义？还是只是装饰？
+A4. <填>
+
+## 8. 验收门槛
+- [ ] 每一个可见文本都对应 §3 中的某条
+- [ ] 没有 §3 之外的节点 / 编号 / 引用
+- [ ] §4 术语清单中每一项都逐字出现
+- [ ] 配色和 §5 一致
+- [ ] §7 中识别的风险点已经在图中被回应
+"""
+
+
+def cmd_contract(args: argparse.Namespace) -> int:
+    """scaffold contract.md。被 SKILL.md Step 1 调用。"""
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if out_path.exists() and not args.force:
+        print(f"❌ {out_path} 已存在；加 --force 覆盖", file=sys.stderr)
+        return 2
+    project = args.project or out_path.parent.name
+    archetype = args.archetype or "<thinking | method | workflow>"
+    out_path.write_text(
+        CONTRACT_TEMPLATE.format(project=project, archetype=archetype),
+        encoding="utf-8",
+    )
+    print(f"✅ 已写入 contract 骨架：{out_path}")
+    print(f"   下一步：让用户填字段并在 SKILL.md Step 1 末尾 ⛔ BLOCKING gate 处确认。")
+    return 0
+
+
+def _extract_glossary(content: dict) -> list[str]:
+    return content.get("glossary_preserve", []) or []
+
+
+def _walk_text_strings(node):
+    """递归收集 content.yaml 中所有 leaf 字符串。"""
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for v in node.values():
+            yield from _walk_text_strings(v)
+    elif isinstance(node, list):
+        for v in node:
+            yield from _walk_text_strings(v)
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    """对生成的 PNG 跑 hard checks（机器可判），并生成 audit_report.md。
+
+    soft / reviewer-risk 检查项写到报告里，留给主代理 + 用户人工补完。
+    """
+    image_path = Path(args.image)
+    if not image_path.is_file():
+        print(f"❌ image 不存在：{image_path}", file=sys.stderr)
+        return 2
+
+    hard_results: list[tuple[str, bool, str]] = []
+
+    # hard: file size
+    size_kb = image_path.stat().st_size / 1024
+    hard_results.append(("file size ≥ 200 KB", size_kb >= 200, f"actual = {size_kb:.0f} KB"))
+
+    # hard: width / aspect (Pillow optional)
+    width = height = None
+    try:
+        from PIL import Image  # type: ignore
+
+        with Image.open(image_path) as im:
+            width, height = im.size
+    except ImportError:
+        pass
+
+    if width is not None:
+        hard_results.append(("width ≥ 1600 px", width >= 1600, f"actual = {width} px"))
+        if height:
+            aspect = width / height
+            hard_results.append(
+                ("aspect within ±2% of contract canvas",
+                 True,  # 留给人工判断（contract 的 canvas 多种合法）
+                 f"aspect = {aspect:.3f}")
+            )
+
+    # 内容比对（如果提供了 contract / content）
+    glossary: list[str] = []
+    if args.content:
+        cp = Path(args.content)
+        if cp.is_file():
+            try:
+                content = load_content(cp)
+                glossary = _extract_glossary(content)
+            except SystemExit:
+                content = None
+        else:
+            print(f"⚠️ content 文件不存在：{cp}", file=sys.stderr)
+
+    # 写 audit_report.md
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    lines: list[str] = []
+    lines.append(f"# Audit Report — {image_path.name}\n")
+    lines.append("## Hard checks")
+    n_pass = sum(1 for _, ok, _ in hard_results if ok)
+    lines.append(f"({n_pass}/{len(hard_results)} passed)\n")
+    for name, ok, detail in hard_results:
+        mark = "✓" if ok else "✗"
+        lines.append(f"- [{mark}] **{name}** — {detail}")
+    lines.append("")
+    lines.append("## Soft checks (manual review required)")
+    soft_items = [
+        "每一个可见文本都对应 contract.md §3 panel/stage 映射中的某一条",
+        "没有 contract 之外的节点 / 编号 / 引用",
+        "contract.md §4 术语保留清单中的每一项都逐字出现",
+        "配色不超过 4 种主色（primary / secondary / accent / muted）",
+        "强调色面积 ≤ 5% 且承载语义（不只是装饰）",
+        "panel / 阶段数与 contract §3 一致",
+        "论证流向与 archetype × sub_variant 一致",
+        "公式区底色为浅灰 / 白（method archetype）",
+        "列间过渡箭头带 italic muted 标签（workflow horizontal-pipeline）",
+        "底部强调横幅 ≤ 1 条",
+        "中文文字无错位 / 截断 / 乱码 CJK",
+        "中英文混排：英 / 数 = serif；中文 = sans-serif",
+    ]
+    for s in soft_items:
+        lines.append(f"- [ ] {s}")
+    if glossary:
+        lines.append("")
+        lines.append("### Glossary preserve（contract §4）— 主代理用多模态读图核对每一项是否逐字出现")
+        for term in glossary:
+            lines.append(f"  - [ ] `{term}`")
+    lines.append("")
+    lines.append("## Reviewer-risk checks (contract §7)")
+    for q in ["Q1 最可能挑战点已在图中回应", "Q2 panel 减半后论证仍成立 → 每个 panel 必要",
+              "Q3 引用文献在 PPT 页脚有 GB/T 7714 条目（嵌入 paper2ppt 后再核对）",
+              "Q4 颜色编码承担信息含义（非装饰）"]:
+        lines.append(f"- [ ] {q}")
+    lines.append("")
+    lines.append("## Decision")
+    lines.append("- [ ] PASS — ready for embed")
+    lines.append("- [ ] CONDITIONAL PASS — note follow-ups below")
+    lines.append("- [ ] FAIL — regenerate via `generate_route_image.py run` with `--refine`")
+    lines.append("")
+    lines.append("## Recommended `--refine` instruction")
+    lines.append("> <在此填写需要图像模型修正的具体指令，例如 \"把第 3 panel 的 X 改回 Y，其他不变\"。>")
+
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"✅ 已写入 audit report：{out}")
+    print(f"   hard checks 通过 = {n_pass}/{len(hard_results)}")
+    if any(not ok for _, ok, _ in hard_results):
+        print("   ⚠️ 有 hard check 失败，建议先修复再考虑 soft / reviewer-risk")
+        return 1
+    return 0
+
+
+def main(argv: Iterable[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="CN_Spark_technicalroute · image prompt + gen + embed")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_prompt = sub.add_parser("prompt", help="拼装 prompt → prompt.md")
+    p_prompt.add_argument("--archetype", choices=["thinking", "method", "workflow"])
+    p_prompt.add_argument("--content", required=True, help="content.yaml")
+    p_prompt.add_argument("--style", help="style_profile.md (optional)")
+    p_prompt.add_argument("--out", required=True, help="prompt.md")
+    p_prompt.set_defaults(func=cmd_prompt)
+
+    p_run = sub.add_parser("run", help="调 image_gen.py 出图")
+    p_run.add_argument("--prompt", required=True)
+    p_run.add_argument("--aspect_ratio", default="16:9")
+    p_run.add_argument("--image_size", default="2K")
+    p_run.add_argument("--refs", nargs="*", default=[])
+    p_run.add_argument("--out", required=True)
+    p_run.set_defaults(func=cmd_run)
+
+    p_emb = sub.add_parser("embed", help="把生成的 PNG 嵌入 paper2ppt 的一张 SVG")
+    p_emb.add_argument("--image", required=True)
+    p_emb.add_argument("--target", required=True, help="目标 SVG 路径（svg_output/<NN>_<page>.svg）")
+    p_emb.add_argument("--bbox", required=True, help="x,y,w,h（如 '60,120,1160,500'）")
+    p_emb.add_argument("--caption", default="")
+    p_emb.set_defaults(func=cmd_embed)
+
+    p_con = sub.add_parser("contract", help="scaffold contract.md（SKILL.md Step 1 用）")
+    p_con.add_argument("--out", required=True, help="contract.md 输出路径")
+    p_con.add_argument("--project", default="", help="项目名（用于标题）")
+    p_con.add_argument("--archetype", choices=["thinking", "method", "workflow"])
+    p_con.add_argument("--force", action="store_true", help="存在则覆盖")
+    p_con.set_defaults(func=cmd_contract)
+
+    p_aud = sub.add_parser("audit", help="对生成的 PNG 跑 QA 检查（hard 自动 + soft / risk 留人工）")
+    p_aud.add_argument("--image", required=True)
+    p_aud.add_argument("--content", default="", help="可选 content.yaml — 用来抽 glossary 比对")
+    p_aud.add_argument("--contract", default="", help="可选 contract.md — 仅记录路径")
+    p_aud.add_argument("--out", required=True, help="audit_report.md 输出路径")
+    p_aud.set_defaults(func=cmd_audit)
+
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,6 +1,6 @@
 {
   "name": "cn-academic-ppt-skills",
-  "description": "A Claude-friendly skill collection for Chinese academic PPT production, including full paper-to-PPT generation and editable academic workflow / conceptual diagram generation.",
+  "description": "A Claude-friendly skill collection for Chinese academic PPT: paper-to-PPT via SVG→DrawingML pipeline plus AI-generated technical-route diagrams (thinking / method / workflow archetypes).",
   "version": "1.0.0",
   "author": {
     "name": "Yuecheng Wang",
@@ -13,9 +13,12 @@
     "academic",
     "ppt",
     "paper2ppt",
-    "workflow",
+    "technicalroute",
+    "research-framework",
     "diagram",
     "chinese",
+    "svg",
+    "drawingml",
     "claude"
   ]
 }
