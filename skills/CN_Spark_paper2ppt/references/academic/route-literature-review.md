@@ -1,6 +1,6 @@
 # Route D · 文献综述 PPT 路线
 
-> 本路线规定 Strategist 阶段生成 `design_spec.md §IX` 的页面结构与论证骨架，与具体 pipeline 无关。Executor 在 [executor-academic.md](executor-academic.md) §3 中按 `content_type` 落地到 SVG（其中"概念框架"页常调 [cn-academic-spark-technicalroute-engine](../../../CN_Spark_technicalroute/SKILL.md) 生图）。
+> 本路线规定 Strategist 阶段生成 `design_spec.md §IX` 的页面结构与论证骨架，与具体 pipeline 无关。Executor 在 [executor-academic.md](executor-academic.md) §3 中按 `content_type` 落地到 SVG（其中“概念框架”页走 SKILL.md Step 5.5 的内置 TechnicalRoute 流程）。
 
 适用：综述论文讲解 / 综述类组会汇报 / 开题前的"国内外研究现状"独立成稿 / 课题立项前的研究图谱梳理。
 
@@ -221,3 +221,4 @@ Route D 只有在“公式本身构成研究谱系的一部分”时，才单独
 - 局限性：综述本身也有局限（语种、时间窗、数据库覆盖），要诚实交代。
 
 详细写法见 [speaker-notes.md](speaker-notes.md)。
+

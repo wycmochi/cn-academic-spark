@@ -7,9 +7,9 @@ description: >
   转 PPTX，最终交付的是矢量可编辑的 `.pptx`，不是 Markdown 大纲。同时强制满足中文学术硬约束：
   GB/T 7714 引文页脚、备注区演讲词、底部横幅、四路线版式分流。
   当任意一页需要"技术路线图 / 研究框架图 / 思考脉络图 / 全文流程图"时，本技能会在
-  Step 5 内联调用同一 bundle 中的 **cn-academic-spark-technicalroute-engine**
-  （contract-first 8 步流水线 + 文献样式检索 + Custom_gallery 风格参考 + AI 生图），
-  确保该页是可编辑学术图，而非位图截图。
+  Step 5.5 使用**内置 TechnicalRoute 模块**
+  （contract-first 8 步流水线 + 文献样式检索 + Custom_gallery 风格参考 + 可编辑 SVG 优先），
+  不再调用外部 technicalroute skill，确保整套学术 PPT 由一个 skill 独立完成。
   当用户上传学术材料且要求做幻灯片 / 答辩 / 汇报 / 组会 / 开题 / 综述讲解时调用本技能。
 ---
 
@@ -24,7 +24,7 @@ description: >
 3. 强制满足中文学术硬约束（GB/T 7714 引文、混合字体、备注演讲词、底部横幅、四路线分流）。
 
 > [!CAUTION]
-> ## 🚨 全局执行纪律（与 ppt-master 一致）
+> ## 🚨 全局执行纪律
 >
 > 1. **串行执行**：Step 1 → Step 7 严格按序，每步输出即下一步输入。
 > 2. **BLOCKING = 硬停**：⛔ 标记的步骤必须等用户明确确认。
@@ -33,16 +33,15 @@ description: >
 > 5. **SVG 主代理产出**：SVG 生成必须由当前主代理顺序输出，禁止派给子代理批量生成。
 
 > [!IMPORTANT]
-> ## 🌐 语言与字体规则
+> ## 🌐 语言规则
 >
 > - **响应语言**：跟随用户输入与源材料；除非用户明确切换。
-> - **正文字体**：中文用 *微软雅黑 / Source Han Sans*，英文 / 数字 / 拉丁字符用 *Times New Roman*（学术汇报场景的硬约束）。
 > - **混合字体写法**：在 SVG 中用 `<tspan font-family="...">` 分段；具体见 [references/academic/citation-style.md](references/academic/citation-style.md)。
-> - **`design_spec.md` 模板结构**保持英文骨架（与 ppt-master 一致），字段值可填中文。
+> - **`design_spec.md` 模板结构**保持英文骨架，字段值可填中文。
 
 ---
 
-## 主流水线脚本（继承自 ppt-master）
+## 主流水线脚本
 
 | 脚本 | 作用 |
 |------|------|
@@ -54,6 +53,8 @@ description: >
 | `scripts/project_manager.py` | 项目初始化 / 校验 / 资源导入 |
 | `scripts/analyze_images.py` | 图片分析（生成图注 + 位置建议） |
 | `scripts/image_gen.py` | 多后端 AI 生图（默认 Gemini 3 Pro Image） |
+| `scripts/technicalroute/generate_route_image.py` | 内置技术路线 / 研究框架图模块：contract / prompt / assemble / run / embed / audit |
+| `scripts/technicalroute/literature_search.py` | 技术路线图文献样式检索与 style_refs manifest 生成 |
 | `scripts/svg_quality_checker.py` | SVG 合规检查 |
 | `scripts/total_md_split.py` | 演讲词按页拆分 |
 | `scripts/finalize_svg.py` | SVG 后处理（图标内嵌 / 图片裁切 / tspan 拍平） |
@@ -68,6 +69,7 @@ description: >
 |------|------|------|
 | 版式模板 | `templates/layouts/layouts_index.json` | 含 `academic_defense`（学位答辩）/ `medical_university`（医学院风）/ `government_blue`（开题答辩可用）等 |
 | 可视化模板 | `templates/charts/charts_index.json` | 70+ 图表 / 信息图 / 框架（甘特图 / SWOT / 鱼骨 / 矩阵 / 概念图等） |
+| 技术路线模板 | `templates/technicalroute/templates/templates_index.json` | 内置 TechnicalRoute 可编辑 SVG 骨架，配合 `templates/technicalroute/Custom_gallery/` 风格参考 |
 | 图标库 | `templates/icons/` | tabler / phosphor / simple-icons / chunk 四套 |
 
 学术场景**强推**：
@@ -86,7 +88,7 @@ description: >
 | [references/academic/citation-style.md](references/academic/citation-style.md) | GB/T 7714 引文 + 中英文混合字体 SVG 写法 | **任何路线写引用时必读** |
 | [references/academic/speaker-notes.md](references/academic/speaker-notes.md) | 演讲词撰写规范、衔接、口播 vs 书面 | Step 6 写 `notes/total.md` 时 |
 | [references/academic/layout-library.md](references/academic/layout-library.md) | 中文学术各 `content_type` 的版式映射（含底部横幅） | Strategist 选版式时 |
-| [references/academic/executor-academic.md](references/academic/executor-academic.md) | **学术专属执行器**：底部横幅 / 引文页脚 / 公式页 / 矩阵证据表的 SVG 写法 | **Step 6 执行器必读，替换 executor-{general,consultant}** |
+| [references/academic/executor-academic.md](references/academic/executor-academic.md) | **学术专属执行器**：底部横幅 / 引文页脚 / 公式页 / 矩阵证据表的 SVG 写法 | **Step 6 执行器必读，配合 executor-base；必要时可参考 executor-general；非学术 consultant 执行器已清理，不使用** |
 
 ---
 
@@ -219,6 +221,27 @@ Read references/academic/executor-academic.md   # 学术执行器（提前看，
 | 开题报告（含甘特图、研究计划） | **Route C** | [references/academic/route-proposal.md](references/academic/route-proposal.md) |
 | 文献综述 / Review | **Route D** | [references/academic/route-literature-review.md](references/academic/route-literature-review.md) |
 
+#### 4.1.5 论文类型叙事与标题规则（高优先级）
+
+按 `D:\Code_mochi\AI_Try\nature-skills\skills\nature-paper2ppt\SKILL.md#Paper-Type Guidance` 的逻辑先判断论文类型，再组织章节与页标题：
+
+| 论文类型 | 默认叙事弧 |
+|---|---|
+| discovery / mechanism | question-to-evidence |
+| methods / AI / tool / algorithm | problem-to-solution |
+| resource / dataset / atlas / omics / benchmark | workflow-to-validation |
+| clinical / population / intervention | design-to-inference |
+| materials / chemistry / physics / engineering | property-to-mechanism 或 design-to-performance |
+| review / perspective | evidence-map |
+
+标题必须是**结论式 / 证据式标题**，不能只写"方法""结果""案例"。内容页标题格式固定为：
+
+```text
+<模块编号> <模块大标题>：<本页小标题或证据结论>
+```
+
+示例：`4 模型结果：变量重要性排序`、`4 模型结果：网络结构ALE图分析`。同一大模块内页码编号不变，小标题变化；章节页 / 封面 / 致谢页可不套此格式。
+
 #### 4.2 八项确认 + 模板候选（⛔ BLOCKING）
 
 把以下配置作为**一次性**打包给用户：
@@ -261,35 +284,35 @@ Read references/image-searcher.md       # 仅当有 web 行
 
 **学术补充**：
 - 论文里**已存在的图**（实验结果图、流程图截图） → 用 `analyze_images.py` 分析后**直接嵌入 SVG**（保留原图，标"图来源：[n]"）。
-- 需要的**自绘图**（技术路线、研究框架、概念图、思考脉络、全文流程） → **不要本地手画 SVG**，统一切换到 **Step 5.5：内联 TechnicalRoute 子流程**（见下）。
+- 需要的**自绘图**（技术路线、研究框架、概念图、思考脉络、全文流程） → 统一切换到 **Step 5.5：内置 TechnicalRoute 流程**（见下）；不要调用外部 technicalroute skill。
 
 **✅ Checkpoint** — 每一行资源都达到 `Generated` / `Sourced` / `Needs-Manual` 终态；所有"自绘示意图"行已转给 Step 5.5。
 
 ---
 
-### Step 5.5 · 内联 TechnicalRoute 子流程（融合段）
+### Step 5.5 · 内置 TechnicalRoute 流程（paper2ppt 内联模块）
 
 🚧 **GATE**：Step 5 中至少有一行被标记为 `figure_type ∈ {technical_route, research_framework, thinking_map, whole_paper_workflow, concept_framework}`，或 `design_spec.md §IX` 任意一页 `page_charts` 含 `embed_technicalroute: true`。
+> 本步骤使用 **paper2ppt 内置模块**：`scripts/technicalroute/`、`references/technicalroute/`、`templates/technicalroute/`。不要读取、调用或依赖外部 technicalroute skill；paper2ppt 必须作为一个独立 skill 完成整套 PPT 与其中的技术路线 / 研究框架图。
 
-> 本步骤把 **`cn-academic-spark-technicalroute-engine`**（位于 [../CN_Spark_technicalroute/SKILL.md](../CN_Spark_technicalroute/SKILL.md)）作为**子流程**串入 PPT engine 的流水线，**不是**两个独立 skill 各跑各的。
+#### 5.5.1 运行内置 TechnicalRoute pipeline
 
-#### 5.5.1 进入 TechnicalRoute engine
-
-主代理切换上下文，读 TechnicalRoute engine 的 SKILL.md：
-
-```
-Read ../CN_Spark_technicalroute/SKILL.md
-```
-
-然后按它的 Step 1 → Step 8 严格走一遍（**contract.md 必填、content.yaml 必填、style_refs 检索 / atlas-only fallback、prompt 合成、image_gen、QA audit**）。
+按以下内置 8 步执行（路径均相对本 skill 根目录）：
+1. `python3 scripts/technicalroute/generate_route_image.py contract --out <route_workdir>/contract.md --project <project_name> --archetype <thinking|method|workflow>` 写 Diagram Contract，并让用户确认关键字段；
+2. 写 `<route_workdir>/content.yaml`，字段必须完全来自当前论文 / 用户材料 / `design_spec.md §IX`；
+3. 需要文献样式参考时运行 `scripts/technicalroute/literature_search.py emit-plan ...`，无足够参考时走 atlas-only fallback；
+4. 先读 `templates/technicalroute/Custom_gallery/<discipline>/...` 选 1-3 张结构 / 风格 anchor（若无 manifest 则跳过，不编造），再读 `templates/technicalroute/templates/templates_index.json` 选择可编辑 SVG 模板；
+5. 写 route 级 `design_spec.md` + `spec_lock.md`，记录 gallery_refs、template_key、slot_map、color_var_map、colors；
+6. `python3 scripts/technicalroute/generate_route_image.py prompt ...` 合成 prompt；
+7. Tier 2 优先：`generate_route_image.py assemble ...` 输出可编辑 SVG；模板缺失或 slot_map 不全时退到 Tier 3：`generate_route_image.py run ...` 生成 PNG；
+8. `generate_route_image.py audit ...` 做 hard checks，并由主代理多模态核验 gallery 抄袭红线。
 
 #### 5.5.2 复用 PPT engine 的 design_spec
 
-TechnicalRoute engine 的 `contract.md §5（视觉合同）` 中 `color_scheme / typography` 字段**必须**与本 PPT engine 的 `<project_path>/design_spec.md §III + §IV`（配色 / 字体）保持一致——避免技术路线图配色与整套 deck 漂移。
+`contract.md §5（视觉合同）` 中 `color_scheme / typography` 字段**必须**与本 PPT engine 的 `<project_path>/design_spec.md §III + §IV`（配色 / 字体）保持一致——避免技术路线图配色与整套 deck 漂移。
 
-#### 5.5.3 输入清单（PPT engine → TechnicalRoute engine）
-
-把以下信息以 dict 形式喂给 TechnicalRoute engine：
+#### 5.5.3 输入清单（PPT engine → 内置 TechnicalRoute）
+把以下信息写入 route workdir 的 `contract.md` / `content.yaml`：
 
 ```yaml
 caller: cn-academic-spark-ppt-engine
@@ -297,7 +320,7 @@ target_svg: <project_path>/svg_output/<NN>_<page_name>.svg
 target_bbox: "<x>,<y>,<w>,<h>"           # 该图在 SVG 页面里的预留位置
 target_caption: "图 N · <caption>"
 archetype: thinking|method|workflow      # 由 design_spec.md §IX 决定
-sub_variant: <可选，让 TR engine 推>
+sub_variant: <可选，让 内置 TechnicalRoute 推>
 content_inline: { ... }                  # 同 content.yaml 的 dict
 glossary_preserve: ["<术语1>", ...]
 contract_inline: { ... }                 # 至少 §1 §3 §4 §5 §6
@@ -305,16 +328,16 @@ color_scheme_from_pptx: "<deck 主色 HEX>"
 typography_from_pptx: "中文-微软雅黑 / 拉丁-Times New Roman"
 ```
 
-#### 5.5.4 输出回填（TechnicalRoute engine → PPT engine）
+#### 5.5.4 输出回填（内置 TechnicalRoute → PPT engine）
 
-TechnicalRoute engine 必须返回：
+内置 TechnicalRoute 模块必须产出：
 
 ```yaml
 image_path: <project_path>/.../route_xxx.png
 audit_passed: true
 manifest_json: <project_path>/.../style_refs/manifest.json
 contract_path: <project_path>/.../contract.md
-editable_svg_path: <project_path>/.../route_xxx.svg   # 可编辑版本（若 TR engine 命中模板）
+editable_svg_path: <project_path>/.../route_xxx.svg   # 可编辑版本（若 内置 TechnicalRoute 命中模板）
 fallback_reason: <若仅有 png 没有 svg 的原因>
 ```
 
@@ -326,15 +349,15 @@ PPT engine 收到后：
 
 #### 5.5.5 三档优先级（任务 3 + 任务 8 的硬规则）
 
-TR engine 内部按以下三档分叉，PPT engine 不用干预——只看返回值是 `editable_svg_path` 还是 `image_path`：
+内置 TechnicalRoute 内部按以下三档分叉，PPT engine 不用干预——只看返回值是 `editable_svg_path` 还是 `image_path`：
 
 | Tier | 路径 | 输出 | 触发 |
 |---|---|---|---|
 | **1** | Always: `assets/Custom_gallery/<discipline>/` 取结构 / 风格 anchor | — | 学科文件夹存在 manifest 且 keywords 命中 |
-| **2** | `assets/templates/templates_index.json` 找能装下 anchor 那种结构的可编辑模板 → `assemble` 子命令注入 content.yaml | **可编辑 SVG**（首选嵌入：用 `<image href>` 矢量引用或 inline `<svg>`，让 deck 整体仍是矢量可编辑） | TR engine 找到 ≥ 2 分的模板 + 与 anchor 结构匹配 |
-| **3** | `image_gen.py`（nano banana pro / image2）出 PNG，把 Custom_gallery anchor 作 `--refs` 喂进去 | **PNG**（用 `<image href>` 嵌入；在 `notes/<NN>_*.md` 注明该页含位图） | TR engine 找不到合适模板 |
+| **2** | `templates/technicalroute/templates/templates_index.json` 找能装下 anchor 那种结构的可编辑模板 → `assemble` 子命令注入 content.yaml | **可编辑 SVG**（首选嵌入：用 `<image href>` 矢量引用或 inline `<svg>`，让 deck 整体仍是矢量可编辑） | 内置 TechnicalRoute 找到 ≥ 2 分的模板 + 与 anchor 结构匹配 |
+| **3** | `image_gen.py`（nano banana pro / image2）出 PNG，把 Custom_gallery anchor 作 `--refs` 喂进去 | **PNG**（用 `<image href>` 嵌入；在 `notes/<NN>_*.md` 注明该页含位图） | 内置 TechnicalRoute 找不到合适模板 |
 
-**学术抄袭红线（每张图必跑）**：Custom_gallery 仅作**结构 / 配色风格**参考。图中所有节点文字、数据、地名、模型名、作者名 **必须**来自当前论文 / 用户给定材料，**不允许**直接搬运 Custom_gallery 案例图里的文字内容。这条约束由 TR engine 的：
+**学术抄袭红线（每张图必跑）**：Custom_gallery 仅作**结构 / 配色风格**参考。图中所有节点文字、数据、地名、模型名、作者名 **必须**来自当前论文 / 用户给定材料，**不允许**直接搬运 Custom_gallery 案例图里的文字内容。这条约束由 内置 TechnicalRoute 的：
 
 - `contract.md §4 glossary_preserve` —— 字节级保留来自用户材料的术语，
 - `spec_lock.md §forbidden` —— 明令禁止节点文字来自 gallery_refs，
@@ -357,7 +380,7 @@ Read references/shared-standards.md       # SVG / PPT 兼容性硬约束
 Read references/academic/executor-academic.md   # ⭐ 学术专属执行器（替代 executor-general / consultant）
 ```
 
-> ⚠️ 学术场景**只读 executor-academic.md**，不读 executor-general / consultant / consultant-top。学术执行器在通用约束之上叠加：底部横幅、引文页脚、模块化公式页、矩阵证据表、混合字体 tspan 写法。
+> ⚠️ 学术场景**只读 executor-academic.md**，不读 executor-general 或任何非学术 consultant 流程。学术执行器在通用约束之上叠加：底部横幅、引文页脚、模块化公式页、矩阵证据表、混合字体 tspan 写法。
 
 #### 6.1 设计参数确认
 
@@ -447,7 +470,7 @@ python3 scripts/svg_to_pptx.py <project_path>
 
 页数：<N>
 备注覆盖页数：<N>          ← 即 notes/ 下有内容的页数；应当 = 总页数
-插图对象数：<N>            ← `<image>`、`finalize_svg` 嵌入的位图、TR engine 返回的 PNG 之和
+插图对象数：<N>            ← `<image>`、`finalize_svg` 嵌入的位图、内置 TechnicalRoute 返回的 PNG 之和
 技术路线图：<位置与可编辑性说明>  ← 例如 "第05页，使用 python-pptx 原生形状绘制，可在 PowerPoint/WPS 中编辑。" 没有就写"无"
 引文方式：<一句话说明>      ← 例如 "关键页脚注论文来源，末页集中列出参考文献。"
 已知限制：<一句话说明>      ← 例如 "论文原始图表以裁切图片形式嵌入；路线图和框架图为可编辑矢量形状。"
@@ -464,36 +487,27 @@ python3 scripts/svg_to_pptx.py <project_path>
 
 1. 不要再另存任何其他名字的"中文大纲" / "outline_cn" / "outline.md"——只允许 `ppt_outline_cn.md` 这一份。
 2. "插图对象数"必须**实数**（grep 一遍最终 svg / pptx 数清楚），不要估算。
-3. "技术路线图"行如果 deck 里有自绘示意图 → 必须写明在第几页 + 是 SVG 可编辑还是 PNG 位图（来自 TR engine 的 `editable_svg_path` 或 `image_path`）。
+3. "技术路线图"行如果 deck 里有自绘示意图 → 必须写明在第几页 + 是 SVG 可编辑还是 PNG 位图（来自 内置 TechnicalRoute 的 `editable_svg_path` 或 `image_path`）。
 4. "页面清单"逐页一行，编号与 `svg_output/` 文件名前缀一致。
 
 **✅ Checkpoint** — `ppt_outline_cn.md` 已写入 project 根，且与 `exports/*.pptx` 实际页数 / 内容核对一致。Step 7 完成。
 
 ---
 
-## 与 TechnicalRoute engine 的协作（融合模型）
+## 独立内置模块说明
 
-本 PPT engine 与 [`cn-academic-spark-technicalroute-engine`](../CN_Spark_technicalroute/SKILL.md) 同属一个 marketplace 捆绑（`cn-academic-spark`），但**实现层**是**两个独立 skill**。融合发生在工作流里——本 SKILL 的 **Step 5.5** 是融合段（见上方），不是单独的"协作章节"。
-
-简记：
-
-| 场景 | 走法 |
-|---|---|
-| 整套 PPT 含若干自绘图 | 用户调 PPT engine 一个；PPT engine 在 Step 5.5 内联调 TR engine 一次或多次。 |
-| 仅一张图（不做 PPT） | 用户直接调 TR engine。PPT engine 完全不上场。 |
-| TR engine 单独安装、PPT engine 没装 | 用户仍可用 TR engine 输出 png；PPT engine 不在场就没有 Step 5.5。 |
-
-详细约定见仓库根 [README.md](../../README.md) 与本 SKILL 的 Step 5.5。
+paper2ppt 已内置技术路线 / 研究框架图能力：脚本在 `scripts/technicalroute/`，参考说明在 `references/technicalroute/`，模板与 Custom_gallery 在 `templates/technicalroute/`。整套学术 PPT 生成不得再依赖外部 technicalroute skill；仅当用户明确只要一张单图且不做 PPT 时，才可以另行使用单图 skill。
 
 ---
 
-## 学术硬约束（无论走哪一路线都要满足）
+## 学术硬约束
 
 1. **可编辑 .pptx**：所有正文、表格、流程图都是原生 DrawingML 矢量；禁止把流程图退化为整张截图。
 2. **引文**：正文出现引用 → 必加 `[n]` 角标；该页底端 8pt 灰色完整 GB/T 7714 条目；混合字体分 tspan。
 3. **底部横幅**：每张证据型页都要有一句话主旨（深蓝底白字、22mm 高）。
 4. **演讲词**：每页 `notes/<NN>_*.md` 不允许空白。
 5. **不编造**：不出现源材料中没有的数据 / 机构 / 文献 / 图细节。
+6. **图片 / 公式高优先级**：除技术路线图页、总结页、规划启示页、封面、目录、章节页、致谢页外，其余每一页至少包含一张论文内图片 / 复杂表格截图 / 可引用图片，或一个数学公式 / 模型公式。若原文视觉资产不足，优先裁切论文复杂表格或方法公式；仍不足时在 `ppt_outline_cn.md` 的“已知限制”中列出对应页。
 
 ---
 
@@ -569,3 +583,7 @@ projects/<project_name>/
 - 本地预览：`python3 -m http.server -d projects/<name>/svg_final 8000`
 - 故障排除：[scripts/docs/troubleshooting.md](scripts/docs/troubleshooting.md)
 - 公式页规则（模块化 / 标题分段）已内嵌到 [executor-academic.md](references/academic/executor-academic.md)，不用查别的文件。
+
+
+
+

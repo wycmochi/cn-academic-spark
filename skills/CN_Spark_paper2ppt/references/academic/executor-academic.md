@@ -2,7 +2,7 @@
 
 > 通用规则在 [executor-base.md](../executor-base.md)，SVG/PPT 技术约束在 [shared-standards.md](../shared-standards.md)。本文件**仅**列出"中文学术汇报"相对通用执行器的增量。
 >
-> ⚠️ 学术场景**只读本文件**作为风格执行器，不读 `executor-general.md` / `executor-consultant.md` / `executor-consultant-top.md`。
+> ⚠️ 学术场景**只读本文件**作为风格执行器，不读 `executor-general.md` 或任何非学术 consultant 流程。
 
 ---
 
@@ -16,7 +16,7 @@
 - 文献综述讲解
 - 学术海报式总结页
 
-风格目标：**克制、严谨、信息密度适中、可朗读**。每页都能用一句话讲清楚，不堆砌装饰。
+风格目标：**克制、严谨、信息密度较大、页面内容饱满、可朗读**。每页都能用一句话讲清楚，不堆砌装饰。
 
 ---
 
@@ -24,31 +24,7 @@
 
 每一张证据型 / 论点页都按下面四件事检查。封面、目录、章节页、致谢页例外。
 
-### 2.1 底部横幅 `bottom_banner`
-
-中文学术 PPT 的标志性元素：页面**最底端**一条深色横幅，白字一句话，复述这页的论点 / 主旨。
-
-**SVG 写法**（1280×720 画布）：
-
-```svg
-<g id="bottom_banner">
-  <rect x="0" y="668" width="1280" height="52" fill="#1F3864"/>
-  <text x="640" y="700" font-family="Microsoft YaHei,Source Han Sans SC,sans-serif"
-        font-size="18" font-weight="bold" fill="#FFFFFF" text-anchor="middle">
-    本页主张：人类流动性数据为暴露科学提供了高分辨率轨迹基线
-  </text>
-</g>
-```
-
-**硬约束**：
-- 高度 52–72px（折合 22–30mm），不要更高，否则压缩正文；
-- 颜色用 `spec_lock.colors.banner`（默认 = `primary` = `#1F3864`）；
-- 字号 16–20px，**加粗**；
-- 文本 ≤ 30 字（论点要短到能口头朗读）；
-- 永远位于页面**最底层**，所有引文 / 页码 / 图都在其**上方**；
-- 封面 / 目录 / 章节封面 / 致谢页**不要**底部横幅。
-
-### 2.2 引文页脚 `citation_footer`
+### 2.1 引文页脚 `citation_footer`
 
 每张引用了文献的页都必须有。
 
@@ -75,7 +51,7 @@
 
 引文写法的完整规范见 [citation-style.md](citation-style.md)。
 
-### 2.3 中英文混排的 tspan 分段规则
+### 2.2 中英文混排的 tspan 分段规则
 
 **任意正文 / 标题 / 表格**只要同时含中文和"数字 / 英文 / 符号"，都必须分 tspan：
 
@@ -87,9 +63,9 @@
 
 切分规则（正则等价）：连续的中文汉字属于一段，连续的非中文（数字、字母、符号、空格）属于另一段。每段独立 `<tspan>` 设 `font-family`。
 
-> 这一条是**学术汇报场景的硬约束**，比 ppt-master 默认更严格。`finalize_svg.py --flatten-tspan` 不会破坏此结构（它只拍平没有 font-family 切换的 tspan）。
+> 这一条是**学术汇报场景的硬约束**。`finalize_svg.py --flatten-tspan` 不会破坏此结构（它只拍平没有 font-family 切换的 tspan）。
 
-### 2.4 页码 + Logo
+### 2.3 页码 + Logo
 
 - 页码：右下角，紧贴 `citation_footer` 与 `bottom_banner` 之间，9pt 灰；
 - Logo：右上角占位 40×40px 方块，`<image href="logos/school_logo.png">`；
@@ -121,7 +97,7 @@
 
 ### 3.3 `pipeline` · 技术路线 / 流程页（Route A P6、Route C P9）
 
-**重要**：复杂技术路线**不要**在本技能内手画 SVG `<rect>` + `<line>`，调 [cn-academic-spark-technicalroute-engine](../../../CN_Spark_technicalroute/SKILL.md) 生图后嵌入。简单 3–5 步线性流程才本地画。
+**重要**：复杂技术路线**不要**在本技能内手画 SVG `<rect>` + `<line>`，走 SKILL.md Step 5.5 的内置 TechnicalRoute 流程后嵌入。简单 3–5 步线性流程才本地画。
 
 简单流程 SVG：
 
@@ -199,8 +175,8 @@
 
 三选一形态：
 - **形态 A · 矩阵表**：行 = 主题、列 = 维度 / 时段，单元格 = 代表文献 + 关键观点。直接用 `templates/charts/consulting_table.svg`。
-- **形态 B · 思维导图**：调 [cn-academic-spark-technicalroute-engine](../../../CN_Spark_technicalroute/SKILL.md) 的"思考路线类"。
-- **形态 C · 演化时间轴**：调 [cn-academic-spark-technicalroute-engine](../../../CN_Spark_technicalroute/SKILL.md) 的"全文思路类"。
+- **形态 B · 思维导图**：走 SKILL.md Step 5.5 的内置 TechnicalRoute “思考路线类”。
+- **形态 C · 演化时间轴**：走 SKILL.md Step 5.5 的内置 TechnicalRoute “全文思路类”。
 
 由 Strategist 在 Step 4 判定走哪一形态，并在 `design_spec.md §IX` 该页备注 `framework_variant: matrix|mindmap|timeline`。
 
@@ -285,6 +261,9 @@ Strategist 没填这三个新字段时，Executor **必须**回查 `design_spec.
 - [ ] 数字 / 拉丁字符走 Times New Roman；
 - [ ] 配色不超过 4 种主色 + muted 灰；
 - [ ] 不要装饰素材（emoji / 立体 / 渐变）；
-- [ ] 复杂流程图走 cn-academic-spark-technicalroute-engine，不本地手画。
+- [ ] 复杂流程图走 SKILL.md Step 5.5 的内置 TechnicalRoute，不本地手画。
 
 跑过 `scripts/svg_quality_checker.py` 后再进入 Step 7。
+
+
+

@@ -8,7 +8,7 @@ description: Generate a new PPT layout template based on existing project files 
 
 Generate a complete set of reusable PPT layout templates for the **global template library**.
 
-> This workflow is for **library asset creation**, not project-level one-off customization. The output must be reusable by future PPT projects and discoverable from `templates/layouts/layouts_index.json`.
+> This workflow is for **library asset creation**, not project-level one-off customization. A user-uploaded PPTX is **not** added to the reusable library automatically: after the confirmation gate, Step 4 writes the final `templates/layouts/<template_id>/` directory (`*.svg` pages + `design_spec.md` + copied assets), and Step 6 runs `register_template.py` to write `templates/layouts/layouts_index.json` and refresh the layouts README. Only after Step 4-6 succeed is the template reusable by future PPT projects.
 
 ## Process Overview
 
@@ -384,3 +384,4 @@ For a standard-mode template the card looks like:
 4. **Discovery requirement**: A template directory is only discoverable after `register_template.py` has been run against it (Step 6)
 
 > **Full role specification**: [template-designer.md](../references/template-designer.md)
+
