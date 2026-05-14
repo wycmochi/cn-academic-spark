@@ -330,6 +330,18 @@ Side-by-side only: container ratio must match image ratio. Hero / atmosphere / a
 
 > **Pipeline handoff**: When C) AI generation is selected, Image_Generator consumes `Pending` rows and updates them to `Generated` or `Needs-Manual` before Executor proceeds. Status names are defined in [`svg-image-embedding.md`](svg-image-embedding.md).
 
+### Layout Catalog (BLOCKING — user must confirm Top 3 in Step 4.2 §1.5)
+
+> **Reading is mandatory** — parallel to the chart-catalog rule below, but for **deck-level layouts** instead of per-page charts.
+> - Fully read `templates/layouts/layouts_index.json` **before drafting the Eight Confirmations** — same up-front timing as `charts_index.json`. Each entry's `summary` describes the **scene fit** (e.g. "Thesis defense, academic presentations, research progress reports"); each entry's `keywords` describes the **style fingerprint**.
+> - Score every layout against the user's incoming signals (scenario keywords from the prompt + source material title; the user's intended audience, style goal, palette, and any school / institution branding) and emit **Top 3 candidates** to `design_spec.md §I 模板候选` with `summary`-quote + matched keywords + recommendation rationale + the exact `cp` command.
+> - **Never default to "free design"** — only fall back to free design if the user explicitly picks `自由设计` at confirmation §1.5, or if every candidate scores below the threshold (in which case still list them and annotate "below threshold, falling back to free design").
+> - After the user picks a layout, the main agent MUST `read_file <project_path>/templates/design_spec.md` (the chosen template's own design spec) and **fold its §II Color / §III Typography / §V Page Roster verbatim** into the project-level `design_spec.md`. Do NOT rewrite a competing palette / font plan / page roster — the template's authored spec wins.
+
+The full Step-3 workflow (Read → Score → Confirm → Copy → Re-read) lives in [SKILL.md Step 3](../SKILL.md). This Strategist file just enforces the catalog-read rule.
+
+---
+
 ### Visualization Reference (Non-blocking — Strategist recommends, no user confirmation needed)
 
 When content outline pages involve **data visualization or infographic-style structured information design** (comparisons, trends, proportions, KPIs, flows, timelines, org structures, strategic frameworks, etc.), Strategist should select appropriate visualization types from the built-in template library.

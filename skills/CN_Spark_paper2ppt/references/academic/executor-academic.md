@@ -121,7 +121,7 @@
 
 ### 3.3 `pipeline` · 技术路线 / 流程页（Route A P6、Route C P9）
 
-**重要**：复杂技术路线**不要**在本技能内手画 SVG `<rect>` + `<line>`，调 [CN_Spark_technicalroute](../../../CN_Spark_technicalroute/SKILL.md) 生图后嵌入。简单 3–5 步线性流程才本地画。
+**重要**：复杂技术路线**不要**在本技能内手画 SVG `<rect>` + `<line>`，调 [cn-academic-spark-technicalroute-engine](../../../CN_Spark_technicalroute/SKILL.md) 生图后嵌入。简单 3–5 步线性流程才本地画。
 
 简单流程 SVG：
 
@@ -199,8 +199,8 @@
 
 三选一形态：
 - **形态 A · 矩阵表**：行 = 主题、列 = 维度 / 时段，单元格 = 代表文献 + 关键观点。直接用 `templates/charts/consulting_table.svg`。
-- **形态 B · 思维导图**：调 [CN_Spark_technicalroute](../../../CN_Spark_technicalroute/SKILL.md) 的"思考路线类"。
-- **形态 C · 演化时间轴**：调 [CN_Spark_technicalroute](../../../CN_Spark_technicalroute/SKILL.md) 的"全文思路类"。
+- **形态 B · 思维导图**：调 [cn-academic-spark-technicalroute-engine](../../../CN_Spark_technicalroute/SKILL.md) 的"思考路线类"。
+- **形态 C · 演化时间轴**：调 [cn-academic-spark-technicalroute-engine](../../../CN_Spark_technicalroute/SKILL.md) 的"全文思路类"。
 
 由 Strategist 在 Step 4 判定走哪一形态，并在 `design_spec.md §IX` 该页备注 `framework_variant: matrix|mindmap|timeline`。
 
@@ -285,6 +285,6 @@ Strategist 没填这三个新字段时，Executor **必须**回查 `design_spec.
 - [ ] 数字 / 拉丁字符走 Times New Roman；
 - [ ] 配色不超过 4 种主色 + muted 灰；
 - [ ] 不要装饰素材（emoji / 立体 / 渐变）；
-- [ ] 复杂流程图走 CN_Spark_technicalroute，不本地手画。
+- [ ] 复杂流程图走 cn-academic-spark-technicalroute-engine，不本地手画。
 
 跑过 `scripts/svg_quality_checker.py` 后再进入 Step 7。

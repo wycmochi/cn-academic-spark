@@ -1,31 +1,40 @@
 {
-  "name": "cn-academic-ppt-marketplace",
-  "version": "1.0.0",
-  "description": "Claude plugin metadata for Chinese academic PPT generation and editable academic diagram workflows.",
+  "name": "cn-academic-spark",
+  "version": "1.1.0",
+  "description": "CN-Academic-Spark: a Claude skill bundle for Chinese academic reporting. Includes a PPT engine (Generate editable and reusable .pptx files with presentation slides) and a TechnicalRoute engine (Academic Technology Roadmap Generator). ",
   "owner": {
-    "name": "Yuecheng Wang"
+    "name": "Yuecheng Wang",
+    "email": "wyc_mochi@tongji.edu.cn"
   },
   "plugins": [
     {
-      "name": "cn-academic-ppt-skills",
-      "version": "1.0.0",
+      "name": "cn-academic-spark",
+      "version": "1.1.0",
       "source": "./",
-      "description": "A reusable Claude-oriented academic skill bundle: paper-to-PPT via SVG→DrawingML pipeline plus AI-generated technical-route diagrams (thinking / method / workflow).",
+      "description": "A reusable Claude-oriented academic skill collection for Chinese academic reporting. Ships two cooperating skills: a PPT engine for full editable Chinese-academic .pptx generation and a TechnicalRoute engine for single contract-first academic infographics (thinking / method / workflow archetypes, literature style retrieval).",
       "author": {
-        "name": "Yuecheng Wang"
+        "name": "Yuecheng Wang",
+        "email": "wyc_mochi@tongji.edu.cn"
       },
       "keywords": [
         "academic",
-        "ppt",
+        "pptx",
         "paper2ppt",
-        "technicalroute",
+        "technical-route",
         "research-framework",
+        "thinking-map",
         "diagram",
         "chinese",
         "svg",
-        "drawingml"
+        "drawingml",
+        "thesis-defense",
+        "literature-review",
+        "proposal"
       ],
-      "category": "academic"
+      "category": "academic",
+      "homepage": "https://github.com/wycmochi/cn-academic-spark",
+      "repository": "https://github.com/wycmochi/cn-academic-spark",
+      "license": "MIT"
     }
   ]
 }

@@ -389,7 +389,7 @@ def cmd_assess(args: argparse.Namespace) -> int:
 
 
 def main(argv: Iterable[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Literature style search for CN_Spark_technicalroute")
+    parser = argparse.ArgumentParser(description="Literature style search for cn-academic-spark-technicalroute-engine")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_plan = sub.add_parser("emit-plan", help="生成检索计划（搜索 URL + 过滤启发式）")

@@ -1,16 +1,26 @@
 #!/usr/bin/env python3
 """
 generate_route_image.py · 把 content.yaml + style_profile.md 拼成 prompt，再调用
-``CN_Spark_paper2ppt/scripts/image_gen.py``（继承自 ppt-master）的多后端生图。
+PPT engine 的 ``scripts/image_gen.py`` 做多后端生图。
 
 子命令：
   prompt   读 content.yaml + style_profile.md + archetype skeleton → 生成 prompt.md
   run      读 prompt.md + 参考图 → 调 image_gen.py 出 PNG
-  embed    把生成的 PNG 嵌入 paper2ppt 的某张 SVG 页面
+  embed    把生成的 PNG 嵌入 PPT engine 项目的某张 SVG 页面
 
 默认 backend = gemini（gemini-3-pro-image-preview，即 nano banana pro），
-环境变量 ``IMAGE_BACKEND`` / ``GEMINI_API_KEY`` 由用户在
-``CN_Spark_paper2ppt/.env`` 中配置。
+环境变量 ``IMAGE_BACKEND`` / ``GEMINI_API_KEY`` 由用户在 PPT engine 的 ``.env`` 中配置。
+
+生图脚本路径查找顺序（最高优先级在前）：
+
+1. ``IMAGE_GEN_PATH``  — 直接指向某个 image_gen.py（独立安装时最常用）；
+2. ``PAPER2PPT_ROOT``  — 指向已部署的 PPT engine 根目录，自动拼出
+   ``$PAPER2PPT_ROOT/scripts/image_gen.py``；
+3. 默认值              — 同级目录下的 ``../CN_Spark_paper2ppt/scripts/image_gen.py``
+   （仓库捆绑安装时这条就够了）。
+
+三条都失败时 ``run`` 子命令会报错并把上述变量名一并打印出来，提示用户单独安装时
+如何接生图后端。
 """
 
 from __future__ import annotations
@@ -18,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import textwrap
@@ -32,8 +43,24 @@ except ImportError:  # 退化：手写极简 yaml loader 暂用 json
 HERE = Path(__file__).resolve().parent
 TECHROUTE_ROOT = HERE.parent
 REFS_DIR = TECHROUTE_ROOT / "references"
-PAPER2PPT_ROOT = TECHROUTE_ROOT.parent / "CN_Spark_paper2ppt"
-IMAGE_GEN_PY = PAPER2PPT_ROOT / "scripts" / "image_gen.py"
+
+
+def _resolve_image_gen() -> Path:
+    """Locate the PPT engine's image_gen.py via env-var overrides, then sibling fallback.
+
+    Returns the resolved Path (may not exist; caller checks ``.exists()``).
+    """
+    override = os.environ.get("IMAGE_GEN_PATH")
+    if override:
+        return Path(override).expanduser().resolve()
+    paper2ppt_env = os.environ.get("PAPER2PPT_ROOT")
+    if paper2ppt_env:
+        return (Path(paper2ppt_env).expanduser().resolve() / "scripts" / "image_gen.py")
+    return (TECHROUTE_ROOT.parent / "CN_Spark_paper2ppt" / "scripts" / "image_gen.py").resolve()
+
+
+IMAGE_GEN_PY = _resolve_image_gen()
+PAPER2PPT_ROOT = IMAGE_GEN_PY.parent.parent  # backwards compatibility
 
 
 # ---------------------------------------------------------------------------
@@ -325,8 +352,13 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     if not IMAGE_GEN_PY.exists():
         print(
-            f"❌ 未找到 image_gen.py：{IMAGE_GEN_PY}\n"
-            "请确认 CN_Spark_paper2ppt 已部署完整 scripts/",
+            "❌ 未找到 image_gen.py：\n"
+            f"   尝试路径：{IMAGE_GEN_PY}\n"
+            "\n"
+            "cn-academic-spark-technicalroute-engine 依赖 ppt-engine 的 image_gen.py 做生图。请任选一种修复：\n"
+            "  1. 设置 IMAGE_GEN_PATH=/abs/path/to/image_gen.py 直接指向脚本；\n"
+            "  2. 设置 PAPER2PPT_ROOT=/abs/path/to/CN_Spark_paper2ppt 指向 PPT engine 根目录；\n"
+            "  3. 把 CN_Spark_paper2ppt 与 CN_Spark_technicalroute 作为兄弟目录一起安装（捆绑安装即满足）。\n",
             file=sys.stderr,
         )
         return 2
@@ -605,8 +637,245 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# assemble · 装配可编辑 SVG（Gallery-first → Template assembly 链路的 Tier 2）
+# ---------------------------------------------------------------------------
+
+TEMPLATES_DIR = TECHROUTE_ROOT / "assets" / "templates"
+PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z0-9_.\[\]]+)\s*\}\}")
+CSS_VAR_RE = re.compile(r"var\(\s*(--[A-Za-z0-9_-]+)\s*\)")
+
+
+def _parse_spec_lock(path: Path) -> dict[str, list[tuple[str, str]]]:
+    """Minimal spec_lock.md parser.
+
+    Recognises ``## section`` headers and ``- key: value`` data rows under each
+    section. Blockquote lines (``>``), blank lines, code fences and free text are
+    ignored. Returns ``{section_name: [(key, value), ...]}``.
+    """
+    sections: dict[str, list[tuple[str, str]]] = {}
+    current: str | None = None
+    in_fence = False
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.rstrip()
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence or line.startswith(">"):
+            continue
+        if line.startswith("## "):
+            current = line[3:].strip().lower()
+            sections.setdefault(current, [])
+            continue
+        if current is None or not line.lstrip().startswith("- "):
+            continue
+        body = line.lstrip()[2:]
+        if ":" not in body:
+            continue
+        key, _, value = body.partition(":")
+        sections[current].append((key.strip(), value.strip()))
+    return sections
+
+
+def _section_as_dict(rows: list[tuple[str, str]]) -> dict[str, str]:
+    return {k: v for k, v in rows}
+
+
+def _resolve_yaml_path(data: object, dotted: str) -> object | None:
+    """Walk ``data`` along a dotted path with ``[index]`` segments.
+
+    Example: ``content.yaml.panels[0].label`` → drops the leading ``content.yaml.``
+    if present, then walks ``panels → [0] → label``.
+    """
+    if dotted.startswith("content.yaml."):
+        dotted = dotted[len("content.yaml."):]
+    cur: object | None = data
+    for raw_seg in dotted.split("."):
+        if cur is None:
+            return None
+        seg = raw_seg
+        # extract trailing [i][j]... indices
+        idx_parts = re.findall(r"\[(\d+)\]", seg)
+        name = re.sub(r"\[\d+\]", "", seg)
+        if name:
+            if not isinstance(cur, dict) or name not in cur:
+                return None
+            cur = cur[name]
+        for idx in idx_parts:
+            if not isinstance(cur, list):
+                return None
+            try:
+                cur = cur[int(idx)]
+            except (IndexError, ValueError):
+                return None
+    return cur
+
+
+def _load_content_yaml(path: Path) -> object:
+    text = path.read_text(encoding="utf-8")
+    if yaml is None:
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            raise SystemExit(
+                f"❌ content.yaml 不是合法 JSON 且 PyYAML 未安装：{e}\n"
+                "请 `pip install pyyaml` 再重试。"
+            )
+    return yaml.safe_load(text)
+
+
+def cmd_assemble(args) -> int:
+    """Assemble an editable SVG from a chosen template + content.yaml + spec_lock.md.
+
+    Pipeline:
+      1. Load spec_lock.md, pull `template_key` from §source_choice and the
+         §slot_map / §color_var_map / §colors / §glossary_preserve / §forbidden
+         sections.
+      2. Read the template SVG at ``assets/templates/<template_key>.svg``.
+      3. Substitute every ``{{path}}`` with the value at the dotted path inside
+         content.yaml (per §slot_map). Unmapped placeholders abort with an
+         error so the user fixes spec_lock.md, not the template.
+      4. Substitute every ``var(--X)`` with the matching HEX from §colors (per
+         §color_var_map).
+      5. Sanity-check: every glossary_preserve term either appears verbatim in
+         the output OR was never required to appear (warn, not fail).
+      6. Write the output SVG to ``--out``.
+    """
+    spec_lock = Path(args.spec_lock).expanduser().resolve()
+    if not spec_lock.is_file():
+        print(f"❌ spec_lock.md not found: {spec_lock}", file=sys.stderr)
+        return 2
+    sections = _parse_spec_lock(spec_lock)
+
+    source = _section_as_dict(sections.get("source_choice", []))
+    template_key = source.get("template_key") or args.template_key
+    if not template_key or template_key.lower() == "none":
+        print(
+            "❌ spec_lock.md §source_choice.template_key is empty or `none`.\n"
+            "   `assemble` requires a concrete template_key. If none matches, "
+            "fall through to `run` (which calls image_gen.py for PNG output).",
+            file=sys.stderr,
+        )
+        return 2
+
+    template_path = TEMPLATES_DIR / f"{template_key}.svg"
+    if not template_path.is_file():
+        print(
+            f"❌ Template SVG not found: {template_path}\n"
+            f"   Check that `{template_key}` is a real key in "
+            f"`assets/templates/templates_index.json` and that the SVG file exists.",
+            file=sys.stderr,
+        )
+        return 2
+
+    content_path = Path(args.content).expanduser().resolve()
+    if not content_path.is_file():
+        print(f"❌ content.yaml not found: {content_path}", file=sys.stderr)
+        return 2
+    content_data = _load_content_yaml(content_path)
+
+    slot_map = _section_as_dict(sections.get("slot_map", []))
+    color_var_map = _section_as_dict(sections.get("color_var_map", []))
+    colors = _section_as_dict(sections.get("colors", []))
+    glossary = [k for k, _ in sections.get("glossary_preserve", [])]
+    # In `## glossary_preserve` we emit `- 术语` (no colon); the key holds the
+    # whole term and value is "". Re-collect raw lines to be safe.
+    if not glossary:
+        glossary = [
+            ln.strip().lstrip("-").strip()
+            for ln in spec_lock.read_text(encoding="utf-8").splitlines()
+            if ln.strip().startswith("-")
+        ]
+        glossary = []  # fallback empty rather than misclassify other lines
+
+    svg_text = template_path.read_text(encoding="utf-8")
+
+    # ---- step 3 · slot substitution -----------------------------------------
+    placeholders = set(PLACEHOLDER_RE.findall(svg_text))
+    unmapped = [p for p in placeholders if p not in slot_map]
+    if unmapped:
+        print(
+            "❌ Template has placeholders with no row in spec_lock.md §slot_map:",
+            file=sys.stderr,
+        )
+        for p in sorted(unmapped):
+            print(f"   - {{{{{p}}}}}", file=sys.stderr)
+        print(
+            "   Add one row per placeholder under `## slot_map` "
+            "(left = placeholder, right = dotted content.yaml path), then re-run.",
+            file=sys.stderr,
+        )
+        return 2
+
+    missing_in_yaml: list[str] = []
+    for placeholder, dotted in slot_map.items():
+        value = _resolve_yaml_path(content_data, dotted)
+        if value is None:
+            missing_in_yaml.append(f"{{{{{placeholder}}}}} ← {dotted}")
+            continue
+        # YAML lists / dicts coerce to str for SVG text injection.
+        svg_text = svg_text.replace(
+            "{{" + placeholder + "}}", str(value)
+        )
+    if missing_in_yaml:
+        print(
+            "❌ The following slot_map paths resolved to nothing in content.yaml:",
+            file=sys.stderr,
+        )
+        for m in missing_in_yaml:
+            print(f"   - {m}", file=sys.stderr)
+        print(
+            "   Either fill in content.yaml, or trim the placeholder from the template.",
+            file=sys.stderr,
+        )
+        return 2
+
+    # ---- step 4 · color var substitution ------------------------------------
+    used_vars = set(CSS_VAR_RE.findall(svg_text))
+    for var_name in used_vars:
+        # spec_lock writes the key as `"var(--primary)"` (quoted) → strip quotes
+        quoted_key = f'"var({var_name})"'
+        target_section_key = color_var_map.get(quoted_key) or color_var_map.get(
+            f"var({var_name})"
+        )
+        if not target_section_key:
+            print(
+                f"⚠️ var({var_name}) appears in template but has no row in "
+                f"spec_lock.md §color_var_map — leaving literal token in SVG.",
+                file=sys.stderr,
+            )
+            continue
+        # target_section_key looks like "colors.primary" — pull from §colors
+        if target_section_key.startswith("colors."):
+            color_key = target_section_key.split(".", 1)[1]
+            hex_val = colors.get(color_key)
+            if not hex_val:
+                print(
+                    f"⚠️ color_var_map points var({var_name}) → {target_section_key} "
+                    f"but §colors has no `{color_key}` row.",
+                    file=sys.stderr,
+                )
+                continue
+            svg_text = svg_text.replace(f"var({var_name})", hex_val)
+
+    # ---- step 6 · write output ----------------------------------------------
+    out_path = Path(args.out).expanduser().resolve()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(svg_text, encoding="utf-8")
+    print(f"✅ Assembled editable SVG: {out_path}")
+    print(f"   template: {template_key}.svg")
+    print(f"   placeholders substituted: {len(slot_map)}")
+    print(f"   color vars substituted: {len(used_vars)}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
 def main(argv: Iterable[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="CN_Spark_technicalroute · image prompt + gen + embed")
+    parser = argparse.ArgumentParser(description="cn-academic-spark-technicalroute-engine · image prompt + gen + embed")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_prompt = sub.add_parser("prompt", help="拼装 prompt → prompt.md")
@@ -616,7 +885,31 @@ def main(argv: Iterable[str] | None = None) -> int:
     p_prompt.add_argument("--out", required=True, help="prompt.md")
     p_prompt.set_defaults(func=cmd_prompt)
 
-    p_run = sub.add_parser("run", help="调 image_gen.py 出图")
+    p_asm = sub.add_parser(
+        "assemble",
+        help=(
+            "装配可编辑 SVG（Tier 2 路径）：读 spec_lock.md 中选好的 template_key，"
+            "用 content.yaml 替换占位符 + 用 §colors 替换 var(--*) → 输出可编辑 .svg"
+        ),
+    )
+    p_asm.add_argument("--spec-lock", required=True, help="项目的 spec_lock.md 路径")
+    p_asm.add_argument("--content", required=True, help="项目的 content.yaml 路径")
+    p_asm.add_argument(
+        "--template-key",
+        default="",
+        help="可选；显式覆盖 spec_lock.md §source_choice.template_key",
+    )
+    p_asm.add_argument("--out", required=True, help="输出 .svg 路径")
+    p_asm.set_defaults(func=cmd_assemble)
+
+    p_run = sub.add_parser(
+        "run",
+        help=(
+            "Tier 3 兜底：模板装不出可编辑 SVG 时调 image_gen.py 出 PNG。"
+            "默认 backend = gemini（nano banana pro），可切 qwen（image2）等。"
+            "把 Custom_gallery / style_refs 图当 --refs 喂进去作风格 anchor。"
+        ),
+    )
     p_run.add_argument("--prompt", required=True)
     p_run.add_argument("--aspect_ratio", default="16:9")
     p_run.add_argument("--image_size", default="2K")

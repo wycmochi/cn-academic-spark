@@ -1,6 +1,8 @@
-# Handling No-References · 文献检索没找到合适技术路线图时的 fallback
+# Handling No-References · 文献检索 + Custom_gallery 都没合适图时的 fallback
 
-> 学科冷门 / 关键词受限 / 站点不可访问 / IDE 无 web 工具时，文献样式检索可能**返回 0 张可用图**。本文件规定此时的 fallback 路径，保证 pipeline 不会卡死。
+> 学科冷门 / 关键词受限 / 站点不可访问 / IDE 无 web 工具时，文献样式检索可能**返回 0 张可用图**；同时 `assets/Custom_gallery/<discipline>/` 也可能因为该学科尚未补图而为空。本文件规定此时的 fallback 路径，保证 pipeline 不会卡死。
+>
+> **位置**：本文件描述的是 Step 7 Tier 3（AI 生 PNG）路径中的**参考图来源兜底**——当 Custom_gallery + literature 检索两路都拿不到 anchor 时如何继续出 PNG。它**不影响** Step 7 Tier 2（模板装配）的判定；Tier 2 只看 `templates_index.json` 是否打分命中，与本文件无关。
 
 ---
 
@@ -9,7 +11,8 @@
 1. `literature_search.py assess <out_dir>` 返回 `score < 0.5`（即可用参考图 < 3 张）；
 2. `manifest.json` 中 `refs` 数量 < `min_refs`（默认 5）；
 3. 用户主动在 contract.md 中标记 `reference_mode: atlas_only`；
-4. IDE 没有 `WebSearch` / `WebFetch` 且用户也未上传参考图。
+4. IDE 没有 `WebSearch` / `WebFetch` 且用户也未上传参考图；
+5. **Custom_gallery 同学科文件夹为空或无 `trans-manifest.json`**——即"既无文献参考、也无 gallery 参考"的双重缺失情景。
 
 ---
 
@@ -27,9 +30,9 @@ python3 scripts/literature_search.py offline \
 
 > "结构相似"指：archetype 一致（同是 thinking / method / workflow），sub_variant 接近（同是 quad / core-steps / horizontal-pipeline 等）。学科 / 主题 / 文字内容可以完全不同，因为风格参考只取**视觉骨架**。
 
-### 档位 B · 用 atlas 默认骨架
+### 档位 B · 用 `assets/templates/` 中匹配 archetype 的 SVG 作风格 anchor
 
-用户没上传图，但接受标准学术 infographic 风格：用 `assets/archetype-atlas/` 中对应 archetype + sub_variant 的 SVG 作为风格 anchor：
+用户没上传图，但接受标准学术 infographic 风格：用 `assets/templates/` 中对应 archetype + sub_variant_hint 的可编辑 SVG 作为风格 anchor（即使本图整体走 Tier 3 出 PNG）：
 
 ```bash
 python3 scripts/generate_route_image.py prompt \
@@ -79,19 +82,14 @@ note: <为什么没找到 — 例如 "学科为某新兴交叉领域，Google Sc
 
 ---
 
-## 与 archetype-atlas 的关系
+## 与 `assets/templates/` 的关系
 
-`assets/archetype-atlas/` 提供每个 archetype × sub_variant 的**抽象骨架 SVG**。这些 SVG 仅含：
+`assets/templates/` 提供 18 张可编辑 SVG 模板（详见 `assets/templates/templates_index.json` + `assets/templates/README.md`）。这些 SVG 在本 skill 中担**两个角色**：
 
-- 几何形状（panel / arrow / banner）
-- 占位文字 `<label>` `<text>` `<formula>` 等
-- 命名色板的 placeholder 颜色（用 CSS 变量或注释标记）
-- 在 `<title>` 与 `<desc>` 元素中写明 shape recipe 名称（R1-R10）
+1. **Tier 2 装配源**——主流路径下，`generate_route_image.py assemble` 直接把 content.yaml 注入这些 SVG，产出可编辑成品；
+2. **atlas-only fallback**（本文件场景）——当文献检索 + Custom_gallery 双双拿不到 anchor 时，`prompt --reference-mode atlas_only` 把对应模板的几何骨架 / 占位符布局 / 命名色板抽出来注入 prompt（不传 `--reference` 图），让模型按"标准学术 infographic"风格出 PNG。
 
-Atlas SVG 是**机器读 + 人读**双用途文档：
-
-- 机器读：`generate_route_image.py prompt --reference-mode atlas_only` 解析 SVG 中的 `<desc>` 提取布局描述注入 prompt；
-- 人读：用户 / agent 浏览 SVG 直接知道这个 sub_variant 长什么样。
+两个角色用同一批 SVG 文件，只是消费方式不同。Tier 2 是"装"（替换占位符）；atlas-only fallback 是"看"（提取结构特征）。
 
 ---
 

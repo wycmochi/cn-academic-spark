@@ -330,6 +330,105 @@ MAX_ASPECT_RATIO = 12        # Maximum aspect ratio (filters decorative bars)
 MAX_LOW_INFO_BPP = 0.08      # Bytes-per-pixel threshold for low-info images
 MAX_LOW_INFO_AREA = 500000   # Area threshold: only apply bpp filter below this
 
+# Figure-region render mode (academic-friendly cropping). The default
+# `block["image"]` extraction only returns the embedded raster layer, so figures
+# composed of raster + vector overlays (axis labels, arrows, annotations,
+# captions) come out incomplete. Render mode clips the page to the figure's
+# bbox (adaptively expanded to include adjacent drawings + caption text) and
+# rasterises that region — every layer ends up in the output.
+FIGURE_RENDER_PAD = 12.0        # pad (PDF points) around the embedded image's bbox before scanning neighbors
+FIGURE_MERGE_DIST = 24.0        # merge any vector drawing whose bbox sits within this many points of the current figure rect
+FIGURE_CAPTION_LOOKAHEAD = 60.0 # vertical points below the figure to scan for a "Figure N: …" caption line
+FIGURE_RENDER_ZOOM = 2.0        # 2× → ~144 dpi when the source PDF page is 72 dpi
+CAPTION_RE = re.compile(r"^\s*(figure|fig\.?|table|tab\.?|图|表)\s*[\d一二三四五六七八九十]+", re.I)
+
+
+def expand_figure_bbox(
+    page: "fitz.Page",
+    base_bbox: tuple[float, float, float, float],
+    *,
+    pad: float = FIGURE_RENDER_PAD,
+    merge_dist: float = FIGURE_MERGE_DIST,
+    caption_lookahead: float = FIGURE_CAPTION_LOOKAHEAD,
+) -> "fitz.Rect":
+    """Grow an embedded-image bbox so the clip covers the whole figure.
+
+    The base bbox from PyMuPDF only describes the raster payload. Academic
+    figures usually overlay vector axes / arrows / labels and place a caption
+    directly below. We:
+
+    1. Pad the bbox by ``pad`` on every side so abutting strokes are not sliced.
+    2. Iteratively union in any ``page.get_drawings()`` rectangle that sits
+       within ``merge_dist`` of the current figure rect. Drawings whose area
+       is more than 4× the figure rect are skipped (page frames / watermarks).
+    3. Union in the bbox of the first text block below the figure whose text
+       starts with "Figure N" / "Fig. N" / "Table N" / "图 N" / "表 N".
+
+    The returned rect is clipped to the page mediabox.
+    """
+    rect = fitz.Rect(base_bbox)
+    rect.x0 -= pad
+    rect.y0 -= pad
+    rect.x1 += pad
+    rect.y1 += pad
+
+    try:
+        drawings = page.get_drawings()
+    except Exception:
+        drawings = []
+
+    grew = True
+    while grew:
+        grew = False
+        for d in drawings:
+            d_rect = fitz.Rect(d.get("rect", (0, 0, 0, 0)))
+            if d_rect.is_empty:
+                continue
+            if d_rect.get_area() > rect.get_area() * 4:
+                continue
+            inflated = fitz.Rect(rect)
+            inflated.x0 -= merge_dist
+            inflated.y0 -= merge_dist
+            inflated.x1 += merge_dist
+            inflated.y1 += merge_dist
+            if inflated.intersects(d_rect):
+                merged = fitz.Rect(rect) | d_rect
+                if merged != rect:
+                    rect = merged
+                    grew = True
+
+    try:
+        text_blocks = page.get_text("blocks")
+    except Exception:
+        text_blocks = []
+    for tb in text_blocks:
+        if len(tb) < 5:
+            continue
+        x0, y0, x1, y1, text = tb[0], tb[1], tb[2], tb[3], tb[4]
+        if not text or not isinstance(text, str):
+            continue
+        if y0 < rect.y1 or y0 > rect.y1 + caption_lookahead:
+            continue
+        if x1 < rect.x0 - merge_dist or x0 > rect.x1 + merge_dist:
+            continue
+        if CAPTION_RE.match(text.strip()):
+            rect = rect | fitz.Rect(x0, y0, x1, y1)
+            break  # only the first caption line
+
+    return rect & page.rect
+
+
+def render_figure_png(
+    page: "fitz.Page",
+    base_bbox: tuple[float, float, float, float],
+    *,
+    zoom: float = FIGURE_RENDER_ZOOM,
+) -> tuple[bytes, "fitz.Rect"]:
+    """Render the expanded figure region as PNG bytes. Returns (png_bytes, expanded_rect)."""
+    rect = expand_figure_bbox(page, base_bbox)
+    pix = page.get_pixmap(clip=rect, matrix=fitz.Matrix(zoom, zoom), alpha=False)
+    return pix.tobytes("png"), rect
+
 
 def should_keep_image(
     block: dict[str, object],
@@ -455,16 +554,28 @@ def should_merge_lines(current: dict, next_line: dict) -> bool:
     return True
 
 
-def extract_pdf_to_markdown(pdf_path: str, output_path: str = None, images: str = "filtered") -> str:
+def extract_pdf_to_markdown(
+    pdf_path: str,
+    output_path: str = None,
+    images: str = "filtered",
+    image_extract: str = "render",
+) -> str:
     """Extract text, images, and tables from a PDF and convert to Markdown.
 
     Args:
         pdf_path: Path to the PDF file.
         output_path: Optional output path for the Markdown file.
-        images: Image extraction mode.
+        images: Which images to keep.
             "filtered" = apply size/quality filters (default),
-            "all"      = extract all images without filtering,
+            "all"      = keep every detected image,
             "none"     = skip all images.
+        image_extract: How to extract a kept image.
+            "render" = clip the page region around the embedded image's bbox
+                       (adaptively expanded to include nearby vector drawings +
+                       caption text) and rasterise it as PNG. Default for
+                       academic figures composed of raster + vector overlays.
+            "embed"  = dump the raw embedded image bytes verbatim (legacy
+                       behavior; loses vector overlays / labels / captions).
     """
     try:
         doc = fitz.open(pdf_path)
@@ -719,9 +830,27 @@ def extract_pdf_to_markdown(pdf_path: str, output_path: str = None, images: str 
                     prev_was_code = False
                 if img_dir:
                     block = el["content"]
-                    ext = block["ext"]
-                    image_data = block["image"]
                     safe_filename = filename.replace(" ", "_")
+
+                    if image_extract == "render":
+                        try:
+                            png_bytes, clip_rect = render_figure_png(page, block["bbox"])
+                            image_data = png_bytes
+                            ext = "png"
+                            tag = (
+                                f"render clip=({clip_rect.x0:.0f},{clip_rect.y0:.0f},"
+                                f"{clip_rect.x1:.0f},{clip_rect.y1:.0f})"
+                            )
+                        except Exception as e:
+                            print(f"  [WARN] render-mode failed ({e}); falling back to embedded extract")
+                            image_data = block["image"]
+                            ext = block["ext"]
+                            tag = "embed-fallback"
+                    else:
+                        image_data = block["image"]
+                        ext = block["ext"]
+                        tag = "embed"
+
                     image_name = f"{safe_filename}_p{page_num}_{img_count}.{ext}"
                     image_path = img_dir / image_name
 
@@ -735,7 +864,7 @@ def extract_pdf_to_markdown(pdf_path: str, output_path: str = None, images: str 
                         markdown_content += f"![{image_name}]({rel_img_dir}/{image_name})\n\n"
                         img_count += 1
                         prev_was_list = False
-                        print(f"  [OK] Extracted image: {image_name}")
+                        print(f"  [OK] Extracted image ({tag}): {image_name}")
                     except Exception as e:
                         print(f"  [WARN] Failed to save image: {e}")
 
@@ -757,14 +886,13 @@ def extract_pdf_to_markdown(pdf_path: str, output_path: str = None, images: str 
     return markdown_content
 
 
-def process_directory(input_dir: str, output_dir: str | None = None, images: str = "filtered") -> None:
-    """Convert all PDFs in a directory to Markdown.
-
-    Args:
-        input_dir: Directory containing PDF files.
-        output_dir: Optional output directory for Markdown files.
-        images: Image extraction mode passed through to each file conversion.
-    """
+def process_directory(
+    input_dir: str,
+    output_dir: str | None = None,
+    images: str = "filtered",
+    image_extract: str = "render",
+) -> None:
+    """Convert all PDFs in a directory to Markdown."""
     input_path = Path(input_dir)
 
     if output_dir:
@@ -779,7 +907,12 @@ def process_directory(input_dir: str, output_dir: str | None = None, images: str
     for pdf_file in pdf_files:
         output_file = output_path / (pdf_file.stem + '.md')
         print(f"Processing: {pdf_file.name}")
-        extract_pdf_to_markdown(str(pdf_file), str(output_file), images=images)
+        extract_pdf_to_markdown(
+            str(pdf_file),
+            str(output_file),
+            images=images,
+            image_extract=image_extract,
+        )
 
 
 def main() -> int:
@@ -810,7 +943,19 @@ Structure detection features:
         '--images',
         choices=['all', 'filtered', 'none'],
         default='filtered',
-        help='Image extraction mode: filtered=apply size/quality filters (default), all=no filtering, none=skip images',
+        help='Which images to keep: filtered=apply size/quality filters (default), all=no filtering, none=skip images',
+    )
+    parser.add_argument(
+        '--image-extract',
+        choices=['render', 'embed'],
+        default='render',
+        help=(
+            'How to extract a kept image. render (default) clips the page region '
+            'around the embedded image bbox (adaptively expanded to capture nearby '
+            'vector overlays + caption) and rasterises it — preserves academic-figure '
+            'labels / arrows / axes. embed keeps the legacy behavior of dumping the '
+            'raw embedded image bytes (faster, but lossy for layered figures).'
+        ),
     )
 
     args = parser.parse_args()
@@ -819,9 +964,13 @@ Structure detection features:
 
     if input_path.is_file():
         output = args.output or str(input_path.with_suffix('.md'))
-        extract_pdf_to_markdown(str(input_path), output, images=args.images)
+        extract_pdf_to_markdown(
+            str(input_path), output, images=args.images, image_extract=args.image_extract,
+        )
     elif input_path.is_dir():
-        process_directory(str(input_path), args.output, images=args.images)
+        process_directory(
+            str(input_path), args.output, images=args.images, image_extract=args.image_extract,
+        )
     else:
         print(f"Error: File or directory not found: {args.input}")
         return 1

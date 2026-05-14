@@ -2,10 +2,22 @@
 
 > 每个 archetype × sub_variant 都有一份**英文骨架 prompt**（描述结构与风格，喂给图像模型）+ **中文 CONTENT 注入区**（描述实际节点文字，逐字保留）。骨架不写入任何学科 / 主题 / 案例，所有具体内容由 `content.yaml` 注入。
 
-## 拼装函数（被 `generate_route_image.py prompt` 调用）
+## 优先级链（Gallery-first → Template assembly → AI 生 PNG）
+
+本文件描述的是**第三级**——AI 生图——的 prompt 拼装规则。它**只有在前两级都不可行**时才被调用：
+
+| Tier | 路径 | 输出形式 | 触发条件 |
+|---|---|---|---|
+| **1** | Always: 读 `assets/Custom_gallery/<discipline>/` 取 1–3 张作**结构 / 风格 anchor** | — (anchor，不是产物) | 学科文件夹存在 `trans-manifest.json` 且至少一个条目 `agentKeywords` 匹配 |
+| **2** | 读 `assets/templates/templates_index.json` 找能装下 anchor 那种结构的可编辑模板 → `generate_route_image.py assemble` | **可编辑 SVG**（首选交付） | `templates_index.json` 中至少一个模板的 `sub_variant_hint` 匹配 + summary "Pick for …" 命中 |
+| **3** | 本文件——AI 生图，把 Tier 1 的 gallery anchor 作 `--refs` 喂给 `image_gen.py` | **PNG**（兜底交付） | Tier 2 找不到 ≥ 2 分的模板 |
+
+**Gallery anchor 永远进入 prompt**——即使走 Tier 2 装配也仍然把 anchor 当结构灵感引用（在 design_spec §IV.1 记录），只是不喂给生图模型。本文件下面的 prompt 骨架只覆盖 Tier 3。
+
+## 拼装函数（被 `generate_route_image.py prompt` 调用 · Tier 3 路径）
 
 ```python
-def build_prompt(archetype, sub_variant, content, contract, color_scheme, reference_mode):
+def build_prompt(archetype, sub_variant, content, contract, color_scheme, reference_mode, gallery_refs):
     return "\n\n".join([
         COMMON_PREAMBLE,
         f"[ARCHETYPE]\n{archetype} / {sub_variant}",
@@ -16,9 +28,12 @@ def build_prompt(archetype, sub_variant, content, contract, color_scheme, refere
         "[CHINESE CONTENT — render exactly as written, no translation]\n" + render_cn_content(content),
         "[GLOSSARY — preserve verbatim]\n" + render_glossary(content.get("glossary_preserve", [])),
         atlas_only_clause(reference_mode),
+        reference_image_usage_clause(gallery_refs, literature_refs=reference_mode == "literature"),
         "[NEGATIVE]\n" + NEGATIVE,
     ])
 ```
+
+`gallery_refs` 是 design_spec §IV.1 选中的 1–3 个 `assets/Custom_gallery/<discipline>/<file>` 路径；连同 literature `style_refs/*.png` 一起作为 `--refs` 在 `run` 子命令传给 `image_gen.py`。Prompt 里通过 `[REFERENCE IMAGE USAGE]` clause（见下文）明确告诉模型这些图是**结构 / 风格 anchor，不是内容源**。
 
 ---
 
@@ -316,22 +331,37 @@ no extra panels, columns, steps, or stages beyond what [STRUCTURE] specifies
 
 ---
 
-## 使用 reference images（literature 模式）
+## 使用 reference images（Custom_gallery anchor + literature style refs 通用）
 
-literature 模式下传入的参考图作为视觉风格 anchor。Prompt 头部追加：
+只要 `--refs` 不为空（无论来自 `assets/Custom_gallery/<discipline>/`、还是 `style_refs/*.png`、还是两者都有），Prompt 头部都必须追加这一条 clause——它是 image-to-image 接口下的**关键稳定性条款 + 学术抄袭防火墙**。没有它模型会偷懒抄参考图文本，等价于学术抄袭。
 
 ```
 [REFERENCE IMAGE USAGE]
-The provided reference images are STYLE ANCHORS ONLY. Use them to guide:
-  - panel rhythm and spacing
-  - color saturation level
+The provided reference images are STYLE / STRUCTURE ANCHORS ONLY. Use them to guide:
+  - panel count and grid rhythm
+  - flow direction (left-right / top-down / circular / two-track)
+  - color saturation level and accent placement
   - icon density and weight
   - line stroke weight
-  - typography weight
+  - typography weight and CJK / Latin balance
 
-DO NOT copy any text, node labels, formula, author name, citation, or specific
-content from the references. Replace 100% of the content with [CHINESE CONTENT].
-The references' Chinese / English / numeric content is irrelevant to this figure.
+DO NOT copy any text, node labels, formula, dataset name, place name, model name,
+author name, citation, or specific numeric value from the references. Replace 100%
+of the content with [CHINESE CONTENT] and [GLOSSARY]. The references' Chinese /
+English / numeric content is irrelevant to this figure — they were curated as
+visual exemplars, not as content sources. Any verbatim copy of reference text
+would constitute academic plagiarism and is forbidden.
+
+If a reference image contains a phrase that happens to also appear in the user's
+own paper, source it from [CHINESE CONTENT] or [GLOSSARY] (which were derived
+strictly from the user's material), never from the reference image.
 ```
 
-这条 clause 是 image2-to-image 接口下的**关键稳定性条款**——没有它模型会偷懒抄参考图文本。
+### Custom_gallery vs literature refs — they enter the same `--refs` bag
+
+虽然来源不同，**对生图模型而言完全等价**：都是结构 / 风格 anchor。两个差异点只在调用层处理：
+
+1. **筛选标准不同**：gallery refs 通过 `Custom_gallery/<discipline>/trans-manifest.json` 的 `agentKeywords` 命中筛出；literature refs 通过 Step 3 的 `literature_search.py emit-plan` + `record` 拉取。
+2. **academic-integrity 风险不同**：gallery 是仓库 vendored 图，风险更高（每张都被多次反复使用，模型容易记住其内容）；literature refs 是新检索的，风险相对低。但 prompt clause 一视同仁——这条 clause 默认对两类都开启。
+
+prompt 拼装时如果 `gallery_refs` 与 `literature_refs` 都有，按"gallery 在前、literature 在后"排序传入 `--refs`（gallery 通常更同主题、anchor 价值更高）。
