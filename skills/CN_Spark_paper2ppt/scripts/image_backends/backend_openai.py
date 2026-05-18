@@ -30,6 +30,7 @@ import os
 import time
 import threading
 from collections.abc import Mapping
+from pathlib import Path
 
 from openai import OpenAI
 from image_backends.backend_common import (
@@ -271,7 +272,8 @@ def _gpt_image_options(model: str) -> tuple[dict, str]:
 def _generate_image(api_key: str, prompt: str,
                     aspect_ratio: str = "1:1", image_size: str = "1K",
                     output_dir: str = None, filename: str = None,
-                    model: str = DEFAULT_MODEL, base_url: str = None) -> str:
+                    model: str = DEFAULT_MODEL, base_url: str = None,
+                    reference_images: list[str] | None = None) -> str:
     """
     Image generation via OpenAI-compatible API.
 
@@ -316,6 +318,10 @@ def _generate_image(api_key: str, prompt: str,
         print(f"  Background:   {request['background']}")
     if request.get("moderation"):
         print(f"  Moderation:   {request['moderation']}")
+    if reference_images:
+        print(f"  References:   {len(reference_images)}")
+        for ref in reference_images:
+            print(f"    - {Path(ref).name}")
     print()
 
     start_time = time.time()
@@ -334,9 +340,22 @@ def _generate_image(api_key: str, prompt: str,
     hb_thread = threading.Thread(target=_heartbeat, daemon=True)
     hb_thread.start()
 
+    file_handles = []
     try:
-        resp = client.images.generate(**request)
+        if reference_images:
+            for ref in reference_images:
+                ref_path = Path(ref).expanduser()
+                if not ref_path.is_file():
+                    raise FileNotFoundError(f"Reference image not found: {ref}")
+                file_handles.append(ref_path.open("rb"))
+            edit_request = dict(request)
+            edit_request["image"] = file_handles if len(file_handles) > 1 else file_handles[0]
+            resp = client.images.edit(**edit_request)
+        else:
+            resp = client.images.generate(**request)
     finally:
+        for fh in file_handles:
+            fh.close()
         heartbeat_stop.set()
         hb_thread.join(timeout=1)
 
@@ -365,7 +384,8 @@ def _generate_image(api_key: str, prompt: str,
 def generate(prompt: str,
              aspect_ratio: str = "1:1", image_size: str = "1K",
              output_dir: str = None, filename: str = None,
-             model: str = None, max_retries: int = MAX_RETRIES) -> str:
+             model: str = None, max_retries: int = MAX_RETRIES,
+             reference_images: list[str] | None = None) -> str:
     """
     OpenAI-compatible image generation with automatic retry.
 
@@ -382,6 +402,7 @@ def generate(prompt: str,
         filename: Output filename (without extension)
         model: Model name (default: gpt-image-2)
         max_retries: Maximum number of retries
+        reference_images: Optional local images used as style/structure anchors
 
     Returns:
         Path of the saved image file
@@ -411,7 +432,7 @@ def generate(prompt: str,
         try:
             return _generate_image(api_key, prompt,
                                    aspect_ratio, image_size, output_dir,
-                                   filename, model, base_url)
+                                   filename, model, base_url, reference_images)
         except Exception as e:
             last_error = e
             if attempt < max_retries and is_rate_limit_error(e):

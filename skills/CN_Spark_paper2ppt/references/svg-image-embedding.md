@@ -1,6 +1,7 @@
 > See shared-standards.md for common technical constraints.
 
 # SVG Image Embedding Guide
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 6 嵌入图片时读取；它定义 SVG image 标签、裁切、路径和后处理要求。
 
 Technical spec and workflow for adding images to SVG files.
 
@@ -49,7 +50,7 @@ Defined in the Design Specification & Content Outline; each image carries an `Ac
 5. Post-processing & Export → follow shared-standards.md §5
 ```
 
-> Keep external references in `svg_output/` during generation. `finalize_svg.py` auto-embeds images into `svg_final/`; export PPTX from `svg_final/`.
+> Keep external references in `svg_output/` during generation. `finalize_svg.py` auto-embeds images into `svg_final/`. For PPTX export, run `svg_to_pptx.py <project_path>` and let the exporter split sources automatically: the native editable deck reads `svg_output/`, while the legacy SVG-reference deck reads `svg_final/`.
 
 ---
 

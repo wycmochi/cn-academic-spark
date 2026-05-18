@@ -1,311 +1,295 @@
-# {project_name} - Design Spec
+# Design Spec Reference
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 4 写项目 design_spec.md 时读取；它提供中文学术 PPT 的人类可读设计说明骨架。
 
-> Human-readable design narrative — rationale, audience, style, color choices, content outline. Read once by downstream roles for context.
->
-> Machine-readable execution contract: `spec_lock.md` (color / typography / icon / image short form). Executor re-reads `spec_lock.md` before every SVG page to resist context-compression drift. Keep both in sync; on divergence, `spec_lock.md` wins.
+This is the human-readable design narrative for `<project_path>/design_spec.md`. It records rationale, audience, style, color choices, academic narrative structure, page roster, asset plan, and executor handoff details.
+
+The machine-readable execution contract is `<project_path>/spec_lock.md`, generated from `templates/spec_lock_reference.md`. Keep both files synchronized; if they diverge during execution, `spec_lock.md` wins.
+
+Use English section names and keys. Field values may be Chinese when they are final deck content.
+
+If the selected template came from a user-provided PPTX, add a dedicated note in the template strategy: `source: user_pptx_template`, `priority: highest`, and list the extracted RGB HEX palette. Its aesthetic design and parameters override all built-in defaults unless the user explicitly asks otherwise. This includes master/layout placeholder geometry, title position, title box geometry, font family, font size, bold settings, title color, body font scale, logo position, footer rhythm, page-number position, and page density.
+
+For user PPTX templates, use master-placeholder fill mode. Fill the template author's master/layout placeholders and existing slide-local slots; do not create extra free-floating shapes, text boxes, or image frames when a suitable slot exists. Master/layout fixed text, logo, school name, department name, page-number slot, and decorative chrome are protected regions that generated content must not overlap.
+
+For user PPTX templates, copy the manifest-derived `editableContentRegion` into the project spec. It defines the true writable content box after excluding logo, school name, footer, page number, and authored chrome. Generated content must be centered inside that region, not inside the full slide.
 
 ## I. Project Information
 
 | Item | Value |
-| ---- | ----- |
-| **Project Name** | {project_name} |
-| **Canvas Format** | {canvas_info['name']} ({canvas_info['dimensions']}) |
-| **Page Count** | [Filled by Strategist] |
-| **Design Style** | {design_style} |
-| **Target Audience** | [Filled by Strategist] |
-| **Use Case** | [Filled by Strategist] |
-| **Created Date** | {date_str} |
+|---|---|
+| Project Name | `<project_name>` |
+| Canvas Format | `ppt169` / `ppt43` / other confirmed format |
+| Page Count | Confirmed page count |
+| Academic Route | Route A / B / C / D |
+| Paper Type | Discovery / Methods / Resource / Clinical / Materials / Review |
+| Narrative Framework | `question-to-evidence` / `problem-to-solution` / `workflow-to-validation` / `design-to-inference` / `property-to-mechanism` / `evidence-map` |
+| Target Audience | Defense committee / supervisor / group meeting / course instructor / seminar audience |
+| Use Case | Thesis defense / paper presentation / proposal / literature review / course report |
+| Source Material | List source files and converted Markdown path |
+| Template Candidates | Top 3 from `templates/layouts/layouts_index.json`, including summary quote, matched keywords, rationale, and copy command |
+| Selected Template | Template name, source, and whether it came from user PPTX |
 
----
+If a user PPTX template is selected, include:
+- `template_source: user_pptx`
+- recognized school logo, school name, department / college name
+- extracted palette as RGB HEX values
+- extracted master/layout placeholder geometry, title geometry, title font size, title bold setting, title color, body font scale, logo position, footer rhythm, page-number position, and page density when detected
+- per-page selected source layout and slot mapping
+- per-page `editableContentRegion.primary`, `availableRegions`, `titleRegion`, `footerRegion`, and protected / forbidden regions from `manifest.json`
+- overlap audit status and unused-placeholder cleanup notes
+- note: "User PPTX template aesthetics and parameters have highest priority over academic defaults, TechnicalRoute defaults, and generic brand defaults."
+- note: "Generated content must fill master/layout placeholders or existing slide-local slots; protected master/layout identity regions must not be overlapped."
 
 ## II. Canvas Specification
 
 | Property | Value |
-| -------- | ----- |
-| **Format** | {canvas_info['name']} |
-| **Dimensions** | {canvas_info['dimensions']} |
-| **viewBox** | `{canvas_info['viewbox']}` |
-| **Margins** | [Recommended by Strategist, e.g., left/right 60px, top/bottom 50px] |
-| **Content Area** | [Calculated from canvas] |
+|---|---|
+| Format | PPT 16:9 unless confirmed otherwise |
+| Dimensions | `1280 x 720` for PPT 16:9 |
+| viewBox | `0 0 1280 720` |
+| Safe Margin | Usually 40-60 px; increase for dense Chinese academic text |
+| Title Zone | Usually 56-88 px high, depending on template |
+| Content Zone | Main evidence / figure / formula / route diagram area |
+| Footer Zone | Citation footer, page number, bottom banner |
+| Writable Region | In user PPTX template mode, the `editableContentRegion.primary` rectangle from the import manifest |
 
----
+Academic pages must reserve footer space for citation markers and bottom banner text. Do not place charts, formulas, or captions into the footer zone.
 
 ## III. Visual Theme
 
-### Theme Style
+### Theme Direction
 
-- **Style**: {design_style}
-- **Theme**: [Light theme / Dark theme]
-- **Tone**: [Filled by Strategist, e.g., tech, professional, modern, innovative]
+Record:
+- `style_goal`: concise academic, defense-ready, figure-first, template-faithful.
+- `tone`: rigorous, readable, restrained.
+- `visual_density`: dense / balanced / breathing. For academic paper-to-PPT body pages, default to `dense` unless the page is cover, divider, ending/Q&A, or a deliberate single-message anchor page.
+- `template_inheritance`: strict / partial / free design.
 
-### Color Scheme
-
-> Strategist: determine values from project content, industry, brand colors.
+### Color Strategy
 
 | Role | HEX | Purpose |
-| ---- | --- | ------- |
-| **Background** | `#......` | Page background (light theme typically white; dark theme dark gray/navy) |
-| **Secondary bg** | `#......` | Card background, section background |
-| **Primary** | `#......` | Title decorations, key sections, icons |
-| **Accent** | `#......` | Data highlights, key information, links |
-| **Secondary accent** | `#......` | Secondary emphasis, gradient transitions |
-| **Body text** | `#......` | Main body text (dark theme uses light text) |
-| **Secondary text** | `#......` | Captions, annotations |
-| **Tertiary text** | `#......` | Supplementary info, footers |
-| **Border/divider** | `#......` | Card borders, divider lines |
-| **Success** | `#......` | Positive indicators (green family) |
-| **Warning** | `#......` | Issue markers (red family) |
+|---|---|---|
+| Background | `#......` | Slide background |
+| Surface | `#......` | Light panels or figure backplates |
+| Primary | `#......` | Section headers, main lines, key icons |
+| Secondary | `#......` | Supporting structures |
+| Accent | `#......` | Highlights and data emphasis |
+| Accent Critical | `#A23B2A` | Bold key text, critical conclusion, warning / contradiction |
+| Text | `#......` | Main text |
+| Text Secondary | `#......` | Captions, footers, annotations |
+| Border | `#......` | Dividers, table rules, node outlines |
 
-> **Reference**: Industry colors in `references/strategist.md` or `scripts/config.py` under `INDUSTRY_COLORS`
+Rules:
+- The selected template palette wins over generic academic defaults.
+- A user-provided PPTX template palette wins over every other palette when present.
+- A user-provided PPTX template's detected title style, typography scale, placeholder geometry, logo position, footer rhythm, and page-number position win over built-in academic layout defaults when present.
+- Use HEX RGB values only.
+- Use 60-30-10 color balance on ordinary pages.
+- Keep text contrast at or above 4.5:1.
+- Important text may be bold and brick red (`#A23B2A` by default), but do not turn whole paragraphs red.
+- TechnicalRoute pages inherit the deck palette unless the route-local lock explicitly maps variables differently.
 
-### Gradient Scheme (if needed, using SVG syntax)
+### Gradient And Background Use
 
-```xml
-<!-- Title gradient -->
-<linearGradient id="titleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-  <stop offset="0%" stop-color="#[primary]"/>
-  <stop offset="100%" stop-color="#[secondary accent]"/>
-</linearGradient>
+Gradients are optional and should be restrained. If used, specify SVG-compatible `<linearGradient>` or `<radialGradient>` definitions with `stop-opacity`; `rgba()` is forbidden.
 
-<!-- Background decorative gradient (note: rgba forbidden, use stop-opacity) -->
-<radialGradient id="bgDecor" cx="80%" cy="20%" r="50%">
-  <stop offset="0%" stop-color="#[primary]" stop-opacity="0.15"/>
-  <stop offset="100%" stop-color="#[primary]" stop-opacity="0"/>
-</radialGradient>
-```
-
----
+Avoid decorative stock backgrounds. Academic decks should use source figures, formula renderings, complex table screenshots, data charts, or route diagrams as the visual center.
 
 ## IV. Typography System
 
 ### Font Plan
 
-> **Per-role families are expected, not optional.** Title / Body / Emphasis / Code may each use a different family (e.g., display serif title + geometric sans body). One family throughout is not required. See [strategist.md §g — Font Combinations](../references/strategist.md) for starting directions; you may propose a combination not listed.
->
-> **⚠️ PPT-safe stack discipline (HARD rule).** PPTX stores a single `typeface` per run — no runtime fallback. Every stack MUST end with a cross-platform pre-installed font: `"Microsoft YaHei", sans-serif` / `SimSun, serif` / `Arial, sans-serif` / `"Times New Roman", serif` / `Consolas, "Courier New", monospace`. Stacks led by a non-preinstalled font (Inter / Google Fonts / brand typefaces) are allowed only when this spec notes the font-install or embedding requirement.
+PPTX stores one typeface per run. Every stack must end with a cross-platform pre-installed font.
 
-**Typography direction**: [Fill in one phrase, e.g., "modern CJK sans" / "academic serif" / "brand-specific: McKinsey Bower (requires font install)"]
+| Role | CJK | Latin | Fallback Tail |
+|---|---|---|---|
+| Title | Microsoft YaHei / SimHei / SimSun / KaiTi | Georgia / Cambria / Arial / Times New Roman | serif or sans-serif |
+| Body | Microsoft YaHei / SimSun | Arial / Times New Roman | sans-serif or serif |
+| Emphasis | Same as title or body | Same as title or body | same family class |
+| Formula Label | Microsoft YaHei / SimSun | Times New Roman / Cambria | serif |
+| Code / Algorithm | Microsoft YaHei | Consolas / Courier New | monospace |
 
-Two views on the same font decisions — fill both, keep them consistent:
+Write exact per-role font stacks:
+- `title_family: ...`
+- `body_family: ...`
+- `emphasis_family: ...`
+- `formula_family: ...`
+- `code_family: ...`
 
-- **Role breakdown** (table below) — lists the *pieces* per role: CJK font, Latin font, CSS generic fallback. Human-readable design language.
-- **Per-role font stacks** (after the table) — the *ordered* CSS `font-family` strings that actually go into SVG `font-family=""` and `spec_lock.md`'s `*_family` lines. Order controls browser rendering (Latin-led vs. CJK-led), so this is the **actual data** — not derivable from the table alone.
+Academic defaults:
+- Chinese academic oral deck: `"Microsoft YaHei", "PingFang SC", Arial, sans-serif`
+- Formal thesis / humanities: `SimSun, "Times New Roman", serif` for body, paired with a stronger title stack.
+- Formula-heavy pages: render formula title, complete formula, and variable interpretation as one PNG via `scripts/latex_formula_to_png.py --block-json`.
 
-| Role | Chinese | English | Fallback tail |
-| ---- | ------- | ------- | ------------- |
-| **Title** | [e.g., `"Microsoft YaHei"`, or `"Microsoft YaHei", "PingFang SC"` for macOS preview nicety] | [e.g., `Georgia`] | [e.g., `serif`] |
-| **Body** | [e.g., `"Microsoft YaHei", "PingFang SC"`] | [e.g., `Arial`] | [e.g., `sans-serif`] |
-| **Emphasis** | [e.g., `SimSun`, or `—` for Latin-only] | [e.g., `Georgia`] | [e.g., `serif`] |
-| **Code** | — | [e.g., `Consolas, "Courier New"`] | [e.g., `monospace`] |
+### Font Size Ramp
 
-**Per-role font stacks** (CSS `font-family` strings, one per role — arrange the table's pieces in the order your design intends):
+All sizes use px in SVG. `body` is the baseline.
 
-- Title: `[Fill in stack, e.g. Georgia, "Microsoft YaHei", serif for Latin-led; or "Microsoft YaHei", "PingFang SC", Georgia, serif for CJK-led]`
-- Body: `[Fill in stack — may be same as Title]`
-- Emphasis: `[Fill in stack, or write "same as Body" to omit the override]`
-- Code: `[Fill in monospace stack, e.g. Consolas, "Courier New", monospace]`
+| Purpose | Ratio To Body | Example body=18 | Example body=22 | Weight |
+|---|---:|---:|---:|---|
+| Cover title | 2.5-5x | 45-90 | 55-110 | Bold / Heavy |
+| Section opener | 2-2.5x | 36-45 | 44-55 | Bold |
+| Page title | 1.5-2x | 27-36 | 33-44 | Bold |
+| Subtitle | 1.2-1.5x | 22-27 | 26-33 | Semibold |
+| Body | 1x | 18 | 22 | Regular |
+| Caption / annotation | 0.7-0.85x | 13-15 | 15-19 | Regular |
+| Footnote / citation | 0.5-0.65x | 9-12 | 11-14 | Regular |
 
-> **Stack ordering — why it matters**: CSS `font-family` falls back font-by-font (not char-by-char) — the browser uses the **first installed** font for everything it can render, skipping to the next only when a glyph is missing. So:
-> - `Georgia, "Microsoft YaHei", serif` → Latin in Georgia (elegant serif), CJK falls through to Microsoft YaHei. **Use when Latin typography is the primary design statement** (academic / editorial / Latin-heavy covers).
-> - `"Microsoft YaHei", Georgia, serif` → Everything in Microsoft YaHei (Latin uses YaHei's Latin glyphs — a different design tone). **Use when the deck is CJK-primary and Latin is incidental**.
->
-> The converter (`drawingml_utils.py parse_font_family`) maps these to PPTX `<a:latin>` / `<a:ea>` regardless of order — but browser preview and SVG native rendering reflect stack order. Pick the order matching your design intent.
-
-> **Why two views**: the breakdown shows role assignment at a glance; stacks carry the ordering info the breakdown can't encode. Keep both consistent — table cells should be exactly the fonts in the stacks (any order).
-
-### Font Size Hierarchy
-
-> **Ramp discipline, not a fixed menu.** `body` is the single anchor; every other size is a ratio of it. Each row below gives the role's allowed ratio band — Executor may pick any px value inside the band (e.g., 40px hero number, 13px chart annotation, 72px cover headline) without pre-declaring intermediates in `spec_lock.md`.
-> **Unit**: px uniformly (SVG native) to avoid pt/px conversion errors.
-> **Baseline selection**: drive by **content density**, not design style.
-
-**Baseline**: Body font size = [fill in]px (any reasonable integer — `18` and `24` are most common; `16` for chart-heavy, `20`/`22` for medium density, `28-32` for poster / cover decks are all valid. Drive by content density.)
-
-| Purpose | Ratio to body | Example @ body=24 (relaxed) | Example @ body=18 (dense) | Weight |
-| ------- | ------------- | --------------------------- | ------------------------- | ------ |
-| Cover title (hero headline) | 2.5-5x | 60-120px | 45-90px | Bold / Heavy |
-| Chapter / section opener | 2-2.5x | 48-60px | 36-45px | Bold |
-| Page title | 1.5-2x | 36-48px | 27-36px | Bold |
-| Hero number (consulting KPIs) | 1.5-2x | 36-48px | 27-36px | Bold |
-| Subtitle | 1.2-1.5x | 29-36px | 22-27px | SemiBold |
-| **Body content** | **1x** | **24px** | **18px** | Regular |
-| Annotation / caption | 0.7-0.85x | 17-20px | 13-15px | Regular |
-| Page number / footnote | 0.5-0.65x | 12-16px | 9-12px | Regular |
-
-> The two px columns are illustrations for common baselines. For any other `body` value, multiply by each row's ratio — the checker (`svg_quality_checker._check_spec_lock_drift`) reads the live `body` from `spec_lock.md` and applies the bands, so no code change is needed for a different baseline.
-
-> Sizes outside **every** band remain forbidden — surface the need and extend `spec_lock.md typography` (e.g., `cover_title: 96`) rather than invent a one-off value.
-
----
+Dense academic result pages usually use body 16-18 px. Presentation-friendly explanation pages usually use body 20-22 px.
 
 ## V. Layout Principles
 
 ### Page Structure
 
-- **Header area**: [Height and content description]
-- **Content area**: [Height and content description]
-- **Footer area**: [Height and content description]
+- Header area: page title, module number, optional small section marker. When a user PPTX template provides a title placeholder, fill that slot and keep it clear of school name and logo protected regions.
+- Content area: one dominant evidence object whenever possible. User PPTX placeholder geometry is authoritative when present; choose a different source layout if the current layout lacks a suitable content or picture slot.
+- Footer area: GB/T 7714 citation marker, bottom banner, page number. In user-template mode, generated page numbers follow the source master/layout page-number placeholder when present; otherwise use the built-in academic default.
+- User-template writable area: use `editableContentRegion.primary` as the body content box and center the body content within it. Do not position content by eyeballing the full `1280 x 720` canvas.
 
-### Layout Pattern Library (combine or break as content demands)
+### Layout Pattern Library
 
-> **Principle — proportion follows information weight, not preset ratios.** The table below is a pattern library, not a menu. Combine two patterns on one page, break the grid entirely for a `breathing` page, or propose a pattern not listed when content calls for it. Defaulting every page to a symmetric grid produces the "AI-generated" look — vary intentionally.
+| Pattern | Suitable Academic Use |
+|---|---|
+| Figure-first split | Result slides with paper figure + interpretation |
+| Formula + explanation | One formula block PNG containing role, formula, variable definitions, and intuition; prefer templates from `templates/formula/formula_templates_index.json` |
+| Method pipeline | Algorithm / experimental procedure / data workflow |
+| Evidence chain | Mechanism or causal evidence across 3-5 steps |
+| Table screenshot + takeaway | Complex table too dense to redraw |
+| Comparison matrix | Baselines, ablation, subgroup, sensitivity analysis |
+| Full-width figure | Important source figure or route diagram |
+| Text-light conclusion | Summary, implication, planning / outlook pages |
+| Two-column reading | Literature review theme comparison |
+| Timeline / milestone | Proposal plan and research schedule |
 
-| Pattern | Suitable Scenarios |
-| ------- | ----------------- |
-| **Single column centered** | Covers, conclusions, key points |
-| **Symmetric split (5:5)** | Comparisons where two sides carry equal weight |
-| **Asymmetric split (3:7 / 2:8)** | One side dominates — data chart vs. brief takeaway, image vs. caption |
-| **Top-bottom split** | Processes, timelines, ultra-wide image + text |
-| **Three/four column cards** | Feature lists, parallel points, team intros |
-| **Matrix grid (2×2)** | Two-axis classifications, strategic quadrants |
-| **Z-pattern / waterfall** | Storytelling, case studies — content blocks alternate left/right guiding the eye |
-| **Center-radiating** | Core concept + surrounding nodes, ecosystem / stakeholder maps |
-| **Full-bleed + floating text** | `breathing` / feature pages — image fills canvas, text floats with opacity overlay |
-| **Figure-text overlap** | Hero moments — headline / big number sits over or against an image edge instead of beside it |
-| **Negative-space-driven** | A single element in 40-60% whitespace — lets one idea land with weight |
+### Spacing And Shape Discipline
 
-### Spacing Specification
-
-> Spacing defaults depend on **container type**. Cards are one option, not the universal default. Tables below split by container type; a page may consult only one set (e.g., a `breathing` page with no cards uses only universal + non-card entries).
-
-**Universal** (any container type):
-
-| Element | Recommended Range | Current Project |
-| ------- | ---------------- | --------------- |
-| Safe margin from canvas edge | 40-60px | [fill in] |
-| Content block gap | 24-40px | [fill in] |
-| Icon-text gap | 8-16px | [fill in] |
-
-**Card-based layouts** (consult only when the page uses cards — typically `dense` pages with parallel containers):
-
-| Element | Recommended Range | Current Project |
-| ------- | ---------------- | --------------- |
-| Card gap | 20-32px | [fill in] |
-| Card padding | 20-32px | [fill in] |
-| Card border radius | 8-16px | [fill in] |
-| Single-row card height | 530-600px | [fill in] |
-| Double-row card height | 265-295px each | [fill in] |
-| Three-column card width | 360-380px each | [fill in] |
-
-**Non-card containers** (naked text blocks / full-bleed imagery / divider-separated content — typical for `breathing` pages or minimalist designs):
-
-- Vertical rhythm carried by **whitespace**, not gutters — block gaps run wider than card gaps since there's no container edge to separate content.
-- **Line-height**: 1.4-1.6× body font size.
-- **Full-bleed text placement**: inset text away from the image's focal points; legibility over photographic backgrounds typically needs a gradient or opacity overlay.
-- **Content width** is driven by reading comfort and image composition, not a card grid slot — don't back-compute "column width" when there's no column.
-
----
+- Safe margin: 40-60 px.
+- Built-in content boundary baseline: for PPT 16:9 use left/right/top/bottom margin 60 px, giving a `1160 x 600` content area unless a selected template or user-PPTX manifest overrides it. This mirrors the stable `LAYOUT_MARGINS` contract in `scripts/config.py`.
+- Content block gap: 20-40 px.
+- Icon-text gap: 8-14 px.
+- Card padding: 16-28 px.
+- Default shape radius: small; use `shape_radius.default_rx` from `spec_lock.md` (recommended 6 px).
+- Do not stack multiple text boxes to form one phrase.
+- Text box geometry must match its visible shape; when drawing SVG, use explicit `data-box-x`, `data-box-y`, `data-box-width`, and `data-box-height` for bounded text.
+- For text inside visible shapes, also declare `data-shape-x`, `data-shape-y`, `data-shape-width`, and `data-shape-height`. The required inset is `text_box_shape_inset_pt: 5` (`text_box_shape_inset_px: 6.67` at 96 DPI); the text box must be centered within the shape within `10px` tolerance.
+- Shape blocks use `rx="6"` by default and carry `themeBlockShadow`: transparency 60%, size 102%, blur 5pt, angle 0, distance 0pt. Do not apply this shadow to logos, citations, footers, page numbers, or full-slide backgrounds.
+- Avoid nested cards. Use cards only for repeated items, callouts, and framed tools.
 
 ## VI. Icon Usage Specification
 
-### Source
+Use `templates/icons/` only after a single icon library is selected. Do not mix stylistic icon libraries in one deck.
 
-- **Built-in icon library**: `templates/icons/` (11,600+ icons across five libraries; see `templates/icons/README.md`)
-- **Usage method**: SVG placeholder `<use data-icon="library/icon-name" .../>`; Design Spec should list approved `library/icon-name` entries for Executor.
+Record:
+- selected library
+- stroke width if using outline icons
+- approved icon inventory
+- page usage
 
-### Recommended Icon List (fill as needed)
+Academic decks may omit icons when figures, formulas, and charts already carry the slide.
 
-| Purpose | Icon Path | Page |
-| ------- | --------- | ---- |
-| [example] | `chunk-filled/circle-checkmark` | Slide XX |
+## VII. Visualization Reference List
 
----
+When pages need data visualization or structured diagrams, read `templates/charts/charts_index.json` and record:
 
-## VII. Visualization Reference List (if needed)
-
-> When the deck includes data visualization or infographic-style structured information, Strategist selects types from `templates/charts/charts_index.json` and lists them here for Executor reference. Path stays under `templates/charts/` for backward compatibility.
-
-**Read-audit** (mandatory):
-
-```
+```text
 Catalog read: <N> templates / <M> categories
 Runners-up considered: <key_A> (rejected: <reason>), <key_B> (rejected: <reason>), <key_C> (rejected: <reason>)
 ```
 
-Runners-up must be genuine second-best matches for a page in this deck. If fewer than 3 viz pages exist, list what exists and note "fewer than 3 viz pages".
+| Page | Visualization Type | Reference Template | Purpose | Source Evidence |
+|---|---|---|---|---|
+| P04 | `bar_chart` | `templates/charts/...` | Compare baseline results | Source table / figure |
 
-| Visualization Type | Reference Template | Used In |
-| ------------------ | ------------------ | ------- |
-| [e.g. grouped_bar_chart] | `templates/charts/grouped_bar_chart.svg` | Slide 05 |
+If no chart template fits, write `no-template-match` and explain the custom layout.
 
----
+## VIII. Image Resource List
 
-## VIII. Image Resource List (if needed)
+Academic image priority:
+1. Source figures extracted from the paper.
+2. Source complex table screenshots when redrawing would distort the data.
+3. Rendered formula block PNGs from LaTeX plus structured explanation JSON.
+4. Self-drawn charts and route diagrams.
+5. AI-generated or web-sourced supporting images only when they are necessary and clearly labeled.
 
-| Filename | Dimensions | Ratio | Purpose | Type | Status | Generation Description |
-| -------- | --------- | ----- | ------- | ---- | ------ | --------------------- |
-| cover_bg.png | {canvas_info['dimensions']} | [ratio] | Cover background | [Background/Photography/Illustration/Diagram/Decorative] | [Pending/Existing/Placeholder] | [AI generation prompt] |
+| Filename | Dimensions | Ratio | Purpose | Type | Acquire Via | Status | Reference / Citation |
+|---|---:|---:|---|---|---|---|---|
+| `fig_03_method.png` | `...` | `...` | Method evidence | Source figure | user/source | Existing | `[Author, Year]` |
+| `formula_block_01.png` | `...` | `...` | Core equation with interpretation | Formula block PNG | script | Pending | Source equation |
+| `route_template_01.svg` | `1280x720` | `1.78` | TechnicalRoute A page | Editable SVG | internal | Pending | Source-grounded |
+| `route_ai_01.png` | `1280x720` | `1.78` | TechnicalRoute B page | AI route image | ai | Pending | Custom_gallery + source |
 
-**Status**:
-
-- **Pending** — needs AI generation, provide description
-- **Existing** — user-supplied, place in `images/`
-- **Placeholder** — not yet processed, use dashed border in SVG
-
-**Type** (used by Image_Generator for prompt strategy):
-
-- **Background** — full-page (covers / chapters); reserve text area
-- **Photography** — real scenes, people, products, architecture
-- **Illustration** — flat / vector / cartoon / concept diagrams
-- **Diagram** — flowcharts, architecture diagrams, concept maps
-- **Decorative** — partial decorations, textures, borders, dividers
-
----
+High-priority visual coverage rule:
+- Except TechnicalRoute pages, summary pages, and planning / implication pages, every slide must contain at least one meaningful image, source figure, complex table screenshot, chart, or mathematical formula.
+- Decorative icons do not satisfy this rule.
 
 ## IX. Content Outline
 
-### Part 1: [Chapter Name]
+Write pages grouped by numbered modules. Body slide titles must follow:
 
-#### Slide 01 - Cover
+```text
+<module_number> <module_title>: <slide_subtitle_or_evidence_conclusion>
+```
 
-- **Layout**: Full-screen background image + centered title
-- **Title**: [Main title]
-- **Subtitle**: [Subtitle]
-- **Info**: [Author / Date / Organization]
+For every page, include:
+- `page_id`
+- `module`
+- `title`
+- `content_type`
+- `page_rhythm`: anchor / dense / breathing
+- `layout_source`: template SVG basename or free design
+- `chart_reference`: chart key or empty
+- `visual_requirement`: source figure / formula / chart / table screenshot / route diagram / exempt
+- `bottom_banner_text`
+- `citation_footer`
+- `speaker_note_goal`
+- `editable_content_region` when using a user PPTX template
 
-#### Slide 02 - [Page Name]
+Example:
 
-- **Layout**: [Choose a pattern from §V, combine two, or break the grid as the content demands]
-- **Title**: [Page title]
-- **Visualization**: [visualization_type] (see VII. Visualization Reference List)
-- **Content**:
-  - [Point 1]
-  - [Point 2]
-  - [Point 3]
+```markdown
+#### Slide 07 - 4 Model Results: Variable Importance Ranking
 
-> **Visualization field**: add only when the page has data visualization or structured infographic elements. Type must be listed in §VII.
+- content_type: result_figure
+- page_rhythm: dense
+- layout_source: 03b_content_image_text
+- visual_requirement: source figure or recreated chart
+- chart_reference: bar_chart
+- bottom_banner_text: Study title / journal / year
+- citation_footer: [Author et al., Year]
+- editable_content_region: "{x: 60, y: 118, width: 1160, height: 522} or manifest slot id"
+- Content:
+  - Main claim.
+  - Figure interpretation.
+  - Limitation or caveat.
+```
 
----
-
-[Strategist continues adding more pages based on source document content and page count planning...]
-
----
+TechnicalRoute pages must appear as two consecutive pages:
+- `<module_number> Research Route: Editable Template Version`
+- `<module_number> Research Route: AI Reference Version`
 
 ## X. Speaker Notes Requirements
 
-One speaker note file per page, saved to `notes/`:
+Record:
+- total duration
+- intended speaking style
+- per-slide note file naming
+- transitions between modules
+- which figure, formula, or table should be explained aloud
 
-- **Filename**: match SVG name (e.g., `01_cover.md`)
-- **Content**: script key points, timing cues, transition phrases
-
----
+Notes should support oral academic reporting, not duplicate slide text.
 
 ## XI. Technical Constraints Reminder
 
-### SVG Generation Must Follow:
-
-1. viewBox: `{canvas_info['viewbox']}`
-2. Background uses `<rect>` elements
-3. Text wrapping uses `<tspan>` (`<foreignObject>` FORBIDDEN)
-4. Transparency uses `fill-opacity` / `stroke-opacity`; `rgba()` FORBIDDEN
-5. FORBIDDEN: `mask`, `<style>`, `class`, `foreignObject`
-6. FORBIDDEN: `textPath`, `animate*`, `script`
-7. Text characters: write typography & symbols as raw Unicode (em dash `—`, en dash `–`, `©`, `®`, `→`, NBSP, etc.); HTML named entities (`&nbsp;`, `&mdash;`, `&copy;`, `&reg;` …) are FORBIDDEN. XML reserved chars in text MUST be escaped as `&amp;` `&lt;` `&gt;` `&quot;` `&apos;` (e.g. `R&amp;D`, `error &lt; 5%`). See shared-standards.md §1.0
-7. `marker-start` / `marker-end` conditionally allowed: `<marker>` must be in `<defs>`, `orient="auto"`, shape must be triangle / diamond / circle (see shared-standards.md §1.1)
-8. `clipPath` conditionally allowed **only on `<image>` elements**: `<clipPath>` in `<defs>`, single shape child (circle / ellipse / rect with rx,ry / path / polygon). Do NOT apply to shapes / groups / text — draw the target geometry directly with the matching native element (`<circle>` / `<ellipse>` / `<rect rx>` / `<polygon>` / `<path>`). See shared-standards.md §1.2
-
-### PPT Compatibility Rules:
-
-- `<g opacity="...">` FORBIDDEN (group opacity); set on each child element individually
-- Image transparency uses overlay mask layer (`<rect fill="bg-color" opacity="0.x"/>`)
-- Inline styles only; external CSS and `@font-face` FORBIDDEN
+SVG generation must follow:
+1. Use the confirmed `viewBox`.
+2. Use `<rect>` backgrounds.
+3. Use `<text>` and `<tspan>` for wrapped text; `<foreignObject>` is forbidden.
+4. Use raw Unicode for typography and symbols; escape XML reserved characters.
+5. Use `fill-opacity` / `stroke-opacity`; `rgba()` is forbidden.
+6. Do not use `<style>`, `class`, `textPath`, `animate*`, `script`, `<iframe>`, or external CSS.
+7. `<marker>` is allowed only through compatible definitions in `<defs>`.
+8. `<clipPath>` is allowed only for images.
+9. `<g opacity>` is forbidden; set opacity on child elements.
+10. Text boxes must not overlap or stack unless intentionally layered as a title + subtitle with distinct y-positions. User-template pages must also pass the template overlap audit: title, logo, school name, footer, page number, image, chart, and formula regions must not collide.
+11. Formula images must be transparent PNGs generated from LaTeX and explanation JSON whenever possible. Formula title, complete equation, and variable explanations must not be drawn as ordinary text boxes; formula SVG pages must reference `<image data-formula-png="true" data-formula-block-png="true">`, use at most five formula blocks per slide, and separate blocks with gray 1.5pt dashed lines.
+12. Every referenced asset path must exist before final export.

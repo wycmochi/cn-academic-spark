@@ -1,0 +1,59 @@
+{
+  "meta": {
+    "total": 1,
+    "defaultViewBox": "0 0 1216 240",
+    "formats": [
+      "ppt169"
+    ],
+    "filePattern": "{key}.svg",
+    "libraryPositioning": "Formula templates are visible analysis-card SVG shells for one pre-rendered formula explanation PNG. The PNG itself contains formula title, equation, and variable interpretation. Add gray 1.5pt dashed separators outside the shell between formula blocks.",
+    "updated": "2026-05-16"
+  },
+  "templates": {
+    "formula_explanation_block": {
+      "label": "Formula Analysis PNG Block",
+      "file": "formula_explanation_block.svg",
+      "summary": "Use for one important academic formula in a visible formula-analysis card whose title, equation, and variable explanations must be rendered together as one PNG.",
+      "contentTypes": [
+        "formula_step",
+        "formula_paragraph"
+      ],
+      "requiredSlots": [
+        "formula_id",
+        "formula_block_png_href"
+      ],
+      "optionalSlots": [],
+      "blockJsonSlots": [
+        "formula_id",
+        "formula_role",
+        "latex",
+        "definition_label",
+        "variables"
+      ],
+      "formulaBlockPngRequired": true,
+      "formulaPngRequired": true,
+      "maxBlocksPerSlide": 5,
+      "separator": {
+        "required": true,
+        "stroke": "#A6A6A6",
+        "strokeWidthPt": 1.5,
+        "strokeDasharray": "8 6"
+      },
+      "notes": "Do not place formula role, equation, or variable explanations as separate visible SVG text. Generate a single block PNG with scripts/latex_formula_to_png.py --block-json, then bind it to formula_block_png_href. Formula title and explanation text use the same font size and are not bold. The SVG template provides the visible formula-analysis card; the formula content itself must remain inside the PNG slot so nested SVG conversion keeps the PNG in the PPTX."
+    }
+  },
+  "quickLookup": {
+    "formula": [
+      "formula_explanation_block"
+    ],
+    "equation_explanation": [
+      "formula_explanation_block"
+    ],
+    "variable_definitions": [
+      "formula_explanation_block"
+    ],
+    "formula_block_png": [
+      "formula_explanation_block"
+    ]
+  }
+}

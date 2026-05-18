@@ -1,171 +1,168 @@
-# Shape Recipes · 视觉原子积木
+# TechnicalRoute Shape Recipes
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5.5 需要本地绘制或检查路线图形状时读取；它定义节点、箭头、泳道、卡片和注释的 SVG 形状写法。
 
-> 这些是构成所有 archetype 的**原子视觉元素**。Agent 在 prompt 合成时根据 archetype + sub_variant 选取需要的 recipe 拼装。每个 recipe 都是参数化的，不绑定具体颜色 / 内容。
+Shape recipes are reusable visual atoms for Version A editable SVG assembly and Version B prompt construction. They are parameterized; they do not contain discipline-specific content, concrete datasets, or hard-coded paper examples.
 
----
+Use PPT-compatible SVG primitives: `<rect>`, `<line>`, `<path>`, `<polyline>`, `<text>`, `<tspan>`, and simple `<marker>`. Avoid filters, blur, complex masks, unsupported CSS, and decorative effects that may fail during SVG to DrawingML conversion.
 
-## R1 · Panel（圆角矩形 + 可选顶端徽章）
+## R1 Panel
 
-参数：
+Purpose: node card, stage card, concept panel, or method block.
 
-- `radius` — 圆角半径（默认 6px；学术 PPT 中普通 panel 建议 6–8px，避免过圆）
-- `border` — `none | thin (1px) | medium (2px)`
-- `fill` — `primary | secondary | surface | none`
-- `badge` — `none | number_circle | step_pill | top_color_bar | corner_icon`
-- `padding` — `compact (16px) | normal (24px) | airy (36px)`
+Parameters:
+- `radius`: default 6 px, dense 3 px, large panel 8 px.
+- `border`: `none`, `thin`, or `medium`.
+- `fill`: `primary_tint`, `secondary_tint`, `surface`, `white`, or `none`.
+- `badge`: `none`, `number_circle`, `step_pill`, `top_color_bar`, or `corner_icon`.
+- `padding`: compact 16 px, normal 24 px, airy 36 px.
 
-何时用：
-- `quad` panel → fill=surface / border=thin / badge=number_circle
-- `method core-steps` step 卡 → border=thin / badge=top_color_bar
-- `workflow horizontal-pipeline` 阶段卡 → fill=secondary 浅版本 / border=none
+Use cases:
+- thinking `quad`: `surface` fill, thin border, optional number badge.
+- method `core-steps`: thin border, top color bar.
+- workflow `horizontal-pipeline`: light fill, no decorative border.
 
----
+## R2 Badge
 
-## R2 · Badge（编号 / Step 标识）
+Purpose: small index, step tag, or semantic status label.
 
-参数：
+Parameters:
+- `shape`: `circle`, `pill`, `hexagon`, or `none`.
+- `text`: number, short step text, or icon hint.
+- `placement`: `top_left`, `top_center`, or `floating_top`.
+- `size`: compact 28 px, normal 40 px, large 56 px.
 
-- `shape` — `circle | pill | hexagon | none`
-- `text` — `<数字>` / `<"Step N">` / `<图标 hint>`
-- `placement` — `top_left | top_center | floating_top`
-- `size` — `compact (28px) | normal (40px) | large (56px)`
+Rules:
+- Use number circles for thinking panels.
+- Use step pills for method steps.
+- Use light tag pills for workflow columns.
+- Do not use badges as decoration when they do not encode order or category.
 
-变体：
+## R3 Arrow
 
-| variant | 视觉 | 用途 |
-|---|---|---|
-| `number_circle` | 实心圆 + 反白数字 | thinking quad 四个 panel 的编号 |
-| `step_pill` | 矩形 pill，深色底白字 "Step N: 名" | method core-steps / vertical-stack |
-| `tag_pill` | 轻量浅底 pill | workflow 列标题 |
+Purpose: flow, dependency, feedback, or comparison relation.
 
----
+Parameters:
+- `kind`: `straight`, `elbow`, `dashed`, or `curved-mild`.
+- `weight`: thin 2 px, medium 3 px, heavy 5-6 px.
+- `head`: `triangle`, `open`, `chevron`, or `none`.
+- `label`: `none` or `italic_muted`.
 
-## R3 · Arrow（连接 / 流向）
+Use cases:
+- thinking `cascade`: straight thin chevron arrows.
+- method `core-steps`: thin open arrows or chevrons.
+- workflow `horizontal-pipeline`: heavier triangle arrows with short labels.
+- workflow `circular`: mild curved arrows only when iteration is explicit.
+- feedback loops: dashed medium arrows with labels when needed.
 
-参数：
+Do not use freeform curved arrows.
 
-- `kind` — `straight | elbow | dashed | curved-mild`（**禁用** freestyle 弯曲）
-- `weight` — `thin (2px) | medium (3px) | heavy (5–6px)`
-- `head` — `triangle | open | chevron | none`
-- `label` — `none | italic_muted`（仅 italic + muted grey 时显示）
+## R4 Banner
 
-何时用：
+Purpose: bottom anchor, central claim strip, confluence label, or short warning.
 
-| archetype | kind | weight | head | label |
-|---|---|---|---|---|
-| `thinking cascade` panel 间 | straight | thin | chevron | none |
-| `method core-steps` step 间 | straight | thin | open | none |
-| `workflow horizontal-pipeline` 列间 | straight | heavy | triangle | italic_muted |
-| `workflow circular` 阶段间 | curved-mild (弧形) | medium | triangle | none |
-| 反馈环 / 迭代 | dashed | medium | triangle (双向) | optional |
+Parameters:
+- `position`: `top`, `middle`, or `bottom`.
+- `width_pct`: normally 100%.
+- `height_px`: 40, 56, or 72 px on a 720 px canvas.
+- `fill_role`: `primary`, `secondary`, `accent`, or `brick_red`.
+- `text`: from `content.yaml`.
+- `icon`: `none` or one simple leading icon.
 
----
+Rules:
+- Draw at most one dominant banner in one route diagram.
+- Use accent or brick red only for central claim, risk, or warning.
+- Do not create a banner if no anchor text exists.
 
-## R4 · Banner（贯通横幅）
+## R5 Formula Box
 
-参数：
+Purpose: method formulas and short equation explanations.
 
-- `position` — `top | bottom | middle`
-- `width_pct` — 默认 100%
-- `height_px` — `40 | 56 | 72`（最终输出 1080 高时；其他尺寸按比例）
-- `fill_role` — `primary | accent`
-- `text` — yaml 提供
-- `icon` — `none | leading_icon`
+Parameters:
+- `bg`: white or light surface gray.
+- `border`: none or thin muted.
+- `padding`: 24-28 px.
+- `font_style`: LaTeX-style serif.
+- `caption`: one muted line.
 
-何时用：
+Rules:
+- Use only for `archetype: method`.
+- Formula content must come from `content.yaml`.
+- For normal PPT pages, prefer formula PNG generated by `scripts/latex_formula_to_png.py`.
 
-- thinking 的 `bottom_anchor` → bottom + accent fill + leading_icon (target / lightbulb / question)
-- method 顶部的标题带（可选） → top + primary fill + leading_icon
-- workflow 的 confluence label → middle + secondary fill
+## R6 Data Cylinder Stack
 
----
+Purpose: multi-source data, database layers, corpus layers, or data integration.
 
-## R5 · Formula Box（公式区）
+Parameters:
+- `layers`: 3-5.
+- `tilt_deg`: 0-5.
+- `colors`: primary and secondary tints.
+- `label_per_layer`: optional short hint.
 
-参数：
+Use mostly in workflow input or extraction columns. Do not assign unrelated colors to every layer.
 
-- `bg` — 始终用 muted 浅灰（如 `#F5F8FB`），**不要**饱和色
-- `border` — none（用底色区隔即可）
-- `padding` — `28px`
-- `font_style` — LaTeX serif + math italics for variables + roman for indices
-- `caption` — 下方 14px muted 一行"含义：…"或"Meaning:…"
+## R7 Tree Or Network
 
-仅用于 archetype=method 的 step / formula 卡。
+Purpose: model tree, dependency network, mechanism graph, or taxonomy.
 
----
+Parameters:
+- `node_count`: normally no more than 8.
+- `colors`: root muted, branch primary, leaf accent or secondary.
+- `arrangement`: `horizontal_row`, `vertical_layer`, or `radial`.
 
-## R6 · Data Cylinder Stack（多层圆柱体）
+Rules:
+- Use only when the source implies hierarchy or network structure.
+- Keep labels outside or beside nodes if nodes are small.
 
-参数：
+## R8 Mini Chart
 
-- `layers` — 3–5 个（超过看不清）
-- `tilt_deg` — `≤ 5°`
-- `colors` — 2 种主色循环，**不要** 5 种不同色
-- `label_per_layer` — 可选，每层一个 9px hint 文本
+Purpose: compact sign for result, validation, feature importance, distribution, or output.
 
-仅用于 workflow horizontal-pipeline 的 Extraction 列（或类似"多源数据汇总"语义的地方）。
+Parameters:
+- `kind`: `scatter`, `bar`, `line`, `heatmap`, `shap`, or `map_thumbnail`.
+- `height`: normally no more than 80 px inside a card.
+- `colors`: inherit the route palette.
 
----
+Rules:
+- Use mini charts as visual indicators, not as full empirical result figures.
+- Do not place unreadable axes or fake values.
 
-## R7 · Tree / Network 节点群
+## R9 Symbol Legend Strip
 
-参数：
+Purpose: compact explanation of method symbols.
 
-- `node_count` — `≤ 8`（多了图模型识别不清）
-- `colors` — `branch` 主色 / `leaf` 强调色 / `root` muted（**不要**每节点一种）
-- `arrangement` — `horizontal_row | vertical_layer | radial`
+Parameters:
+- `position`: below step cards or below formula grid.
+- `style`: one horizontal strip containing symbol and meaning pairs.
+- `bg`: white or very light surface.
 
-用于 workflow funnel / mechanism block / 算法树（如 XGBoost、决策树、神经网络示意）。
+Rules:
+- Use when formulas contain three or more custom symbols.
+- Keep the strip short; long symbol explanations belong in speaker notes.
 
----
+## R10 Assumption Cards
 
-## R8 · Mini Chart（小图缩略）
+Purpose: method assumptions, constraints, or boundary conditions.
 
-参数：
+Parameters:
+- `count`: 0-3.
+- `layout`: horizontal row.
+- `icon`: simple circle plus abstract icon.
+- `colors`: muted tints from primary and secondary.
+- `text`: label plus short note.
 
-- `kind` — `scatter | bar | line | heatmap | shap`
-- `size` — 高度 `≤ 80px`（嵌在卡内），**不要**占满整列
-- `colors` — 沿用主图配色，不另起一套
+Rules:
+- Use only when the source states assumptions or constraints.
+- Do not create assumption cards to fill empty space.
 
-用于 workflow 的 Process / Results 列，作为方法 / 数据 / 输出的视觉代表。
+## Prompt Recipe Notation
 
----
+When constructing `prompt_ai.md`, the agent may describe structure with recipe notation:
 
-## R9 · Symbol Legend Strip（符号说明带）
-
-参数：
-
-- `position` — `below_step_cards`（method archetype）
-- `style` — 横向一行 `符号说明:` + 多个 [sym | desc] 对
-- `bg` — 极浅灰半透明带或纯白
-
-仅用于 method archetype 当 `symbols` 字段非空。
-
----
-
-## R10 · Assumption Cards（假设 / 前提卡）
-
-参数：
-
-- `count` — `0–3`
-- `layout` — 横向并排
-- `icon` — 圆形 + 抽象 icon（balance / lock / filter / clock 等）
-- `colors` — 三种 muted 主色循环
-- `text` — `<label>` (bold) + `<note>` (muted)
-
-仅用于 method archetype 当 `assumptions` 字段非空。
-
----
-
-## 拼装规则（agent 在 prompt 中调用）
-
-prompt 中用类似下面的伪 DSL 描述要画的东西：
-
-```
-RECIPE: R1 panel, R2 badge=number_circle, R3 arrow=none (quad panels 并列)
-RECIPE: R5 formula_box, R9 symbol_strip below
-RECIPE: R6 cylinder_stack layers=4 tilt=3deg
+```text
+RECIPE: R1 panel with R2 number_circle, no arrows for a quad thinking map.
+RECIPE: R5 formula_box plus R9 symbol_strip for a method formula grid.
+RECIPE: R6 cylinder_stack for multi-source input and R3 heavy labeled arrows for workflow transitions.
 ```
 
-`generate_route_image.py prompt` 会把这些 RECIPE 注入到 prompt 的 [STRUCTURE] 块中，让图像模型按 recipe 名识别要画什么。
-
+This notation is guidance for the image model. It does not replace `content.yaml`, and it must not introduce content absent from the source.

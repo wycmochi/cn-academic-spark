@@ -193,9 +193,12 @@ def flatten_text_with_tspans(tree: ET.ElementTree) -> bool:
             return True
         if dy_val is not None and dy_val != 0:
             return True
-        # If tspan has an x attribute and there are preceding sibling tspans, treat it as a new line
-        if t_x_attr is not None:
-            return True
+        # x alone is often used by authoring tools for same-line run
+        # positioning, especially when mixed CJK / Latin text is split into
+        # styled runs. Treating every x-bearing tspan as a new text box causes
+        # phrases like "high betweenness, low circuity" to become several
+        # stacked PowerPoint text boxes. Only y / non-zero dy starts a new
+        # line; true columns must be authored as separate <text> elements.
         return False
 
     # Collect candidates first to avoid modifying while iterating

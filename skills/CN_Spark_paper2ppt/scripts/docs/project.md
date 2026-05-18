@@ -1,4 +1,5 @@
 # Project Tools
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在需要了解 project_manager 时读取；它说明项目初始化、导入、校验和目录结构。
 
 > Architecture rationale (why `import-sources` defaults are asymmetric for in-repo vs out-of-repo files): see [docs/technical-design.md "Project Structure & Lifecycle"](../../../../docs/technical-design.md#project-structure--lifecycle).
 
@@ -78,19 +79,19 @@ python3 scripts/generate_examples_index.py
 python3 scripts/generate_examples_index.py examples
 ```
 
-## `pptx_template_import.py`
+## `template_import/cli.py`
 
 Unified PPTX preparation entry point for `/create-template`.
 
 ```bash
-python3 scripts/pptx_template_import.py <template.pptx>
-python3 scripts/pptx_template_import.py <template.pptx> -o <output_dir>
-python3 scripts/pptx_template_import.py <template.pptx> --manifest-only
-python3 scripts/pptx_template_import.py <template.pptx> --skip-manifest
-python3 scripts/pptx_template_import.py <template.pptx> --embed-images
-python3 scripts/pptx_template_import.py <template.pptx> --inheritance-mode both
-python3 scripts/pptx_template_import.py <template.pptx> --inheritance-mode flat
-python3 scripts/pptx_template_import.py <template.pptx> --inheritance-mode layered
+python3 scripts/template_import/cli.py <template.pptx>
+python3 scripts/template_import/cli.py <template.pptx> -o <output_dir>
+python3 scripts/template_import/cli.py <template.pptx> --manifest-only
+python3 scripts/template_import/cli.py <template.pptx> --skip-manifest
+python3 scripts/template_import/cli.py <template.pptx> --embed-images
+python3 scripts/template_import/cli.py <template.pptx> --inheritance-mode both
+python3 scripts/template_import/cli.py <template.pptx> --inheritance-mode flat
+python3 scripts/template_import/cli.py <template.pptx> --inheritance-mode layered
 ```
 
 Notes:

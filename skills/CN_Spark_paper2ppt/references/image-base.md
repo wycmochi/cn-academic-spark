@@ -1,6 +1,7 @@
 > See [`image-generator.md`](./image-generator.md) and [`image-searcher.md`](./image-searcher.md) for path-specific behavior.
 
 # Image Acquisition Common Reference
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5 图片获取时读取；它定义 AI 生图和 web 搜图共同使用的资源清单、状态和验收规则。
 
 Shared baseline for both acquisition paths. Path-specific behavior lives in the path's own reference.
 

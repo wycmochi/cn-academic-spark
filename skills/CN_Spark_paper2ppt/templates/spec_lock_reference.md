@@ -1,128 +1,436 @@
-# Execution Lock
+# Spec Lock Reference
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 4 写项目 spec_lock.md 时读取；它提供执行器每页重读的机器可读锁定字段。
 
-> **⚠️ Skeleton for Strategist — do NOT copy verbatim into a project.** When producing `<project_path>/spec_lock.md`, emit only `##` sections with filled-in `-` data lines. Do NOT carry over any `>` blockquote guidance, HARD-rule notes, or override examples — those are author-time guidance, not runtime data. Every output line must be parseable data.
->
-> Machine-readable execution contract. Executor MUST `read_file` this before every SVG page. Values not listed here must NOT appear in SVGs. For design narrative (rationale, audience, style), see `design_spec.md`.
->
-> After SVG generation begins, this is the canonical source for color / font / icon / image values. Modifications should go through `scripts/update_spec.py` to keep this file and generated SVGs in sync.
+This is the author-time skeleton for `<project_path>/spec_lock.md`. The generated project file must be concise, machine-readable, and free of explanatory blockquotes. Executors must re-read project `spec_lock.md` before every SVG page.
+
+When the selected template came from a user-provided PPTX, set `template_priority: user_pptx_template_override`, set `color_priority: user_pptx_template_override`, and copy the extracted RGB HEX palette into `user_template_palette`. The user PPTX design system overrides academic defaults, route-diagram defaults, and generic brand defaults, including master/layout placeholder geometry, title geometry, typography scale, font weight, color, logo position, footer rhythm, page-number position, and page density.
 
 ## canvas
-- viewBox: 0 0 1280 720
-- format: PPT 16:9
 
-> Strategist: fill viewBox and format for the chosen canvas. Common values: `0 0 1280 720` (PPT 16:9), `0 0 1024 768` (PPT 4:3), `0 0 1242 1660` (Xiaohongshu), `0 0 1080 1080` (WeChat Moments), `0 0 1080 1920` (Story).
+```yaml
+canvas:
+  format: ppt169
+  viewBox: "0 0 1280 720"
+  width: 1280
+  height: 720
+  safe_margin:
+    left: 50
+    right: 50
+    top: 42
+    bottom: 48
+  title_zone_height: 76
+  footer_zone_height: 34
+  content_bounds:
+    x: 60
+    y: 60
+    width: 1160
+    height: 600
+```
+
+Common values:
+- PPT 16:9: `0 0 1280 720`
+- PPT 4:3: `0 0 1024 768`
+- PPT 16:9 stable content boundary from `scripts/config.py`: margin 60 px on all sides, content area `x=60, y=60, width=1160, height=600`. User PPTX `editableContentRegion` overrides this.
+
+## template
+
+```yaml
+template:
+  name: academic_defense
+  source: built_in
+  layout_root: templates/layouts/academic_defense
+  strict_inheritance: true
+  user_pptx_template: false
+  identity_assets:
+    school_logo: ""
+    school_name: ""
+    department_name: ""
+```
+
+If imported from user PPTX, set:
+
+```yaml
+template_priority: user_pptx_template_override
+template:
+  source: user_pptx
+  user_pptx_template: true
+  strict_inheritance: true
+  editable_import_policy:
+    master_placeholder_fill_mode: true
+    fill_existing_slots_only: true
+    allow_extra_generated_shapes: false
+    allow_extra_generated_text_boxes: false
+    allow_extra_generated_image_frames: false
+    use_slide_local_examples_as_slot_evidence: true
+    protect_master_layout_identity_regions: true
+    remove_unused_placeholder_prompts: true
+    master_layout_usage: authoritative_slots_and_protected_regions
+    derive_editable_content_region_before_generation: true
+  user_template_style_lock:
+    title_geometry: inherit_when_detected
+    title_font_size: inherit_when_detected
+    title_bold: inherit_when_detected
+    title_color: inherit_when_detected
+    body_font_scale: inherit_when_detected
+    placeholder_geometry: inherit_when_detected
+    logo_position: inherit_when_detected
+    footer_rhythm: inherit_when_detected
+    page_number_position: follow_master_layout_sldNum_when_detected
+  editable_content_region:
+    P02:
+      source: manifest
+      primary: {x: 60, y: 118, width: 1160, height: 522}
+      title_region: null
+      footer_region: null
+      forbidden_regions: []
+```
+
+## academic
+
+```yaml
+academic:
+  route: A
+  paper_type: methods_ai_tool_algorithm
+  narrative_framework: problem_to_solution
+  citation_style: GB_T_7714
+  title_rule: "<module_number> <module_title>: <slide_subtitle_or_evidence_conclusion>"
+  visual_coverage_exemptions:
+    - technicalroute
+    - summary
+    - planning_implication
+  bottom_banner_text: ""
+```
+
+Allowed route values:
+- `A`: single academic paper
+- `B`: course report / policy report / case analysis
+- `C`: proposal / research plan / opening defense
+- `D`: literature review / review synthesis
 
 ## colors
-- bg: #FFFFFF
-- primary: #......
-- accent: #......
-- secondary_accent: #......
-- text: #......
-- text_secondary: #......
-- border: #......
 
-> Strategist: fill only colors actually used. Add extra rows as needed; delete unused rows rather than leave as `#......`.
+```yaml
+colors:
+  bg: "#FFFFFF"
+  surface: "#F6F8FB"
+  primary: "#1F3864"
+  secondary: "#4472C4"
+  accent: "#2F75B5"
+  accent_secondary: "#70AD47"
+  accent_critical: "#A23B2A"
+  text: "#1F1F1F"
+  text_secondary: "#595959"
+  muted: "#888888"
+  border: "#D9E2F3"
+  formula: "#111111"
+color_priority: default
+user_template_palette: []
+```
+
+Color priority values:
+- `user_pptx_template_override`: user PPTX template colors override all other defaults.
+- `selected_template`: built-in selected template palette wins over generic academic defaults.
+- `academic_default`: use the academic defaults above.
+- `free_design`: Strategist-defined free palette.
+
+Important text rule:
+- Bold high-priority text and use `colors.accent_critical` only for a concise phrase, conclusion, contradiction, or warning.
+- Do not use `accent_critical` as a full-page theme color.
 
 ## typography
-- font_family: "Microsoft YaHei", Arial, sans-serif
-- title_family: Georgia, SimSun, serif
-- body_family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif
-- emphasis_family: Georgia, SimSun, serif
-- code_family: Consolas, "Courier New", monospace
-- body: 22
-- title: 32
-- subtitle: 24
-- annotation: 14
 
-> **All five family lines are listed explicitly** so Strategist considers every role — `code_family` and `emphasis_family` are easily forgotten. In a real `spec_lock.md`:
-> - Keep any `*_family` whose role genuinely differs from `font_family`.
-> - **Omit** any `*_family` equal to `font_family` — Executor falls back to `font_family` for missing roles, so writing it twice is noise. (Exception: keep `code_family` even when equal — monospace is conceptually distinct.)
->
-> `font_family` is the default fallback. Every declared family is a CSS font-stack string.
->
-> **Source**: copy verbatim from the *Per-role font stacks* list in `design_spec.md §IV Font Plan`. Stack **order** encodes browser-rendering intent (Latin-led vs. CJK-led) that the breakdown table cannot — strings here must match character-for-character. See `design_spec.md §IV` for the explainer.
->
-> Sizes (`body` / `title` / etc.) are in px, matching SVG units. `body` is the **required baseline anchor** — all other sizes derive as ratios of it (ramp table: `design_spec_reference.md §IV`).
->
-> **Size slots are anchors, not a closed menu.** Common slots (`title` / `subtitle` / `annotation`) cover frequent cases. Add role-specific slots (e.g. `cover_title: 72`, `hero_number: 48`, `chart_annotation: 13`) when needed — common for cover-heavy decks, consulting-style hero numbers, dense pages. Executor may use intermediate sizes as long as the ratio to `body` sits in the role's ramp band.
->
-> **⚠️ PPT-safe stack discipline (HARD rule).** PPTX stores one `typeface` per run with no runtime fallback. Every stack MUST end with a cross-platform pre-installed font: `"Microsoft YaHei", sans-serif` / `SimSun, serif` / `Arial, sans-serif` / `"Times New Roman", serif` / `Consolas, "Courier New", monospace`. Non-preinstalled fonts (Inter / Google Fonts / brand typefaces) may lead the stack only when the Design Spec notes the font-install or embedding requirement.
->
-> **Stack length discipline.** 3-4 fonts per stack is the sweet spot. Converter only writes the **first** Latin and **first** CJK font into PPTX — everything after is silently dropped. macOS-only families (`Songti SC`, `Menlo`, `Monaco`, `Helvetica`) are auto-mapped to Windows equivalents via `FONT_FALLBACK_WIN` (see `scripts/svg_to_pptx/drawingml_utils.py`); stacking both is redundant. Lead with Windows-preinstalled fonts (`Microsoft YaHei` / `SimSun` / `Arial` / `Georgia` / `Consolas`); keep at most **one** macOS-exclusive family (typically `"PingFang SC"`) as a browser-preview nicety.
+```yaml
+typography:
+  font_family: "\"Microsoft YaHei\", \"PingFang SC\", Arial, sans-serif"
+  title_family: "\"Microsoft YaHei\", \"PingFang SC\", Arial, sans-serif"
+  body_family: "\"Microsoft YaHei\", \"PingFang SC\", Arial, sans-serif"
+  emphasis_family: "Georgia, SimSun, serif"
+  formula_family: "\"Times New Roman\", Cambria, SimSun, serif"
+  code_family: "Consolas, \"Courier New\", monospace"
+  body: 18
+  title: 34
+  subtitle: 24
+  annotation: 14
+  footnote: 11
+```
+
+Rules:
+- All sizes are px.
+- `body` is the baseline anchor.
+- Keep page titles within the title zone; shrink only within the allowed ramp rather than splitting titles into multiple unrelated boxes.
+- Mixed Chinese / Latin / numeric SVG text should use `<tspan>` segmentation.
+
+## page_number
+
+```yaml
+page_number:
+  source: default
+  position: bottom_right
+  x: 1234
+  y: 688
+  font_size: 9
+  fill: "#888888"
+  follow_user_template_slot: true
+  fallback_position: bottom_right
+  unique_per_slide: true
+```
+
+Rules:
+- In user PPTX template mode, generated page numbers must follow the slide/layout/master `sldNum` placeholder when one exists.
+- Fallback order: slide-local page-number placeholder, layout page-number placeholder, master page-number placeholder, then built-in bottom-right academic default.
+- Do not invent a new page-number position when the user template already defines one.
+
+## shape_radius
+
+```yaml
+shape_radius:
+  default_rx: 6
+  card_rx: 6
+  callout_rx: 5
+  node_rx: 6
+  image_rx: 4
+```
+
+This is where the default shape corner radius is controlled. Use smaller values for serious academic decks. Increase only when the selected template's authored design requires it.
+
+## text_box_contract
+
+```yaml
+text_box_contract:
+  require_data_box: true
+  forbid_stacked_fragments: true
+  max_overlap_ratio: 0.08
+  enforce_declared_box_fit: true
+  forbid_canvas_overflow: true
+  text_box_shape_inset_pt: 5
+  text_box_shape_inset_px: 6.67
+  text_box_center_tolerance_px: 10
+  allow_title_subtitle_overlap: false
+  wrap_strategy: single_text_element_with_tspans
+  user_template_slot_fill_only: true
+  remove_unused_placeholder_prompts: true
+```
+
+Executor rules:
+- One semantic phrase belongs in one text element.
+- Do not output fragments such as `High`, `betweenness, low`, `circuity` as three stacked boxes.
+- Visible shape bounds and text box bounds must match.
+- Use explicit `data-box-x`, `data-box-y`, `data-box-width`, and `data-box-height` when a text element is bounded by a shape.
+- Also write `data-shape-x`, `data-shape-y`, `data-shape-width`, and `data-shape-height` for the visible background shape. The text box must be centered inside that shape and keep at least `5pt` (`6.67px` at 96 DPI) inset on every side.
+- In user-template mode, fill existing master/layout placeholders and do not create additional floating text boxes or image boxes unless `layout_source: fallback_template_library` is explicitly selected.
+- Remove unused placeholder prompts such as `Click to edit body text`, `Click to add title`, `单击编辑正文内容`, and `单击此处添加标题` before export.
+
+## shape_block_shadow
+
+```yaml
+shape_block_shadow:
+  required_on_shape_blocks: true
+  filter_id: themeBlockShadow
+  transparency: 0.60
+  size_percent: 102
+  blur_pt: 5
+  angle_deg: 0
+  distance_pt: 0
+```
+
+Define `themeBlockShadow` in each SVG and apply it to content cards, evidence blocks, formula cards, and diagram node blocks with `data-shape-block="true"`. Do not apply it to full-slide backgrounds, school logos, footers, citations, or page numbers.
 
 ## icons
-- library: chunk-filled
-- brand_library: simple-icons
-- inventory: target, bolt, shield, users, chart-bar, lightbulb
 
-> `library` MUST be exactly one of `chunk-filled` / `tabler-filled` / `tabler-outline` / `phosphor-duotone` — mixing is forbidden. `brand_library: simple-icons` is optional; include only when the deck uses real company / product brand marks, otherwise omit. `inventory` lists approved icon names (no library prefix); Executor may only use icons from this list.
->
-> **`stroke_width` (stroke-style libraries only)** — required when `library` is stroke-based (currently `tabler-outline`); allowed values `1.5` / `2` / `3`. Executor MUST apply this value to every `<use data-icon="...">` placeholder via `stroke-width`, deck-wide. Omit for non-stroke libraries (`chunk-filled` / `tabler-filled` / `phosphor-duotone`) — ignored there. For heavier weight switch library; do not exceed `3` (at 24×24 strokes merge and the icon stops reading as line art).
->
-> Example for stroke-style libraries:
-> ```
-> - library: tabler-outline
-> - stroke_width: 2
-> - inventory: home, chart-bar, users, bulb
-> ```
+```yaml
+icons:
+  library: chunk-filled
+  stroke_width: null
+  brand_library: ""
+  inventory: []
+```
+
+Only one stylistic icon library is allowed. Add `simple-icons` only for real brand marks.
 
 ## images
-- cover_bg: images/cover_bg.jpg
-- q3_revenue_chart: images/q3_revenue.png | no-crop
 
-> One entry per image file used. Append ` | no-crop` only for images that must not lose pixels (data screenshots, charts, certificates) — Executor will size the container to native ratio and use `preserveAspectRatio="xMidYMid meet"`. Untagged entries default to croppable (`slice`). Remove the section entirely if no images.
+```yaml
+images:
+  fig_01:
+    path: images/fig_01.png
+    usage: source_figure
+    crop: meet
+    citation: ""
+  formula_block_01:
+    path: images/formulas/formula_block_01.png
+    usage: formula_block_png
+    crop: meet
+    citation: ""
+```
+
+Image usage values:
+- `source_figure`
+- `table_screenshot`
+- `formula_png`
+- `formula_block_png`
+- `chart`
+- `technicalroute_template_svg`
+- `technicalroute_ai_png`
+- `ai_supporting_image`
+- `web_supporting_image`
+
+Use `crop: meet` for data screenshots, formulas, charts, certificates, and dense diagrams. Use `crop: slice` only when losing edges is acceptable.
+
+## formula_rendering
+
+```yaml
+formula_rendering:
+  required_when_source_has_equations: true
+  reference: references/academic/formula-rendering.md
+  output_dir: images/formulas
+  render_script: scripts/latex_formula_to_png.py
+  complete_equation_as_png: true
+  complete_interpretation_in_same_png: true
+  require_data_formula_png_attr: true
+  require_data_formula_block_png_attr: true
+  forbid_complete_equation_text_boxes: true
+  forbid_separate_variable_definition_text_boxes: true
+  max_formula_blocks_per_slide: 5
+  separator_required: true
+  separator_stroke: "#A6A6A6"
+  separator_stroke_width: 1.5
+  separator_dasharray: "8 6"
+```
+
+Rules:
+- Every formula page must use a rendered formula block PNG containing the role, equation, and variable interpretation.
+- SVG text must not duplicate formula roles, `???`, or variable definitions that belong to the formula block.
+- Each formula block PNG must appear in `images` with `usage: formula_block_png`.
+
+## technicalroute
+
+```yaml
+technicalroute:
+  required: false
+  pages: []
+```
+
+When route diagrams are required:
+
+```yaml
+technicalroute:
+  required: true
+  pages:
+    - id: route_01
+      module_number: 3
+      module_title: Research Route
+      content_path: technicalroute/route_01/content.yaml
+      spec_lock_path: technicalroute/route_01/spec_lock.md
+      template_svg_path: technicalroute/route_01/output/route_template_01.svg
+      ai_image_path: technicalroute/route_01/output/route_ai_01.png
+      ppt_pages:
+        template_version: P08
+        ai_reference_version: P09
+```
 
 ## page_rhythm
-- P01: anchor
-- P02: dense
-- P03: breathing
-- P04: dense
-- P05: dense
-- P06: breathing
-- P07: anchor
 
-> One entry per page. Key: `P<NN>` (zero-padded, matching `§IX Content Outline` in `design_spec.md`). Value: one of the three rhythm tags. Executor reads per page and applies the tag's layout discipline — breaks the "every page looks the same" pattern.
->
-> **Vocabulary** (exactly these three values):
-> - `anchor` — Structural pages (cover / chapter opener / TOC / ending). Follow the template as-is.
-> - `dense` — Information-heavy pages (data, KPIs, comparisons, multi-point lists). Card grids, multi-column layouts, tables, charts all permitted.
-> - `breathing` — Low-density pages (single concept, hero quote, big image + caption, section transition). Avoid **multi-card grid layouts** (multiple parallel rounded containers as the primary structure); organize via naked text, dividers, whitespace, or full-bleed imagery. Single rounded elements (hero image corners, callouts, tags, one emphasis block) are fine. Proportions follow information weight — not a preset ratio menu.
->
-> **Rhythm follows narrative**: `breathing` pages appear where narrative genuinely pauses — section transitions, a single argument worth standalone emphasis, a deliberate stop after a dense sequence. A data briefing or consulting analysis may legitimately be nearly all `dense` — **do not invent filler pages** to pad rhythm. Validation: every `breathing` page must answer "what independent thing is this page saying?".
->
-> **Missing or empty section** → Executor falls back to `dense` for every page (legacy pre-rhythm behavior). Remove the section only for legacy decks; new decks MUST fill it.
+```yaml
+page_rhythm:
+  P01: anchor
+  P02: dense
+  P03: dense
+  P04: breathing
+```
+
+Allowed values:
+- `anchor`: cover, agenda, section opener, ending.
+- `dense`: result, method, table, chart, multi-point evidence.
+- `breathing`: single concept, implication, summary, transition.
+
+Do not invent filler `breathing` pages. Every page must serve the academic narrative.
 
 ## page_layouts
-- P01: 01_cover
-- P03: 02a_chapter
-- P04: 03a_content_abstract
 
-> One entry per page **that uses a template SVG**. Key: `P<NN>` matching §IX. Value: the template's SVG basename without extension (e.g., `01_cover`, `03a_content_image_text`) — Executor resolves it to `templates/<chosen_template>/<value>.svg`. Modern templates ship many content-page variants (`03a_content_abstract`, `03b_content_image_text`, `03c_content_three_items` …); the page-type → single-file mapping in `executor-base.md §1` no longer covers them, so this section is the per-page truth.
->
-> **No entry for a page** → that page is free design (no template inheritance). Mixed decks are supported: e.g., cover/chapter pages inherit a template while content pages are free.
->
-> **Hard rule**: Use both `page_layouts` and `page_charts` for the same page only when the layout template is a compatible shell for the chart. Do not assign a conflicting layout just to fill every page: a waterfall chart should not inherit a timeline layout, and KPI cards should not inherit a circle-diagram layout unless that is the intended visual structure. When no compatible layout exists, omit the page from `page_layouts`.
->
-> **Whole section omitted** → entire deck is free design. Equivalent to no rows but cleaner; do this when zero pages reference a template.
->
-> **Strategist source**: copy the per-page SVG choices from `design_spec.md §VI Page Roster` (or §IX outline if Roster is absent). Names must match files in `templates/<chosen_template>/` exactly — typos cause silent fallback to free design.
+```yaml
+page_layouts:
+  P01:
+    layout_key: 01_cover
+    source: built_in
+  P02:
+    layout_key: user_layout_02
+    source: user_pptx
+    slot_map:
+      title: layout:title:0
+      body: layout:body:1
+      page_number: master:sldNum:0
+  P07:
+    layout_key: 03b_content_image_text
+    source: built_in
+```
+
+For user PPTX templates, choose a suitable source layout per page based on content needs and available slots. Do not assign every page to the same layout by default. If no user layout fits, set `source: fallback_template_library` and select a compatible built-in layout.
 
 ## page_charts
-- P05: bar_chart
-- P09: timeline_horizontal
-- P12: bcg_matrix
 
-> One entry per page **that adapts a `templates/charts/` chart template**. Key: `P<NN>` matching §IX. Value: chart template basename without `.svg` (must match a key in `templates/charts/charts_index.json`).
->
-> **No entry for a page** → no chart on that page (or a chart that did not match any catalog template — Strategist's `no-template-match` fallback). Both cases mean Executor designs the visualization from scratch per `design_spec.md §VII`.
->
-> **Whole section omitted** → no data-visualization pages in this deck.
->
-> **Strategist source**: copy from `design_spec.md §VII Visualization Reference List` — only the rows whose `reference template path` points to a `templates/charts/` file. Pages marked `no-template-match` in §VII MUST NOT appear here.
+```yaml
+page_charts:
+  P06: bar_chart
+  P10: timeline_horizontal
+```
+
+Only include pages that use a real `templates/charts/` key. Do not list `no-template-match`.
+
+## page_requirements
+
+```yaml
+page_requirements:
+  P01:
+    title: "Cover"
+    content_type: cover
+    visual_requirement: exempt
+    citation_footer: ""
+    bottom_banner_text: ""
+  P07:
+    title: "4 Model Results: Variable Importance Ranking"
+    content_type: result_figure
+    visual_requirement: source_figure_or_chart
+    citation_footer: "[Author et al., Year]"
+    bottom_banner_text: "Journal / Study / Presenter"
+    formula_required: false
+```
+
+`visual_requirement` allowed values:
+- `source_figure`
+- `complex_table_screenshot`
+- `formula_png`
+- `formula_block_png`
+- `chart`
+- `technicalroute`
+- `image_or_formula`
+- `exempt`
+
+Non-exempt pages must have at least one meaningful visual object.
 
 ## forbidden
-- Mixing icon libraries
-- rgba()
-- `<style>`, `class`, `<foreignObject>`, `textPath`, `@font-face`, `<animate*>`, `<script>`, `<iframe>`, `<symbol>`+`<use>`
-- `<g opacity>` (set opacity on each child element individually)
-- HTML named entities in text (`&nbsp;`, `&mdash;`, `&copy;`, `&ndash;`, `&reg;`, `&hellip;`, `&bull;` …) — write as raw Unicode (`—`, `©`, `→`, NBSP, etc.); XML reserved chars `& < > " '` must be escaped as `&amp; &lt; &gt; &quot; &apos;`. See shared-standards.md §1.0
+
+```yaml
+forbidden:
+  - rgba()
+  - "<style>"
+  - "class"
+  - "<foreignObject>"
+  - "textPath"
+  - "@font-face"
+  - "<animate*>"
+  - "<script>"
+  - "<iframe>"
+  - "<g opacity>"
+  - "HTML named entities in text"
+  - "stacked text fragments"
+  - "unbounded text inside visible shapes"
+  - "external technicalroute skill calls"
+  - "editable overlays copied from master-only or layout-only objects"
+  - "duplicated fixed template text or icons"
+  - "unused PowerPoint placeholder prompts in final output"
+  - "page numbers that ignore an available user-template sldNum slot"
+  - "duplicate page numbers on one slide"
+  - "text overflowing declared data-box bounds or slide canvas"
+  - "AI-generated images listed in spec/design but not inserted into SVG/PPT"
+  - "first/final slide large image or blank-shape stacking"
+```

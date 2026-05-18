@@ -1,224 +1,244 @@
-# Route D · 文献综述 PPT 路线
+# Route D Literature Review
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 4 判断为文献综述或 review 汇报时读取；它组织检索范围、证据地图、主题聚类、概念框架和研究展望。
 
-> 本路线规定 Strategist 阶段生成 `design_spec.md §IX` 的页面结构与论证骨架，与具体 pipeline 无关。Executor 在 [executor-academic.md](executor-academic.md) §3 中按 `content_type` 落地到 SVG（其中“概念框架”页走 SKILL.md Step 5.5 的内置 TechnicalRoute 流程）。
+Use this route for review articles, perspective papers, journal-club synthesis across multiple papers, literature review reports, and pre-proposal research landscape decks.
 
-适用：综述论文讲解 / 综述类组会汇报 / 开题前的"国内外研究现状"独立成稿 / 课题立项前的研究图谱梳理。
+## Selection Signals
 
-## 选这条路的标志
+Choose Route D when:
+- the input is a review / perspective paper;
+- the input contains five or more related papers;
+- the user provides a literature review outline, reading notes, or bibliography;
+- the goal is to clarify a field's research landscape rather than present one hypothesis.
 
-- 输入是一篇综述（Review / Perspective），或一组主题相关的论文（≥ 5 篇）；
-- 输入是用户写的综述提纲或读书笔记；
-- 用户的目标是 **"理清一个领域的研究脉络"**，而不是讲一个单一假设；
-- 评价标准：分类合理、覆盖完整、脉络清晰、引用准确。
+Evaluation criteria:
+- reasonable classification;
+- coverage;
+- clear lineage;
+- accurate citations;
+- meaningful gaps and future directions.
 
-## 论证骨架 · evidence-map
+## Narrative Skeleton
 
-综述讲解的论证不是"做了什么 → 得到什么"，而是"已有研究构成怎样的图景 → 这个图景里的空缺与争议是什么 → 接下来该往哪走"。
+Use an evidence-map axis:
 
-```
-为什么这个主题在此刻值得综述
-       ↓
-概念框架（核心可视化页，见下文）
-       ↓
-主题 1 详述 → 主题 2 详述 → 主题 3 详述 …
-       ↓
-主题间联系、争议、矛盾
-       ↓
-研究空缺 / 开放问题
-       ↓
-作者综合判断与未来方向
+```text
+why the topic matters now -> review scope -> evidence map -> conceptual framework -> theme details -> relations and controversies -> research gaps -> synthesis and future directions
 ```
 
-## 默认页面结构（13–18 页）
+A review deck should answer:
+- What does the field look like?
+- Which themes or methods structure the literature?
+- Where do studies agree or disagree?
+- What gaps remain?
+- What should be done next?
 
+## Default Page Structure
+
+```text
+P01 Cover: title, time span, author, institution, date
+P02 Agenda
+P03 Review Background And Significance
+P04 Review Scope: what is included, excluded, and time span
+P05 Search And Screening Method: databases, keywords, inclusion / exclusion, final corpus
+P06 Conceptual Framework Visualization: required core page
+P07 Theme 1: method lineage
+P08 Theme 1: representative evidence
+P09 Theme 2: method lineage
+P10 Theme 2: representative evidence
+P11 Theme 3: optional, depending on topic count
+P12 Cross-Theme Relations / Evolution / Controversy
+P13 Research Gaps And Open Questions
+P14 Author Synthesis And Future Directions
+P15 Review Limitations
+P16 Full References: may span multiple pages
+P17 Acknowledgement / Q&A
 ```
-P1   封面：题目 + 综述时间跨度 + 作者 + 单位 + 日期
-P2   目录
-P3   综述背景与意义（text_flow） — 为什么"现在"值得综述
-P4   核心问题与本综述范围（明确：涵盖什么、不涵盖什么、时间跨度）
-P5   文献检索与筛选方法（pipeline） — 数据库 / 关键词 / 纳入排除 / 最终入选数
-P6   **概念框架可视化页** — 本路线的标志性页面，三选一（见下文）
-P7   主题一 · 方法谱系
-P8   主题一 · 代表性结论与证据
-P9   主题二 · 方法谱系
-P10  主题二 · 代表性结论与证据
-P11  主题三 · 方法谱系（可省略，视主题数）
-P12  主题间联系 / 演化 / 争议
-P13  研究空缺与开放问题
-P14  作者综合判断与未来方向（结论式 bullet）
-P15  局限性（综述本身的局限）
-P16  完整参考文献（按 GB/T 7714，按引用顺序，可跨多页 10pt）
-P17  致谢 / Q&A
-```
 
-## 核心页 · 概念框架可视化（P6）
+Typical length: 13-18 slides. Dense reviews may need multiple reference pages.
 
-这一页是 Route D 的核心，必须有，**三选一**（视主题数与文献量决定）：
+## Required Artifacts
 
-### 形式 1 · 主题矩阵表（默认推荐）
+Route D must include:
+- review scope;
+- evidence map or search / inclusion summary when available;
+- conceptual framework page;
+- theme detail pages;
+- controversy / relation page;
+- research gap page;
+- complete reference page.
+- standalone summary page and separate final thank-you / Q&A page.
 
-最信息密、最便于查阅，**python-pptx 原生表格**，可编辑。
+Use Step 5.5 for complex thinking maps, conceptual frameworks, or whole-field workflows.
 
-行 = 主题；列 = 核心方法 / 主要结论 / 代表文献 / 备注。每个文献单元格内只写 `[1][3]` 等编号，对应该页页脚或 P16 的完整条目。
+## Core Page: Conceptual Framework
 
-| 主题 | 核心方法 | 主要结论 | 代表文献 |
-|---|---|---|---|
-| 主题 A · 基础原理研究 | 解析建模 / 仿真 | 揭示 X 是主导因素 | [1][3] |
-| 主题 B · 数据驱动方法 | 监督学习 / 深度学习 | 精度提升但可解释性下降 | [5][7][9] |
-| 主题 C · 应用落地 | 案例研究 / 中试 | 工程指标可达，成本仍偏高 | [11][12] |
+The conceptual framework page is the signature Route D page. It should use one of three forms.
 
-实现要点：
-- 用 `slide.shapes.add_table(rows, cols, ...)`，斑马底，表头深蓝；
-- 主题列字号 12pt 加粗，其余 10pt；
-- 文献编号列与该页页脚的 GB/T 7714 条目一一对应；
-- 同一主题下多于 4 篇文献的，只列代表 2–3 篇，其余在 P16 完整参考文献页给出。
+### Form 1: Theme Matrix
 
-### 形式 2 · 主题思维导图（适合主题层级清晰、3–4 层时）
+Default recommendation. Best for dense academic synthesis.
 
-中心节点 = 综述主题；一级分支 = 主题（3–5 个）；二级分支 = 子方法 / 子方向；叶子 = 代表文献编号。
+Rows are themes. Columns may include:
+- core methods;
+- main findings;
+- representative papers;
+- limitations;
+- relevance to this review.
 
-**用 python-pptx 的矢量形状画**，不要用 PNG 图片：
-- 节点用圆角矩形 `add_shape(MSO_SHAPE.ROUNDED_RECTANGLE)`；
-- 主题节点深蓝填充、白字；子节点浅蓝填充、深蓝字；
-- 分支用 `add_connector(MSO_CONNECTOR.ELBOW)` 或直线连接，单端无箭头（思维导图不带方向）；
-- 节点旁紧贴一个 8pt 文本框写 `[1][3]`；
-- 详细布局规则见 [layout-library.md](layout-library.md) 里的"思维导图版式"一节。
+Reference cells should contain markers only, such as `[1][3]`. Full entries go to the reference page.
 
-这种形式的好处：一眼看清主题划分。代价：放不下太多文字，每个节点最多 1 行 8 字。
+Use when:
+- theme count is 4-6;
+- each theme has multiple papers;
+- print readability matters.
 
-### 形式 3 · 演化流程图 / 时间轴（适合方法/思想随时间演变的综述）
+### Form 2: Thinking Map
 
-横向时间轴（左老右新）+ 各时间段的代表工作节点 + 节点间用箭头表达"催生 / 替代 / 挑战"关系。
+Use when themes form a clear hierarchy.
 
-实现：
-- 顶部一条水平箭头线 + 年份刻度（5–10 年一格）；
-- 在每个时间段下方挂 1–3 个节点（圆角矩形），节点内写方法名 + `[n]`；
-- 跨时段的"派生 / 推翻"关系用斜箭头连接节点；
-- 颜色：早期灰、中期蓝、近期红，让"时间感"显出来。
+Structure:
+- center node: review topic;
+- first-level branches: 3-5 themes;
+- second-level branches: submethods or subtopics;
+- leaf labels: representative paper markers.
 
-适合：综述领域有清晰技术代际更迭（如 SVM → CNN → Transformer 这种）。
+Constraints:
+- normally no more than 15 nodes;
+- labels should be short;
+- no arrows unless direction is meaningful;
+- cite paper markers near leaf nodes.
 
-### 三种形式如何选
+Use Step 5.5 if the map is complex.
 
-| 综述类型 | 推荐形式 |
+### Form 3: Evolution Timeline
+
+Use when methods, theories, or tools evolve over time.
+
+Structure:
+- horizontal time axis from early to recent;
+- year or period ticks;
+- 1-3 representative nodes per period;
+- arrows showing replacement, derivation, challenge, or complementarity.
+
+Use restrained color progression from early neutral to recent emphasis. Do not make the timeline decorative only.
+
+### Selection Rule
+
+| Review pattern | Recommended form |
 |---|---|
-| 主题数 ≤ 4，每主题文献多 | 矩阵表（密集信息） |
-| 主题数 3–6，层级分明，文献量中等 | 思维导图（结构清晰） |
-| 方法代际更迭明显、强时间维度 | 演化流程图 |
-| 方法/任务/数据集三个维度都重要 | 矩阵表 + 在主题详述页里穿插小思维导图 |
+| Few themes, many papers per theme | Theme matrix |
+| 3-6 themes with clear hierarchy | Thinking map |
+| Strong chronological method evolution | Evolution timeline |
+| Method, task, and dataset dimensions all matter | Theme matrix plus smaller framework pages |
 
-不确定时默认用**矩阵表**，它最学术、最便于查阅、最容易在打印稿上读。
+When uncertain, use the theme matrix.
 
-## 公式页生成规范
+## Theme Detail Pages
 
-Route D 只有在“公式本身构成研究谱系的一部分”时，才单独设置公式页。例如：
-- 不同研究分支的目标函数或约束项差异；
-- 评价指标、定义式或估计式在不同文献中的演化；
-- 某一主题下公式结构本身就是综述对象。
+Each theme usually gets 1-2 pages:
 
-默认优先采用**模块化步骤公式页**：
-- 适合提炼多个研究共享的通用技术链；
-- 例如“问题定义 → 通用目标函数 → 常见求解 → 输出指标”；
-- 调用 `make_formula_slide(..., formula_mode="modular", ...)`。
+Method lineage page:
+- `content_type: matrix_framework`;
+- left column: method class;
+- middle column: representative models / algorithms;
+- right column: assumptions, strengths, weaknesses.
 
-当需要强调不同研究分支、不同年代或不同主题簇的差异时，改用**标题分段公式页**：
-- 如“传统统计方法 / 机器学习方法 / 深度学习方法”；
-- 或“主题 A 指标体系 / 主题 B 指标体系 / 主题 C 指标体系”；
-- 调用 `make_formula_slide(..., formula_mode="sectioned", ...)`。
+Representative evidence page:
+- `content_type: results_chart` or `table_compare`;
+- one source figure plus interpretation rail, or an editable table comparing 3-5 papers;
+- cite all representative papers.
 
-要求：
-- 公式页服务于“学术脉络梳理”，不要逐篇论文抄公式；
-- 优先抽象共性表达，再说明关键差异；
-- 如果只是补充定义，可嵌入主题详述页，不必硬拆成独立页。
+## Controversy Page
 
-## 主题详述页（P7–P11）
+This page is often the highest-value review slide.
 
-每个主题用 1–2 页，建议结构：
+Acceptable forms:
+- two-column comparison of mainstream view versus alternative explanation;
+- relation graph where nodes are themes and edges are dependency, contradiction, or complementarity;
+- timeline showing how a debate changed.
 
-**P · 主题 N · 方法谱系页**（matrix_framework）：
-- 左列：方法分类（如"基于物理的""基于数据的""混合"）；
-- 中列：每类方法的代表算法 / 模型名；
-- 右列：每类的核心假设 / 优缺点；
-- 页脚：该页用到的全部文献 GB/T 7714 条目。
+State the controversy directly. Avoid vague phrases such as "there are different opinions" without explaining what differs.
 
-**P · 主题 N · 代表性结论页**（results_chart 或 table_compare）：
-- 单 hero 图（来自代表论文）+ 解读条；
-- 或原生表格列出 3–5 篇代表论文的数据集 / 指标 / 结果；
-- 页脚：所引文献完整条目。
+## Research Gap Page
 
-## 主题间联系 / 争议页（P12）
+List 3-5 gaps. Each gap should include:
+- one sentence naming the gap;
+- current limitation;
+- why it matters;
+- possible direction.
 
-这一页常被忽略，但是综述最有价值的部分。形式建议：
+Avoid generic statements such as "more research is needed." Make gaps specific to method, data, scenario, theory, evaluation, or transferability.
 
-- 两栏对照表：左"主流观点" vs 右"反对观点 / 替代解释"；
-- 或一张关系图：节点 = 主题，边 = 关系类型（依赖 / 矛盾 / 互补）；
-- 必须明确指出"目前学界有争议的点是 X"，不要回避。
+## Formula Page Rules
 
-## 研究空缺页（P13）
+Use formula pages only when formulas are part of the research lineage:
+- objective functions differ across methods;
+- evaluation metrics evolve across papers;
+- definitions or estimators are the review object.
 
-直接列 3–5 条空缺，每条结构：
+Use `formula_step` for common pipelines:
+- problem definition;
+- general objective;
+- common solution;
+- output metric.
 
+Use `formula_paragraph` when comparing branches, time periods, or theme clusters.
+
+Do not copy formulas from every paper. Abstract shared structure and explain key differences.
+
+## Citation Strategy
+
+Route D has the highest citation density.
+
+High-density pages:
+- concept matrix cells use markers only;
+- footer may only say that full entries are on the reference page;
+- full list appears in `references_page`.
+
+Medium-density pages:
+- body markers plus footer entries for up to three or four sources;
+- if more are needed, show representative entries and point to the reference page.
+
+Low-density pages:
+- one or two markers with full footer entries.
+
+The reference page is required:
+- list entries in citation-number order;
+- keep numbering consistent across pages;
+- allow multiple pages;
+- omit bottom banner if it crowds the list.
+
+## Speaker Notes Focus
+
+- Background: explain why the review is timely.
+- Search method: mention databases, keywords, and selected count when available.
+- Conceptual framework: spend extra time on this page; explain whole map, then themes, then relations.
+- Theme detail: locate each theme in the framework before evidence.
+- Controversy: name competing views clearly.
+- Gaps: explain why each gap deserves future work.
+- Limitations: discuss review limitations such as language, time window, and database coverage.
+
+## Page Brief Fields
+
+Every Route D page should include:
+
+```yaml
+content_type: conceptual_framework
+page_rhythm: dense
+visual_requirement: chart
+citations: ["[1]", "[3]", "[5]"]
+reference_density: high
+bottom_banner_text: "One synthesis claim."
 ```
-空缺 N：[一句话描述]
-        现有工作的局限：……
-        为什么这个空缺值得填：……
+
+For high-density reference pages, set:
+
+```yaml
+reference_strategy: full_list_on_reference_page
+footer_behavior: marker_only
 ```
 
-不要用泛泛的"还有待进一步研究"，要具体到方法、数据、场景。
+## Closing Page Rule
 
-## 引文 · Route D 最复杂
-
-文献综述的引用密度远高于其他路线（一张概念框架页上可能出现 10+ 篇），所以采用**分级策略**：
-
-### 分级 1 · 极高密度页（如 P6 概念框架矩阵表）
-
-- 表格单元格内只放编号 `[1][3][5]`；
-- 该页页脚**不**列完整条目（放不下），改在右下角写一行小字 `详见参考文献页 P16`；
-- 所有完整条目集中在 P16 完整参考文献页。
-
-### 分级 2 · 中等密度页（如 P7–P11 主题详述）
-
-- 正文角标 `[n]`；
-- 页脚 8pt 灰列出**本页用到的**条目，最多 4 条；
-- 超过 4 条 → 也只列前 3 条 + `等，详见 P16`。
-
-### 分级 3 · 低密度页（背景 / 总结页）
-
-- 正文 1–2 处角标；
-- 页脚完整列出 1–2 条条目。
-
-### P16 完整参考文献页
-
-- 字号 10pt（不是 8pt，因为这是主角不是页脚）；
-- 按引用顺序，**不**按拼音/字母排序（GB/T 7714 顺序编码制要求与正文角标对应）；
-- 中文用微软雅黑，数字与拉丁字符用 Times New Roman，逐 run 写入；
-- 一页放不下就跨 2–3 页，每页继续编号；
-- 仍保留页眉，但不加底部横幅避免遮挡。
-
-完整 GB/T 7714 各类型条目格式、python-pptx 多 run 写法见 [citation-style.md](citation-style.md)。
-
-## 版式特化
-
-| 页类型 | 版式建议 |
-|---|---|
-| 概念框架矩阵表 | 全宽原生 `add_table`，斑马底，深蓝表头白字 |
-| 概念框架思维导图 | 全宽矢量形状，居中放射布局，节点≤15 个 |
-| 演化流程图 | 全宽，水平时间轴 + 多层级节点 |
-| 主题详述（方法谱系） | matrix_framework 三列结构 |
-| 主题详述（结论证据） | hero figure + 窄解读条 |
-| 主题间联系 | 双栏对照 或 网络图 |
-| 研究空缺 | 3–5 条编号卡片，每张卡片 3 行 |
-| 完整参考文献 | 全宽两栏 10pt 列表，跨页可分 |
-
-## 演讲词重点（Route D 特化）
-
-- 背景页：交代综述时机（"今年新出现了 X，使得重新梳理领域变得必要"）；
-- 检索方法页：要给出数据库 + 关键词 + 入选数，让评审能复现；
-- 概念框架页：**这一页要讲 3–5 分钟**，逐主题点过；这是综述讲解的高峰；
-- 每个主题详述：先点该主题在框架中的位置，再讲方法谱系，最后给 1–2 个最强证据；
-- 争议页：要敢于点名争议双方，不要含糊；
-- 空缺页：每个空缺解释"为什么填这个空缺值得做"，与未来方向连接；
-- 局限性：综述本身也有局限（语种、时间窗、数据库覆盖），要诚实交代。
-
-详细写法见 [speaker-notes.md](speaker-notes.md)。
-
+The summary / conclusion page and the final thank-you / Q&A page must be separate slides. Do not combine 总结, Summary, or conclusion bullets with 谢谢大家, Thank you, acknowledgements, or Q&A prompts on one slide.

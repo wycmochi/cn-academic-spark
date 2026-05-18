@@ -1,4 +1,5 @@
 # Role: Strategist
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 4 策略阶段读取；它定义设计说明、模板选择、叙事结构和执行器交接字段。
 
 ## Core Mission
 
@@ -130,7 +131,7 @@ See [`../templates/icons/README.md`](../templates/icons/README.md) for the curre
 > **After all eight confirmations are approved — when writing `design_spec.md` §VI / `spec_lock.md`**, then materialize the icon inventory:
 >
 > 3. Enumerate the concepts the deck actually needs (home, chart, users, …) based on the confirmed outline.
-> 4. Search for each concept's filename in the chosen library: `ls skills/ppt-master/templates/icons/<chosen-library>/ | grep <keyword>`
+> 4. Search for each concept's filename in the chosen library: `ls skills/CN_Spark_paper2ppt/templates/icons/<chosen-library>/ | grep <keyword>`
 > 5. Use the verified filename (without `.svg`) as the icon name; always include the library prefix (e.g., `chunk-filled/home`).
 > 6. List the final icon inventory and chosen library in `design_spec.md` §VI; record the same in `spec_lock.md icons` (including `stroke_width` for stroke-style libraries). Executor may only use icons from this list.
 >
@@ -183,7 +184,7 @@ See [`../templates/icons/README.md`](../templates/icons/README.md) for the curre
 | Same family, weight contrast (900 / 300) | `"Microsoft YaHei", "PingFang SC", sans-serif` | same | — |
 | Display × neutral | `Impact, "Arial Black", SimHei, sans-serif` | `Arial, "Microsoft YaHei", sans-serif` | — |
 | Cool serif (academic) | `Cambria, SimSun, serif` | `"Times New Roman", SimSun, serif` | — |
-| Hei × song (政务) | `SimHei, "Microsoft YaHei", sans-serif` | `SimSun, serif` | — |
+| Formal CJK serif pairing | `SimHei, "Microsoft YaHei", sans-serif` | `SimSun, serif` | Formal government-style decks |
 | Tech / developer | `Arial, "Microsoft YaHei", sans-serif` | same | `Consolas, "Courier New", monospace` |
 | Concord (default fallback) | `"Microsoft YaHei", "PingFang SC", sans-serif` | same | — |
 
@@ -334,8 +335,8 @@ Side-by-side only: container ratio must match image ratio. Hero / atmosphere / a
 
 > **Reading is mandatory** — parallel to the chart-catalog rule below, but for **deck-level layouts** instead of per-page charts.
 > - Fully read `templates/layouts/layouts_index.json` **before drafting the Eight Confirmations** — same up-front timing as `charts_index.json`. Each entry's `summary` describes the **scene fit** (e.g. "Thesis defense, academic presentations, research progress reports"); each entry's `keywords` describes the **style fingerprint**.
-> - Score every layout against the user's incoming signals (scenario keywords from the prompt + source material title; the user's intended audience, style goal, palette, and any school / institution branding) and emit **Top 3 candidates** to `design_spec.md §I 模板候选` with `summary`-quote + matched keywords + recommendation rationale + the exact `cp` command.
-> - **Never default to "free design"** — only fall back to free design if the user explicitly picks `自由设计` at confirmation §1.5, or if every candidate scores below the threshold (in which case still list them and annotate "below threshold, falling back to free design").
+> - Score every layout against the user's incoming signals (scenario keywords from the prompt + source material title; the user's intended audience, style goal, palette, and any school / institution branding) and emit **Top 3 candidates** to `design_spec.md §I Template Candidates` with `summary`-quote + matched keywords + recommendation rationale + the exact `cp` command.
+> - **Never default to "free design"** — only fall back to free design if the user explicitly picks `free design` at confirmation §1.5, or if every candidate scores below the threshold (in which case still list them and annotate "below threshold, falling back to free design").
 > - After the user picks a layout, the main agent MUST `read_file <project_path>/templates/design_spec.md` (the chosen template's own design spec) and **fold its §II Color / §III Typography / §V Page Roster verbatim** into the project-level `design_spec.md`. Do NOT rewrite a competing palette / font plan / page roster — the template's authored spec wins.
 
 The full Step-3 workflow (Read → Score → Confirm → Copy → Re-read) lives in [SKILL.md Step 3](../SKILL.md). This Strategist file just enforces the catalog-read rule.

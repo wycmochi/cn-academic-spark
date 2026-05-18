@@ -1,4 +1,5 @@
-# Shared Technical Standards
+﻿# Shared Technical Standards
+document explanation(It doesn't affect the process, it only helps with understanding锛夛細鏈枃浠跺湪 SVG 鐢熸垚銆佽川妫€鍜屽鍑哄墠璇诲彇锛涘畠瀹氫箟鎵€鏈夐〉闈㈠繀椤婚伒瀹堢殑 SVG/PPT 鎶€鏈吋瀹规爣鍑嗐€?
 
 Common technical constraints for PPT Master, eliminating cross-role file duplication.
 
@@ -6,7 +7,7 @@ Common technical constraints for PPT Master, eliminating cross-role file duplica
 
 ## 1. SVG Banned Features Blacklist
 
-The following are **forbidden** in generated SVGs — PPT export breaks otherwise:
+The following are **forbidden** in generated SVGs 鈥?PPT export breaks otherwise:
 
 ### 1.0 Text characters: must be well-formed XML
 
@@ -14,8 +15,8 @@ SVG is strict XML. Two rules for all text and attribute values:
 
 | Character category | Required form | Forbidden form |
 |---|---|---|
-| Typography & symbols (em dash, en dash, ©, ®, →, ·, NBSP, full-width punctuation, emoji…) | **Raw Unicode characters** — write `—` `–` `©` `®` `→` directly | HTML named entities — `&mdash;` `&ndash;` `&copy;` `&reg;` `&rarr;` `&middot;` `&nbsp;` `&hellip;` `&bull;` etc. |
-| XML reserved characters (`&`, `<`, `>`, `"`, `'`) | **XML entities only** — `&amp;` `&lt;` `&gt;` `&quot;` `&apos;` (e.g. `R&amp;D`, `error &lt; 5%`) | Bare `&` `<` `>` (e.g. `R&D`, `error < 5%`) |
+| Typography & symbols (em dash, en dash, 漏, 庐, 鈫? 路, NBSP, full-width punctuation, emoji鈥? | **Raw Unicode characters** 鈥?write `鈥擿 `鈥揱 `漏` `庐` `鈫抈 directly | HTML named entities 鈥?`&mdash;` `&ndash;` `&copy;` `&reg;` `&rarr;` `&middot;` `&nbsp;` `&hellip;` `&bull;` etc. |
+| XML reserved characters (`&`, `<`, `>`, `"`, `'`) | **XML entities only** 鈥?`&amp;` `&lt;` `&gt;` `&quot;` `&apos;` (e.g. `R&amp;D`, `error &lt; 5%`) | Bare `&` `<` `>` (e.g. `R&D`, `error < 5%`) |
 
 One offending character invalidates the file and aborts export. Numeric refs (`&#160;` / `&#xa0;`) are XML-legal but discouraged.
 
@@ -35,17 +36,17 @@ One offending character invalidates the file and aborts export. Numeric refs (`&
 | `<script>` / event attributes | Scripts and interactivity |
 | `<iframe>` | Embedded frames |
 
-> **`marker-start` / `marker-end` is conditionally allowed** — see §1.1 for constraints. The converter maps qualifying markers to native DrawingML `<a:headEnd>` / `<a:tailEnd>`.
+> **`marker-start` / `marker-end` is conditionally allowed** 鈥?see 搂1.1 for constraints. The converter maps qualifying markers to native DrawingML `<a:headEnd>` / `<a:tailEnd>`.
 >
-> **`clipPath` on `<image>` is conditionally allowed** — see §1.2 for constraints. The converter maps qualifying clip shapes to native DrawingML picture geometry (`<a:prstGeom>` or `<a:custGeom>`).
+> **`clipPath` on `<image>` is conditionally allowed** 鈥?see 搂1.2 for constraints. The converter maps qualifying clip shapes to native DrawingML picture geometry (`<a:prstGeom>` or `<a:custGeom>`).
 >
-> **Replacing `<mask>` effects** — DrawingML has no per-pixel alpha. Route by effect:
-> - Image gradient overlay (vignette/fade/tint) → stacked `<rect>` with `<linearGradient>`/`<radialGradient>` (§6 Image Overlay)
-> - Non-rectangular image crop (circle/rounded/hexagon) → `clipPath` on `<image>` (§1.2)
-> - Inner glow / soft-edge → `<filter>` with `<feGaussianBlur>` (§6 Glow)
-> - Drop shadow → filter shadow or layered rect (§6 Shadow)
+> **Replacing `<mask>` effects** 鈥?DrawingML has no per-pixel alpha. Route by effect:
+> - Image gradient overlay (vignette/fade/tint) 鈫?stacked `<rect>` with `<linearGradient>`/`<radialGradient>` (搂6 Image Overlay)
+> - Non-rectangular image crop (circle/rounded/hexagon) 鈫?`clipPath` on `<image>` (搂1.2)
+> - Inner glow / soft-edge 鈫?`<filter>` with `<feGaussianBlur>` (搂6 Glow)
+> - Drop shadow 鈫?filter shadow or layered rect (搂6 Shadow)
 >
-> Pixel-level alpha effects (text-knockout image fills, arbitrary alpha composites) have no PPT path — bake into the source image at Image_Generator stage.
+> Pixel-level alpha effects (text-knockout image fills, arbitrary alpha composites) have no PPT path 鈥?bake into the source image at Image_Generator stage.
 
 ---
 
@@ -58,8 +59,8 @@ One offending character invalidates the file and aborts export. Numeric refs (`&
 | Marker `<marker>` element defined inside `<defs>` | Converter looks up marker defs via id index |
 | `orient="auto"` | DrawingML arrow auto-rotates along the line tangent; other orient values will not round-trip |
 | Marker shape is **one of**: closed 3-vertex path/polygon (triangle), closed 4-vertex path/polygon (diamond), `<circle>` / `<ellipse>` (oval) | These three map cleanly to DrawingML `type="triangle" / "diamond" / "oval"`. Any other shape is silently dropped with a warning. |
-| Marker child's `fill` **matches** the parent line's `stroke` color | In DrawingML the arrow head inherits the line color — a mismatched marker fill will look wrong on export. |
-| `markerWidth` / `markerHeight` roughly in `3–15` range | Mapped to `sm` (<6) / `med` (6–12) / `lg` (>12) size buckets. |
+| Marker child's `fill` **matches** the parent line's `stroke` color | In DrawingML the arrow head inherits the line color 鈥?a mismatched marker fill will look wrong on export. |
+| `markerWidth` / `markerHeight` roughly in `3鈥?5` range | Mapped to `sm` (<6) / `med` (6鈥?2) / `lg` (>12) size buckets. |
 
 **Use boundary**:
 
@@ -75,7 +76,7 @@ One offending character invalidates the file and aborts export. Numeric refs (`&
 | 4-vertex closed path/polygon | `<a:tailEnd type="diamond" .../>` |
 | `<circle cx="5" cy="5" r="4"/>` | `<a:tailEnd type="oval" .../>` |
 
-**Recommended template** — a standard arrow-head definition ready to reuse:
+**Recommended template** 鈥?a standard arrow-head definition ready to reuse:
 
 ```xml
 <defs>
@@ -88,7 +89,7 @@ One offending character invalidates the file and aborts export. Numeric refs (`&
       marker-end="url(#arrowHead)"/>
 ```
 
-> ⚠️ Unclassifiable marker shapes (curved paths, multi-segment, >4 vertices) are silently dropped — line renders without arrow. Use a manual `<polygon>` for exotic shapes.
+> 鈿狅笍 Unclassifiable marker shapes (curved paths, multi-segment, >4 vertices) are silently dropped 鈥?line renders without arrow. Use a manual `<polygon>` for exotic shapes.
 
 ---
 
@@ -106,7 +107,7 @@ One offending character invalidates the file and aborts export. Numeric refs (`&
 **Use boundary**:
 
 - Only on `<image>` for non-rectangular crops (circular avatars, rounded frames, hexagons)
-- NOT on shapes (`<rect>`/`<circle>`/`<path>`/`<g>`/`<text>`) — draw the target shape directly. A rect clipped to a circle is just a circle.
+- NOT on shapes (`<rect>`/`<circle>`/`<path>`/`<g>`/`<text>`) 鈥?draw the target shape directly. A rect clipped to a circle is just a circle.
 - PowerPoint's SVG renderer doesn't handle `clipPath`; only the Native PPTX converter does.
 
 **Supported DrawingML mapping**:
@@ -117,7 +118,7 @@ One offending character invalidates the file and aborts export. Numeric refs (`&
 | `<rect rx="..."/>` | `<a:prstGeom prst="roundRect"/>` with adj value | Rounded rectangle photo frame |
 | `<path>` / `<polygon>` | `<a:custGeom>` with path commands | Hexagon, diamond, custom shape |
 
-**Recommended template** — circular image clip:
+**Recommended template** 鈥?circular image clip:
 
 ```xml
 <defs>
@@ -129,7 +130,7 @@ One offending character invalidates the file and aborts export. Numeric refs (`&
        clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>
 ```
 
-**Rounded rectangle clip** — for card-style image frames:
+**Rounded rectangle clip** 鈥?for card-style image frames:
 
 ```xml
 <defs>
@@ -141,7 +142,7 @@ One offending character invalidates the file and aborts export. Numeric refs (`&
        clip-path="url(#cardClip)" preserveAspectRatio="xMidYMid slice"/>
 ```
 
-> ⚠️ `clip-path` on non-image elements is FORBIDDEN — quality checker errors out. Draw target geometry directly.
+> 鈿狅笍 `clip-path` on non-image elements is FORBIDDEN 鈥?quality checker errors out. Draw target geometry directly.
 
 ---
 
@@ -155,7 +156,7 @@ One offending character invalidates the file and aborts export. Numeric refs (`&
 
 **Mnemonic**: PPT does not recognize rgba, group opacity, or image opacity.
 
-> Arrows: prefer `marker-end` for connector lines (§1.1) — converter produces native auto-rotating arrow heads. For block/chunky arrows, use standalone closed shapes; see `templates/charts/chevron_process.svg` and `templates/charts/process_flow.svg`.
+> Arrows: prefer `marker-end` for connector lines (搂1.1) 鈥?converter produces native auto-rotating arrow heads. For block/chunky arrows, use standalone closed shapes; see `templates/charts/chevron_process.svg` and `templates/charts/process_flow.svg`.
 
 ---
 
@@ -170,7 +171,7 @@ One offending character invalidates the file and aborts export. Numeric refs (`&
 - **viewBox** must match the canvas dimensions (`width`/`height` must match `viewBox`)
 - **Background**: Use `<rect>` to define the page background color
 - **`<tspan>`** has two purposes: (1) manual line breaks (use `dy` or explicit `y`); (2) inline run formatting on the same line (color/weight/size). `<foreignObject>` is FORBIDDEN. See "Single logical line" rule below.
-- **Fonts**: every `font-family` stack MUST end with a pre-installed family (Microsoft YaHei / SimSun / Arial / Times New Roman / Consolas …); `@font-face` is FORBIDDEN. Full rule: [`strategist.md §g`](strategist.md).
+- **Fonts**: every `font-family` stack MUST end with a pre-installed family (Microsoft YaHei / SimSun / Arial / Times New Roman / Consolas 鈥?; `@font-face` is FORBIDDEN. Full rule: [`strategist.md 搂g`](strategist.md).
 - **Styles**: inline only (`fill=""`, `font-size=""`); `<style>`/`class` FORBIDDEN (`id` inside `<defs>` is fine)
 - **Colors**: HEX only; transparency via `fill-opacity`/`stroke-opacity`
 - **Images**: `<image href="../images/xxx.png" preserveAspectRatio="xMidYMid slice"/>`
@@ -178,68 +179,68 @@ One offending character invalidates the file and aborts export. Numeric refs (`&
 
 ### Inline Text Runs (Single Logical Line = Single `<text>`)
 
-One logical line — even with mixed colors/weights/sizes — MUST be one `<text>` with inline `<tspan>` children. Never use multiple adjacent `<text>` elements. The converter maps each `<tspan>` to a `<a:r>` run within the same PPT text frame, keeping the line as one editable shape.
+One logical line 鈥?even with mixed colors/weights/sizes 鈥?MUST be one `<text>` with inline `<tspan>` children. Never use multiple adjacent `<text>` elements. The converter maps each `<tspan>` to a `<a:r>` run within the same PPT text frame, keeping the line as one editable shape.
 
-✅ **DO** — one `<text>` → one text frame with three runs:
+鉁?**DO** 鈥?one `<text>` 鈫?one text frame with three runs:
 
 ```xml
 <text x="100" y="200" font-size="24" fill="#333333">
-  实现<tspan fill="#1A73E8" font-weight="bold">10倍</tspan>效率提升
+  Achieve <tspan fill="#1A73E8" font-weight="bold">10x</tspan> efficiency improvement
 </text>
 ```
 
-❌ **DON'T** — three side-by-side `<text>` elements become three separate text frames in PPT (breaks edit-as-one-line, risks alignment drift, makes spacing fragile):
+鉂?**DON'T** 鈥?three side-by-side `<text>` elements become three separate text frames in PPT (breaks edit-as-one-line, risks alignment drift, makes spacing fragile):
 
 ```xml
-<text x="100" y="200" font-size="24" fill="#333333">实现</text>
-<text x="160" y="200" font-size="24" fill="#1A73E8" font-weight="bold">10倍</text>
-<text x="240" y="200" font-size="24" fill="#333333">效率提升</text>
+<text x="100" y="200" font-size="24" fill="#333333">Achieve</text>
+<text x="160" y="200" font-size="24" fill="#1A73E8" font-weight="bold">10x</text>
+<text x="240" y="200" font-size="24" fill="#333333">efficiency improvement</text>
 ```
 
-**⚠️ Inline tspans must NOT carry `x`/`y`/`dy`** — those mark a new line, and `flatten_tspan` will split into a separate text frame. `dx` is safe (kerning, stays inline). Only set `x`/`y`/`dy` on tspans that genuinely start a new line.
+**鈿狅笍 Inline tspans must NOT carry `x`/`y`/`dy`** 鈥?those mark a new line, and `flatten_tspan` will split into a separate text frame. `dx` is safe (kerning, stays inline). Only set `x`/`y`/`dy` on tspans that genuinely start a new line.
 
-**Multi-line `<text>` with per-line emphasis works**: an outer line-break tspan (with `x` + `dy` or `y`) MAY contain nested inline tspans for color/weight/size — converter walks nested tspans and emits one run per styled segment:
+**Multi-line `<text>` with per-line emphasis works**: an outer line-break tspan (with `x` + `dy` or `y`) MAY contain nested inline tspans for color/weight/size 鈥?converter walks nested tspans and emits one run per styled segment:
 
 ```xml
 <text x="80" y="190" font-size="18" fill="#333333">
-  <tspan x="80" dy="0">完成率<tspan fill="#4CAF50" font-weight="bold">98%</tspan>超预期</tspan>
-  <tspan x="80" dy="35">成本降低<tspan fill="#F44336" font-weight="bold">¥120万</tspan></tspan>
+  <tspan x="80" dy="0">Completion reached <tspan fill="#4CAF50" font-weight="bold">98%</tspan>, above target</tspan>
+  <tspan x="80" dy="35">Cost decreased by <tspan fill="#F44336" font-weight="bold">1.2M CNY</tspan></tspan>
 </text>
 ```
 
-❌ **DON'T** — same-line column jump via `<tspan x="...">`:
+鉂?**DON'T** 鈥?same-line column jump via `<tspan x="...">`:
 
 ```xml
 <text x="100" y="200" font-size="18" fill="#333333">
-  <tspan x="100">左列</tspan><tspan x="600" font-weight="bold">右列</tspan>
+  <tspan x="100">Left column</tspan><tspan x="600" font-weight="bold">Right column</tspan>
 </text>
 ```
 
 `x` on a tspan starts a new line, splitting into two independent text frames. For two-column layouts, write two `<text>` elements.
 
-**Default — lift key information.** Uniform-styled paragraphs read as walls of text. Wrap these in `<tspan fill="..." font-weight="bold">`:
+**Default 鈥?lift key information.** Uniform-styled paragraphs read as walls of text. Wrap these in `<tspan fill="..." font-weight="bold">`:
 
-- **Numerical results** — percentages, multipliers (`10x`), absolute amounts (`¥120万`)
-- **Contrasts** — gain/loss, before/after, target/actual
-- **One or two load-bearing nouns per sentence** — the term that carries the insight
+- **Numerical results** 鈥?percentages, multipliers (`10x`), absolute amounts (`1.2M CNY`)
+- **Contrasts** 鈥?gain/loss, before/after, target/actual
+- **One or two load-bearing nouns per sentence** 鈥?the term that carries the insight
 
 Do NOT highlight: connectives, common verbs, every noun, decorative adjectives, structural text (footer/axis/legend/page number/labels).
 
 Color: use the deck's primary brand color for emphasis. Reserve green/red for actual positive/negative semantics.
 
-❌ **DON'T** — uniform-styled paragraph buries the insight:
+鉂?**DON'T** 鈥?uniform-styled paragraph buries the insight:
 
 ```xml
 <text x="80" y="200" font-size="20" fill="#333333">
-  2024年公司营收同比增长35%达到12亿元创历史新高
+  2024 revenue grew 35% year over year to 1.2B CNY, a new record
 </text>
 ```
 
-✅ **DO** — same line, key data lifted:
+鉁?**DO** 鈥?same line, key data lifted:
 
 ```xml
 <text x="80" y="200" font-size="20" fill="#333333">
-  2024年公司营收同比<tspan fill="#1A73E8" font-weight="bold">增长35%</tspan>达到<tspan fill="#1A73E8" font-weight="bold">12亿元</tspan>创历史新高
+  2024 revenue <tspan fill="#1A73E8" font-weight="bold">grew 35%</tspan> year over year to <tspan fill="#1A73E8" font-weight="bold">1.2B CNY</tspan>, a new record
 </text>
 ```
 
@@ -247,17 +248,17 @@ Color: use the deck's primary brand color for emphasis. Reserve green/red for ac
 
 Wrap logically related elements in top-level `<g id="...">` groups. Produces PowerPoint groups in PPTX, making slides easier to select/move/edit and providing stable anchors for optional per-element entrance animation.
 
-> ⚠️ Only `<g opacity="...">` is banned (§2). Plain `<g>` for grouping is required.
+> 鈿狅笍 Only `<g opacity="...">` is banned (搂2). Plain `<g>` for grouping is required.
 
-**Animation-ready rule**: direct children of `<svg>` should be semantic groups, not raw drawing atoms. Aim for **3–8 top-level content `<g id>` groups per slide** (the 3–8 budget excludes page chrome — see below); each content group becomes one entrance step under the chosen `--animation-trigger` mode (one click in `on-click`, one cascade slot in `after-previous`, parallel in `with-previous`).
+**Animation-ready rule**: direct children of `<svg>` should be semantic groups, not raw drawing atoms. Aim for **3鈥? top-level content `<g id>` groups per slide** (the 3鈥? budget excludes page chrome 鈥?see below); each content group becomes one entrance step under the chosen `--animation-trigger` mode (one click in `on-click`, one cascade slot in `after-previous`, parallel in `with-previous`).
 
-**Chrome groups are excluded automatically.** The exporter treats top-level groups whose id contains chrome tokens as page chrome and skips them in the animation sequence — they appear together with the slide. Tokens (matched against id after splitting on `-` / `_`): `background`, `bg`, `decoration` / `decorations` / `decor`, `header`, `footer`, `chrome`, `watermark`, `pagenumber` / `pagenum` / `page-number`. So `<g id="bg-texture">`, `<g id="cover-footer">`, `<g id="p03-header">`, `<g id="bottom-decor">` all skip animation while keeping their `<g>` wrapper for editing/grouping. Use these naming conventions for chrome — do **not** strip the `<g>` wrapper.
+**Chrome groups are excluded automatically.** The exporter treats top-level groups whose id contains chrome tokens as page chrome and skips them in the animation sequence 鈥?they appear together with the slide. Tokens (matched against id after splitting on `-` / `_`): `background`, `bg`, `decoration` / `decorations` / `decor`, `header`, `footer`, `chrome`, `watermark`, `pagenumber` / `pagenum` / `page-number`. So `<g id="bg-texture">`, `<g id="cover-footer">`, `<g id="p03-header">`, `<g id="bottom-decor">` all skip animation while keeping their `<g>` wrapper for editing/grouping. Use these naming conventions for chrome 鈥?do **not** strip the `<g>` wrapper.
 
 **What to group**:
 
 | Grouping Unit | Contains |
 |---------------|----------|
-| Card / panel | Background rect + (optional shadow only if the card floats over a photo/colored panel — see §6) + icon + title + body text |
+| Card / panel | Background rect + (optional shadow only if the card floats over a photo/colored panel 鈥?see 搂6) + icon + title + body text |
 | Process step | Number circle + icon + label + description |
 | List item | Bullet / number + icon + title + description |
 | Icon-text combo | Icon element + adjacent label |
@@ -276,10 +277,10 @@ Wrap logically related elements in top-level `<g id="...">` groups. Produces Pow
 
 ```xml
 <g id="card-benefits-1">
-  <!-- This card floats over a colored panel — shadow is appropriate. On a flat white canvas, omit the filter. -->
+  <!-- This card floats over a colored panel 鈥?shadow is appropriate. On a flat white canvas, omit the filter. -->
   <rect x="60" y="115" width="565" height="260" rx="20" fill="#FFFFFF" filter="url(#shadow)"/>
   <use data-icon="chunk-filled/bolt" x="108" y="163" width="44" height="44" fill="#0071E3"/>
-  <text x="105" y="270" font-size="56" font-weight="bold" fill="#0071E3">10×</text>
+  <text x="105" y="270" font-size="56" font-weight="bold" fill="#0071E3">10脳</text>
   <text x="250" y="270" font-size="30" font-weight="bold" fill="#1D1D1F">Faster</text>
   <text x="105" y="310" font-size="18" fill="#6E6E73">Reduce production time from days to hours.</text>
 </g>
@@ -291,29 +292,37 @@ Wrap logically related elements in top-level `<g id="...">` groups. Produces Pow
 
 ## 5. Post-processing Pipeline (3 Steps)
 
-Must be executed in order — skipping or adding extra flags is FORBIDDEN:
+Must be executed in order 鈥?skipping or adding extra flags is FORBIDDEN:
 
 ```bash
 # 1. Split speaker notes into per-page note files
 python3 scripts/total_md_split.py <project_path>
 
-# 2. SVG post-processing (icon embedding, image crop/embed, text flattening, rounded rect to path)
+# 2. Export standalone speaker-notes DOCX (one section per slide)
+python3 scripts/notes_to_docx.py <project_path>
+
+# 3. SVG post-processing (icon embedding, image crop/embed, text flattening, rounded rect to path)
 python3 scripts/finalize_svg.py <project_path>
 
-# 3. Export PPTX (from svg_final/, embeds speaker notes by default)
+# 4. Export PPTX (auto source split; speaker notes stay in DOCX)
 python3 scripts/svg_to_pptx.py <project_path>
 # Output:
-#   exports/<project_name>_<timestamp>.pptx           ← main native pptx
-#   backup/<timestamp>/<project_name>_svg.pptx        ← SVG snapshot
-#   backup/<timestamp>/svg_output/                    ← Executor SVG source backup
+#   Native source: main native pptx reads `svg_output/`
+#   Legacy source: legacy/preview pptx reads `svg_final/`
+#   exports/<project_name>_<timestamp>.pptx           鈫?main native pptx
+#   exports/<project_name>_speaker_notes.docx         鈫?speaker notes by slide
+#   backup/<timestamp>/<project_name>_svg.pptx        鈫?SVG snapshot
+#   backup/<timestamp>/svg_output/                    鈫?Executor SVG source backup
 ```
 
 **Optional animation flags** (only when the user asks):
-- `-t <effect>` — page transition (`fade` / `push` / `wipe` / `split` / `strips` / `cover` / `random` / `none`; default `fade`)
-- `-a <effect>` — per-element entrance animation (`fade` / `mixed` / `random` / one of 22 named effects / `none`; default `mixed`). Anchors on top-level `<g id="...">` groups.
-- `--animation-trigger {on-click,with-previous,after-previous}` — Start mode matching PowerPoint's animation-pane Start dropdown. Default `after-previous` (cascade on slide entry; pace via `--animation-stagger <seconds>`); `on-click` advances per click; `with-previous` plays all groups together.
-- `--animation-config <path>` — optional object-level animation sidecar. Default: `<project>/animations.json` when present.
-- `--auto-advance <seconds>` — kiosk-style auto-play
+- Page transitions default `none`; use `-t <effect>` only when the user explicitly asks for slide transitions.
+- `-t <effect>` 鈥?page transition (`fade` / `push` / `wipe` / `split` / `strips` / `cover` / `random` / `none`; default `none`)
+- `-a <effect>` 鈥?per-element entrance animation (`fade` / `mixed` / `random` / one of 22 named effects / `none`; default `mixed`). Anchors on top-level `<g id="...">` groups.
+- `--animation-trigger {on-click,with-previous,after-previous}` 鈥?Start mode matching PowerPoint's animation-pane Start dropdown. Default `after-previous` (cascade on slide entry; pace via `--animation-stagger <seconds>`); `on-click` advances per click; `with-previous` plays all groups together.
+- `--animation-config <path>` 鈥?optional object-level animation sidecar. Default: `<project>/animations.json` when present.
+- `--auto-advance <seconds>` 鈥?kiosk-style auto-play
+- `--no-notes` disables DOCX notes export. PPTX notes are always stripped for openability.
 
 **Optional recorded narration** (only when the user asks for narrated/video export):
 
@@ -324,7 +333,7 @@ python3 scripts/svg_to_pptx.py <project_path> --recorded-narration audio
 
 - `notes_to_audio.py` reads split `notes/*.md` files and writes one audio file per slide to `audio/`. Default `edge` output is MP3; configured cloud providers may output MP3 or WAV depending on provider settings.
 - `--recorded-narration audio` prepares PowerPoint's recorded timings and narrations: every slide needs matching `m4a` / `mp3` / `wav` audio, every duration must be readable by `ffprobe`, and `on-click` object animation is rejected.
-- `--recorded-narration audio` embeds matching audio, keeps speaker notes, and sets slide timings from audio duration.
+- `--recorded-narration audio` embeds matching audio and sets slide timings from audio duration. Speaker notes remain a separate DOCX and are not embedded into the PPTX.
 - `--narration-audio-dir audio` is the lower-level embedding path for partial audio coverage; it does not prepare a complete recorded-timings export.
 - Long-audio import and automatic long-audio splitting are not supported.
 
@@ -335,7 +344,9 @@ Full reference: [`animations.md`](animations.md).
 - NEVER force `-s output` for the legacy/preview pptx (PowerPoint's internal SVG parser drops icons and rounded corners). Default auto-split already gives native the high-fidelity source it needs without affecting legacy.
 - NEVER use `--only` (it suppresses one of the two output files)
 
-> Source-directory split: by default `svg_to_pptx.py` reads `svg_output/` for the native pptx (preserves icon `<use>`, image `preserveAspectRatio` → `srcRect`, rounded rect `rx/ry` → `prstGeom roundRect`) and `svg_final/` for the legacy/preview pptx (PowerPoint's internal SVG parser needs the flattened form). Pass `-s output` or `-s final` only when you specifically want both products to read from a single source.
+> Source-directory split: by default `svg_to_pptx.py` reads `svg_output/` for the native pptx (preserves icon `<use>`, image `preserveAspectRatio` 鈫?`srcRect`, rounded rect `rx/ry` 鈫?`prstGeom roundRect`) and `svg_final/` for the legacy/preview pptx (PowerPoint's internal SVG parser needs the flattened form). Pass `-s output` or `-s final` only when you specifically want both products to read from a single source.
+
+Guardrail: if `--only native -s final` is requested, the exporter falls back to `svg_output/` to avoid pathified shapes and excessive `<a:custGeom>`.
 
 **Re-run rule**: Any change to `svg_output/` after post-processing requires re-running Steps 2-3. Step 1 only re-runs if `notes/total.md` changed.
 
@@ -343,7 +354,7 @@ Full reference: [`animations.md`](animations.md).
 
 ## 6. Shadow & Overlay Techniques
 
-> `<mask>` elements and `<image opacity="...">` are banned. Always use stacked `<rect>` or gradient overlays instead (see §2).
+> `<mask>` elements and `<image opacity="...">` are banned. Always use stacked `<rect>` or gradient overlays instead (see 搂2).
 
 ### Shadow
 
@@ -359,15 +370,15 @@ Only when the element genuinely floats above another layer:
 
 #### When NOT to use
 
-- Background panels / dividers / decorative bars — they are the floor
-- Equal peer cards in a 2/3/4-up grid — keep all flat
-- Containers with visible border, gradient fill, or strong tint — redundant
-- Body-text paragraph containers — disrupts scan rhythm
-- Decorative lines / dividers / icons — they are symbols, not objects
-- Pages with only one content container — no second layer to lift above
-- Dark backgrounds — black shadows vanish; use 1px low-opacity white stroke or outer glow
+- Background panels / dividers / decorative bars 鈥?they are the floor
+- Equal peer cards in a 2/3/4-up grid 鈥?keep all flat
+- Containers with visible border, gradient fill, or strong tint 鈥?redundant
+- Body-text paragraph containers 鈥?disrupts scan rhythm
+- Decorative lines / dividers / icons 鈥?they are symbols, not objects
+- Pages with only one content container 鈥?no second layer to lift above
+- Dark backgrounds 鈥?black shadows vanish; use 1px low-opacity white stroke or outer glow
 
-**Per-page budget**: ≤2-3 shadowed elements. If you reach for a 4th, drop one first.
+**Per-page budget**: 鈮?-3 shadowed elements. If you reach for a 4th, drop one first.
 
 #### Single light source per page
 
@@ -387,7 +398,7 @@ A page may have at most two non-floor tiers.
 
 | Tier | When | dy | stdDeviation | flood-opacity |
 |------|------|----|--------------|---------------|
-| Floor (no shadow) | Backgrounds, peer-grid cards, dividers, body-text containers | — | — | — |
+| Floor (no shadow) | Backgrounds, peer-grid cards, dividers, body-text containers | 鈥?| 鈥?| 鈥?|
 | Resting | Cards on photos/panels, secondary callouts | 2-4 | 4-8 | 0.06-0.10 |
 | Raised | Primary CTA, focused/recommended card, overlay | 6-10 | 10-16 | 0.12-0.20 |
 
@@ -397,7 +408,7 @@ Pick **one** per container: shadow, border, gradient fill, or strong tint. Stack
 
 ---
 
-#### Filter Soft Shadow — Recommended
+#### Filter Soft Shadow 鈥?Recommended
 
 Best for: cards, floating panels, elevated elements. The `svg_to_pptx` converter automatically converts `feGaussianBlur` + `feOffset` into native PPTX `<a:outerShdw>`.
 
@@ -419,12 +430,12 @@ Best for: cards, floating panels, elevated elements. The `svg_to_pptx` converter
 
 Recommended parameters (see "Two-tier elevation maximum" above for tier guidance):
 ```
-stdDeviation:   4–16       (resting cards: 4–8;  raised elements: 10–16)
-flood-opacity:  0.06–0.12  (resting cards — default)
-                0.12–0.20  (raised elements only — primary CTA, overlay)
+stdDeviation:   4鈥?6       (resting cards: 4鈥?;  raised elements: 10鈥?6)
+flood-opacity:  0.06鈥?.12  (resting cards 鈥?default)
+                0.12鈥?.20  (raised elements only 鈥?primary CTA, overlay)
                 NEVER     > 0.20  (Office 2007 hard-shadow look)
-dy:             2–10       (resting: 2–4;  raised: 6–10)
-dx:             0–2        (must match every other shadow on the page — single light source)
+dy:             2鈥?0       (resting: 2鈥?;  raised: 6鈥?0)
+dx:             0鈥?        (must match every other shadow on the page 鈥?single light source)
 ```
 
 #### Colored Shadow
@@ -444,7 +455,7 @@ Best for: accent buttons, brand-colored cards. Use the element's own color famil
 </filter>
 ```
 
-Replace `flood-color` with the element's brand color. Keep `flood-opacity` 0.12-0.20. Reserve for the single primary CTA per page — using on every button defeats the cue.
+Replace `flood-color` with the element's brand color. Keep `flood-opacity` 0.12-0.20. Reserve for the single primary CTA per page 鈥?using on every button defeats the cue.
 
 #### Glow Effect
 
@@ -467,16 +478,16 @@ Best for: title highlights, key metrics, hero text. The converter automatically 
 
 Recommended parameters:
 ```
-stdDeviation:   4–8      (smaller = subtle, larger = prominent)
+stdDeviation:   4鈥?      (smaller = subtle, larger = prominent)
 flood-color:    brand color or accent color (NOT black)
-flood-opacity:  0.35–0.55  (stronger than shadow for visibility)
+flood-opacity:  0.35鈥?.55  (stronger than shadow for visibility)
 ```
 
 **vs shadow**: no `<feOffset>` (or dx=0/dy=0). The converter uses this to distinguish glow from shadow.
 
-#### Layered Rect Shadow — High-Compatibility Fallback
+#### Layered Rect Shadow 鈥?High-Compatibility Fallback
 
-Best for: maximum compatibility with older PowerPoint versions. Stack 2–3 semi-transparent rectangles behind the main card:
+Best for: maximum compatibility with older PowerPoint versions. Stack 2鈥? semi-transparent rectangles behind the main card:
 
 ```xml
 <!-- Shadow layers (back to front, largest offset first) -->
@@ -489,9 +500,9 @@ Best for: maximum compatibility with older PowerPoint versions. Stack 2–3 semi
 
 ### Image Overlay
 
-#### Linear Gradient Overlay — Most Common
+#### Linear Gradient Overlay 鈥?Most Common
 
-Best for: image+text pages. Gradient direction should match text position (text on left → gradient darkens toward left).
+Best for: image+text pages. Gradient direction should match text position (text on left 鈫?gradient darkens toward left).
 
 ```xml
 <image href="..." x="0" y="0" width="1280" height="720" preserveAspectRatio="xMidYMid slice"/>
@@ -519,7 +530,7 @@ Best for: cover slides and full-image pages with bottom title.
 <rect x="0" y="380" width="1280" height="340" fill="url(#bottomBar)"/>
 ```
 
-#### Radial Gradient Overlay — Vignette Effect
+#### Radial Gradient Overlay 鈥?Vignette Effect
 
 Best for: full-screen atmosphere slides; draws attention to the center.
 
@@ -551,10 +562,10 @@ Best for: slides needing strong visual brand identity.
 
 | Scenario | Recommended Technique | Avoid |
 |----------|-----------------------|-------|
-| Card / panel shadow (only when floating over photo/colored panel) | Filter soft shadow (`flood-opacity` 0.06–0.12, single light source) | Hard black shadow, full-page abundance |
+| Card / panel shadow (only when floating over photo/colored panel) | Filter soft shadow (`flood-opacity` 0.06鈥?.12, single light source) | Hard black shadow, full-page abundance |
 | Equal peer cards in a grid | All flat (no shadow) | Lifting every card uniformly |
 | Page-section background panel | Flat fill, no shadow | Treating panels as floating cards |
-| Accent / CTA button (one per page) | Colored shadow (same hue family, `flood-opacity` 0.12–0.20) | Generic gray shadow, applying to every button |
+| Accent / CTA button (one per page) | Colored shadow (same hue family, `flood-opacity` 0.12鈥?.20) | Generic gray shadow, applying to every button |
 | Title / metric highlight | Glow filter (brand color, no offset) | Overuse on body text |
 | Text over image | Linear gradient overlay (direction matches text side) | Uniform flat opacity over whole image |
 | Cover / full-image slide | Bottom gradient bar + brand color | Solid black overlay |
@@ -565,7 +576,7 @@ Best for: slides needing strong visual brand identity.
 
 ## 7. Stroke, Text & Shape Effects
 
-### stroke-dasharray — Dashed / Dotted Lines
+### stroke-dasharray 鈥?Dashed / Dotted Lines
 
 Converts to native PPTX `<a:prstDash>`. Use preset patterns for best results:
 
@@ -617,11 +628,11 @@ Supported text decorations convert to native PPTX text formatting:
 </text>
 ```
 
-### Gradient Fill — linearGradient & radialGradient
+### Gradient Fill 鈥?linearGradient & radialGradient
 
 Gradients defined in `<defs>` and referenced via `fill="url(#id)"` convert to native PPTX `<a:gradFill>`. Use them as shape fills (not just overlays) for polished surfaces.
 
-**Linear gradient** — best for buttons, header bars, background panels:
+**Linear gradient** 鈥?best for buttons, header bars, background panels:
 
 ```xml
 <defs>
@@ -633,7 +644,7 @@ Gradients defined in `<defs>` and referenced via `fill="url(#id)"` convert to na
 <rect x="540" y="600" width="200" height="48" rx="24" fill="url(#btnGrad)"/>
 ```
 
-**Radial gradient** — best for spotlight backgrounds, circular accents:
+**Radial gradient** 鈥?best for spotlight backgrounds, circular accents:
 
 ```xml
 <defs>
@@ -645,7 +656,7 @@ Gradients defined in `<defs>` and referenced via `fill="url(#id)"` convert to na
 <circle cx="640" cy="360" r="300" fill="url(#spotBg)"/>
 ```
 
-### transform: rotate — Element Rotation
+### transform: rotate 鈥?Element Rotation
 
 Rotation converts to native PPTX `<a:xfrm rot="...">`. Supported on all element types: `rect`, `circle`, `ellipse`, `line`, `path`, `polygon`, `polyline`, `image`, and `text`.
 
@@ -661,53 +672,53 @@ Rotation converts to native PPTX `<a:xfrm rot="...">`. Supported on all element 
 
 **Syntax**: `rotate(angle)` or `rotate(angle, cx, cy)` where `cx,cy` is the rotation center. Positive angles rotate clockwise.
 
-### Arc Paths — Donut / Pie Charts
+### Arc Paths 鈥?Donut / Pie Charts
 
-Calculate arc endpoint coordinates precisely with trigonometry. Never estimate — small errors produce wildly wrong shapes.
+Calculate arc endpoint coordinates precisely with trigonometry. Never estimate 鈥?small errors produce wildly wrong shapes.
 
-**Calculation formula** (center `cx,cy`, radius `r`, angle `θ` in degrees):
+**Calculation formula** (center `cx,cy`, radius `r`, angle `胃` in degrees):
 ```
-x = cx + r × cos(θ × π / 180)
-y = cy + r × sin(θ × π / 180)
+x = cx + r 脳 cos(胃 脳 蟺 / 180)
+y = cy + r 脳 sin(胃 脳 蟺 / 180)
 ```
 
 **Key rules**:
-1. Start at **-90°** (12 o'clock position) and go clockwise
-2. Each sector spans `percentage × 360°`
-3. Use **large-arc flag = 1** when the sector is > 180°, **0** otherwise
+1. Start at **-90掳** (12 o'clock position) and go clockwise
+2. Each sector spans `percentage 脳 360掳`
+3. Use **large-arc flag = 1** when the sector is > 180掳, **0** otherwise
 4. sweep-direction = 1 (clockwise) for outer arc, 0 (counter-clockwise) for inner arc returning
-5. **Always verify** that the sum of all sector angles equals 360° and that the last sector's end point matches the first sector's start point
+5. **Always verify** that the sum of all sector angles equals 360掳 and that the last sector's end point matches the first sector's start point
 
-**Example — 75% donut sector** (center 400,400, outer r=180, inner r=100):
+**Example 鈥?75% donut sector** (center 400,400, outer r=180, inner r=100):
 ```
-Start angle: -90°    → outer(400, 220), inner(400, 300)
-End angle: -90+270=180° → outer(220, 400), inner(300, 400)
-Large-arc flag: 1 (270° > 180°)
+Start angle: -90掳    鈫?outer(400, 220), inner(400, 300)
+End angle: -90+270=180掳 鈫?outer(220, 400), inner(300, 400)
+Large-arc flag: 1 (270掳 > 180掳)
 
 <path d="M 400,220 A 180,180 0 1,1 220,400 L 300,400 A 100,100 0 1,0 400,300 Z"/>
 ```
 
 ### Polygon Arrows on Diagonal Lines
 
-> For connector lines prefer `marker-end`/`marker-start` (§1.1). For chunky/wide solid/non-connector arrows, use standalone polygon or path.
+> For connector lines prefer `marker-end`/`marker-start` (搂1.1). For chunky/wide solid/non-connector arrows, use standalone polygon or path.
 
 Horizontal/vertical lines can use simple point offsets for `<polygon>` arrowheads. Diagonal lines need triangle vertices rotated to match line direction.
 
-**Method** — calculate triangle points using the line's direction vector:
+**Method** 鈥?calculate triangle points using the line's direction vector:
 
 ```
 Given line from (x1,y1) to (x2,y2):
 1. Direction vector: dx = x2-x1, dy = y2-y1
-2. Normalize: len = √(dx²+dy²), ux = dx/len, uy = dy/len
+2. Normalize: len = 鈭?dx虏+dy虏), ux = dx/len, uy = dy/len
 3. Perpendicular: px = -uy, py = ux
 4. Arrow tip = (x2, y2)
-5. Back point 1 = (x2 - ux×12 + px×5,  y2 - uy×12 + py×5)
-6. Back point 2 = (x2 - ux×12 - px×5,  y2 - uy×12 - py×5)
+5. Back point 1 = (x2 - ux脳12 + px脳5,  y2 - uy脳12 + py脳5)
+6. Back point 2 = (x2 - ux脳12 - px脳5,  y2 - uy脳12 - py脳5)
 ```
 
-**Example — diagonal line** from (260,310) to (370,430):
+**Example 鈥?diagonal line** from (260,310) to (370,430):
 ```
-dx=110, dy=120, len≈162.8, ux=0.676, uy=0.737
+dx=110, dy=120, len鈮?62.8, ux=0.676, uy=0.737
 px=-0.737, py=0.676
 Tip: (370, 430)
 Back1: (370-8.1-3.7, 430-8.8+3.4) = (358.2, 424.6)
@@ -716,7 +727,7 @@ Back2: (370-8.1+3.7, 430-8.8-3.4) = (365.6, 417.8)
 <polygon points="370,430 365.6,417.8 358.2,424.6" fill="#C8A96E"/>
 ```
 
-⚠️ Never use a fixed downward/rightward triangle on a diagonal line — arrow will point wrong.
+鈿狅笍 Never use a fixed downward/rightward triangle on a diagonal line 鈥?arrow will point wrong.
 
 ---
 
@@ -724,11 +735,11 @@ Back2: (370-8.1+3.7, 430-8.8-3.4) = (365.6, 417.8)
 
 ```
 project/
-├── svg_output/    # Raw SVGs (Executor output, contains placeholders)
-├── svg_final/     # Post-processed final SVGs (finalize_svg.py output)
-├── images/        # Image assets (user-provided + AI-generated)
-├── notes/         # Speaker notes (.md files matching SVG names)
-│   └── total.md   # Complete speaker notes document (before splitting)
-├── templates/     # Project templates (if any)
-└── *.pptx         # Exported PPT file
+鈹溾攢鈹€ svg_output/    # Raw SVGs (Executor output, contains placeholders)
+鈹溾攢鈹€ svg_final/     # Post-processed final SVGs (finalize_svg.py output)
+鈹溾攢鈹€ images/        # Image assets (user-provided + AI-generated)
+鈹溾攢鈹€ notes/         # Speaker notes (.md files matching SVG names)
+鈹?  鈹斺攢鈹€ total.md   # Complete speaker notes document (before splitting)
+鈹溾攢鈹€ templates/     # Project templates (if any)
+鈹斺攢鈹€ *.pptx         # Exported PPT file
 ```

@@ -154,6 +154,11 @@ def extract_paths_from_icon(icon_path: Path, target_color: str = '#000000') -> t
     return elements, style, base_size
 
 
+def _attr_value(use_match: str, attr: str) -> str | None:
+    match = re.search(rf'\b{re.escape(attr)}\s*=\s*([\'"])(.*?)\1', use_match, re.DOTALL)
+    return match.group(2) if match else None
+
+
 def parse_use_element(use_match: str) -> dict[str, str | float]:
     """
     Parse attributes of a use element.
@@ -167,26 +172,26 @@ def parse_use_element(use_match: str) -> dict[str, str | float]:
     attrs: dict[str, str | float] = {}
     
     # Extract data-icon
-    icon_match = re.search(r'data-icon="([^"]+)"', use_match)
-    if icon_match:
-        attrs['icon'] = icon_match.group(1)
+    icon_value = _attr_value(use_match, 'data-icon')
+    if icon_value:
+        attrs['icon'] = icon_value
     
     # Extract numeric attributes
     for attr in ['x', 'y', 'width', 'height']:
-        match = re.search(rf'{attr}="([^"]+)"', use_match)
-        if match:
-            attrs[attr] = float(match.group(1))
+        raw = _attr_value(use_match, attr)
+        if raw is not None:
+            attrs[attr] = float(raw)
     
     # Extract fill color
-    fill_match = re.search(r'fill="([^"]+)"', use_match)
-    if fill_match:
-        attrs['fill'] = fill_match.group(1)
+    fill_value = _attr_value(use_match, 'fill')
+    if fill_value:
+        attrs['fill'] = fill_value
 
     # Extract optional stroke-width override (stroke-style icons only).
     # Tabler-outline ships at stroke-width=2; passing 1.5 reads thin, 3 reads bold.
-    stroke_width_match = re.search(r'stroke-width="([^"]+)"', use_match)
-    if stroke_width_match:
-        attrs['stroke-width'] = stroke_width_match.group(1)
+    stroke_width_value = _attr_value(use_match, 'stroke-width')
+    if stroke_width_value:
+        attrs['stroke-width'] = stroke_width_value
 
     return attrs
 
@@ -257,8 +262,9 @@ def process_svg_file(svg_path: Path, icons_dir: Path, dry_run: bool = False, ver
     
     content = svg_path.read_text(encoding='utf-8')
     
-    # Match <use data-icon="xxx" ... /> elements
-    use_pattern = r'<use\s+[^>]*data-icon="[^"]*"[^>]*/>'
+    # Match self-closing and explicit-closing placeholders, with single or
+    # double quoted attributes. ElementTree may serialize <use> either way.
+    use_pattern = r'<use\b(?=[^>]*\bdata-icon\s*=\s*([\'"])[^\'"]+\1)[^>]*(?:/>|>\s*</use>)'
     matches = list(re.finditer(use_pattern, content))
     
     if not matches:

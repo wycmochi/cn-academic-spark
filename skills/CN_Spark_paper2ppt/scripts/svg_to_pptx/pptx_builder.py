@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import hashlib
 import mimetypes
 import re
@@ -24,9 +25,9 @@ from .pptx_media import (
     PNG_RENDERER,
     get_png_renderer_info, convert_svg_to_png,
 )
-from .pptx_notes import (
-    markdown_to_plain_text,
-    create_notes_slide_xml, create_notes_slide_rels_xml,
+from .pptx_openability import (
+    normalize_output_permissions,
+    validate_pptx_openability,
 )
 from .pptx_narration import (
     AUDIO_CONTENT_TYPES,
@@ -89,6 +90,95 @@ def _add_default_content_type(content_types: str, extension: str, content_type: 
         return content_types
     entry = f'  <Default Extension="{ext}" ContentType="{content_type}"/>'
     return content_types.replace('</Types>', entry + '\n</Types>')
+
+
+def _add_content_type_override(content_types: str, part_name: str, content_type: str) -> str:
+    """Add or replace a content type Override entry."""
+    normalized = part_name if part_name.startswith('/') else f'/{part_name}'
+    pattern = re.compile(
+        rf'\s*<Override\s+PartName="{re.escape(normalized)}"\s+ContentType="[^"]+"\s*/>',
+        flags=re.IGNORECASE,
+    )
+    entry = f'  <Override PartName="{normalized}" ContentType="{content_type}"/>'
+    if pattern.search(content_types):
+        return pattern.sub('\n' + entry, content_types, count=1)
+    return content_types.replace('</Types>', entry + '\n</Types>')
+
+
+def _relationship_id_for_target(rels_path: Path, rel_type: str, target: str) -> str | None:
+    if not rels_path.exists():
+        return None
+    rels_content = rels_path.read_text(encoding='utf-8')
+    pattern = re.compile(
+        r'<Relationship\b(?=[^>]*\bType="' + re.escape(rel_type) + r'")'
+        r'(?=[^>]*\bTarget="' + re.escape(target) + r'")[^>]*\bId="([^"]+)"[^>]*/?>'
+    )
+    match = pattern.search(rels_content)
+    if match:
+        return match.group(1)
+    return None
+
+
+NOTES_REL_TYPES = (
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide',
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster',
+)
+
+
+def _strip_pptx_notes_package(extract_dir: Path) -> None:
+    """Remove PPTX speaker-notes parts and relationships before packaging.
+
+    Speaker notes are exported as a standalone DOCX. Keeping notesSlide /
+    notesMaster markup inside the PPTX has repeatedly triggered PowerPoint
+    repair prompts and COM/RPC open failures, so the native PPTX package is
+    deliberately notes-free regardless of legacy caller flags.
+    """
+    for rel_dir in ('notesSlides', 'notesMasters'):
+        shutil.rmtree(extract_dir / 'ppt' / rel_dir, ignore_errors=True)
+
+    for rels_path in (extract_dir / 'ppt').rglob('*.rels'):
+        try:
+            rels_xml = rels_path.read_text(encoding='utf-8')
+        except OSError:
+            continue
+        original = rels_xml
+        for rel_type in NOTES_REL_TYPES:
+            rels_xml = re.sub(
+                r'\s*<Relationship\b(?=[^>]*\bType="' + re.escape(rel_type) + r'")[^>]*/>',
+                '',
+                rels_xml,
+                flags=re.IGNORECASE,
+            )
+        if rels_xml != original:
+            rels_path.write_text(rels_xml, encoding='utf-8')
+
+    pres_path = extract_dir / 'ppt' / 'presentation.xml'
+    if pres_path.exists():
+        pres_xml = pres_path.read_text(encoding='utf-8')
+        pres_xml = re.sub(
+            r'\s*<p:notesMasterIdLst\b[^>]*>.*?</p:notesMasterIdLst>',
+            '',
+            pres_xml,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        pres_xml = re.sub(
+            r'\s*<p:notesMasterId\b[^>]*/>',
+            '',
+            pres_xml,
+            flags=re.IGNORECASE,
+        )
+        pres_path.write_text(pres_xml, encoding='utf-8')
+
+    content_types_path = extract_dir / '[Content_Types].xml'
+    if content_types_path.exists():
+        content_types = content_types_path.read_text(encoding='utf-8')
+        content_types = re.sub(
+            r'\s*<Override\b(?=[^>]*\bContentType="application/vnd\.openxmlformats-officedocument\.presentationml\.notes(?:Slide|Master)\+xml")[^>]*/>',
+            '',
+            content_types,
+            flags=re.IGNORECASE,
+        )
+        content_types_path.write_text(content_types, encoding='utf-8')
 
 
 _IMAGE_CONTENT_TYPES = {
@@ -231,12 +321,12 @@ def create_pptx_with_native_svg(
     output_path: Path,
     canvas_format: str | None = None,
     verbose: bool = True,
-    transition: str | None = 'fade',
+    transition: str | None = None,
     transition_duration: float = 0.5,
     auto_advance: float | None = None,
     use_compat_mode: bool = True,
     notes: dict[str, str] | None = None,
-    enable_notes: bool = True,
+    enable_notes: bool = False,
     use_native_shapes: bool = False,
     animation: str | None = None,
     animation_duration: float = 0.4,
@@ -260,7 +350,8 @@ def create_pptx_with_native_svg(
         auto_advance: Auto-advance interval in seconds.
         use_compat_mode: Use Office compatibility mode (PNG + SVG dual format).
         notes: Notes dict, key is SVG stem, value is notes content.
-        enable_notes: Whether to enable notes embedding.
+        enable_notes: Deprecated compatibility flag. PPTX speaker notes are
+            always stripped; notes should be exported as standalone DOCX.
         use_native_shapes: Convert SVG to native DrawingML shapes.
         animation: Per-element entrance animation mode (single effect name,
             'mixed', 'random', or None to disable). Native shapes mode only.
@@ -315,6 +406,13 @@ def create_pptx_with_native_svg(
     width_emu, height_emu = get_slide_dimensions(canvas_format or 'ppt169', custom_pixels)
     pixel_width, pixel_height = get_pixel_dimensions(canvas_format or 'ppt169', custom_pixels)
 
+    if enable_notes and verbose:
+        print(
+            "  Warning: PPTX speaker notes embedding is disabled for openability; "
+            "export notes as standalone DOCX instead."
+        )
+    enable_notes = False
+
     if verbose:
         print(f"  Slide dimensions: {pixel_width} x {pixel_height} px")
         print(f"  SVG file count: {len(svg_files)}")
@@ -328,12 +426,7 @@ def create_pptx_with_native_svg(
         if transition:
             trans_name = TRANSITIONS.get(transition, {}).get('name', transition) if TRANSITIONS else transition
             print(f"  Transition effect: {trans_name}")
-        if enable_notes and notes:
-            print(f"  Speaker notes: {len(notes)} page(s)")
-        elif enable_notes:
-            print(f"  Speaker notes: Enabled (no notes files found)")
-        else:
-            print(f"  Speaker notes: Disabled")
+        print(f"  PPTX speaker notes: Disabled (standalone DOCX only)")
         print()
 
     animation_cli_overrides = animation_cli_overrides or {}
@@ -365,7 +458,6 @@ def create_pptx_with_native_svg(
         has_any_image = False
         media_cache: dict[tuple[str, str], str] = {}
         image_exts_used: set[str] = set()
-        notes_slides_created: set[int] = set()
         narration_slides_created: set[int] = set()
         audio_exts_used: set[str] = set()
         mixed_animation_offset = 0
@@ -558,35 +650,6 @@ def create_pptx_with_native_svg(
                     with open(rels_path, 'w', encoding='utf-8') as f:
                         f.write(rels_xml)
 
-                # --- Process notes (shared between native and legacy mode) ---
-                notes_content = ''
-                if enable_notes:
-                    svg_stem = svg_path.stem
-                    notes_content = notes.get(svg_stem, '') if notes else ''
-                    notes_text = markdown_to_plain_text(notes_content) if notes_content else ''
-                    if notes_text:
-                        notes_slides_dir = extract_dir / 'ppt' / 'notesSlides'
-                        notes_slides_dir.mkdir(exist_ok=True)
-
-                        notes_xml_path = notes_slides_dir / f'notesSlide{slide_num}.xml'
-                        notes_xml = create_notes_slide_xml(slide_num, notes_text)
-                        with open(notes_xml_path, 'w', encoding='utf-8') as f:
-                            f.write(notes_xml)
-
-                        notes_rels_dir = notes_slides_dir / '_rels'
-                        notes_rels_dir.mkdir(exist_ok=True)
-                        notes_rels_path = notes_rels_dir / f'notesSlide{slide_num}.xml.rels'
-                        notes_rels_xml = create_notes_slide_rels_xml(slide_num)
-                        with open(notes_rels_path, 'w', encoding='utf-8') as f:
-                            f.write(notes_rels_xml)
-
-                        _append_relationship(
-                            rels_path,
-                            'http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide',
-                            f'../notesSlides/notesSlide{slide_num}.xml',
-                        )
-                        notes_slides_created.add(slide_num)
-
                 # --- Process narration audio (shared between native and legacy mode) ---
                 svg_stem = svg_path.stem
                 audio_path = narration_audio.get(svg_stem) if narration_audio else None
@@ -655,10 +718,8 @@ def create_pptx_with_native_svg(
                         mode_str = " (PNG+SVG)" if has_any_image else " (SVG)"
                     else:
                         mode_str = " (SVG)"
-                    has_notes = slide_num in notes_slides_created
-                    notes_str = " +notes" if has_notes else ""
                     narration_str = " +narration" if slide_num in narration_slides_created else ""
-                    print(f"  [{i}/{len(svg_files)}] {svg_path.name}{mode_str}{notes_str}{narration_str}")
+                    print(f"  [{i}/{len(svg_files)}] {svg_path.name}{mode_str}{narration_str}")
 
                 success_count += 1
 
@@ -700,17 +761,7 @@ def create_pptx_with_native_svg(
             with open(content_types_path, 'w', encoding='utf-8') as f:
                 f.write(content_types)
 
-        # Add notesSlides content types
-        if enable_notes and notes_slides_created:
-            for i in sorted(notes_slides_created):
-                override = (
-                    f'  <Override PartName="/ppt/notesSlides/notesSlide{i}.xml" '
-                    f'ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>'
-                )
-                if override not in content_types:
-                    content_types = content_types.replace('</Types>', override + '\n</Types>')
-            with open(content_types_path, 'w', encoding='utf-8') as f:
-                f.write(content_types)
+        _strip_pptx_notes_package(extract_dir)
 
         # Repackage PPTX to a temporary file first. The public output path is
         # replaced only after every slide and relationship has succeeded.
@@ -721,17 +772,23 @@ def create_pptx_with_native_svg(
                     arcname = file_path.relative_to(extract_dir)
                     zf.write(file_path, arcname)
         shutil.move(str(temp_output_path), str(output_path))
+        permission_warnings = normalize_output_permissions(output_path)
+        openability_report = validate_pptx_openability(output_path)
 
         if verbose:
             print()
             print(f"[Done] Saved: {output_path}")
             print(f"  Succeeded: {success_count}, Failed: {len(svg_files) - success_count}")
+            for warning in permission_warnings + openability_report.warnings:
+                print(f"  [warn] Openability check: {warning}")
+            for error in openability_report.errors:
+                print(f"  [error] Openability check: {error}")
             if use_compat_mode and has_any_image:
                 print(f"  Mode: Office compatibility mode (supports all Office versions)")
                 if PNG_RENDERER == 'svglib' and renderer_hint:
                     print(f"  [Tip] {renderer_hint}")
 
-        return success_count == len(svg_files)
+        return success_count == len(svg_files) and openability_report.ok
 
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)

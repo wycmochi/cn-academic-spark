@@ -1,4 +1,5 @@
 # Executor General — Creative Versatile Style
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件只在需要通用非学术机制补充时读取；它提供 general 风格页面生成规则，不替代 academic executor。
 
 > Common guidelines: executor-base.md. Technical constraints: shared-standards.md.
 

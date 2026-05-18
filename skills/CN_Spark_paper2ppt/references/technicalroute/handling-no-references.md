@@ -1,112 +1,97 @@
-# Handling No-References · 文献检索 + Custom_gallery 都没合适图时的 fallback
+# Handling No References
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5.5 找不到足够外部参考图时读取；它规定如何降级到用户图、论文图或 Custom_gallery atlas-only，保证仍能生成双产物。
 
-> 学科冷门 / 关键词受限 / 站点不可访问 / IDE 无 web 工具时，文献样式检索可能**返回 0 张可用图**；同时 `assets/Custom_gallery/<discipline>/` 也可能因为该学科尚未补图而为空。本文件规定此时的 fallback 路径，保证 pipeline 不会卡死。
->
-> **位置**：本文件描述的是 Step 7 Tier 3（AI 生 PNG）路径中的**参考图来源兜底**——当 Custom_gallery + literature 检索两路都拿不到 anchor 时如何继续出 PNG。它**不影响** Step 7 Tier 2（模板装配）的判定；Tier 2 只看 `templates_index.json` 是否打分命中，与本文件无关。
+If literature search, user references, or Custom_gallery do not provide enough anchors, continue the pipeline instead of stopping. The absence of references affects Version B style confidence; it does not remove the requirement to create both Version A and Version B unless the user explicitly cancels one output.
 
----
+## Trigger Conditions
 
-## 触发条件（任一即触发）
+Use this file when any condition is true:
+- `literature_search.py assess --out <style_refs>` recommends `atlas_only`.
+- `style_refs/manifest.json` is missing or has too few usable references.
+- Search tools are unavailable and the user did not upload enough reference images.
+- The available references are result charts rather than route or framework diagrams.
+- The selected Custom_gallery discipline folder is empty or lacks a useful manifest.
+- The user requests no external reference use for copyright, privacy, or style reasons.
 
-1. `literature_search.py assess <out_dir>` 返回 `score < 0.5`（即可用参考图 < 3 张）；
-2. `manifest.json` 中 `refs` 数量 < `min_refs`（默认 5）；
-3. 用户主动在 contract.md 中标记 `reference_mode: atlas_only`；
-4. IDE 没有 `WebSearch` / `WebFetch` 且用户也未上传参考图；
-5. **Custom_gallery 同学科文件夹为空或无 `trans-manifest.json`**——即"既无文献参考、也无 gallery 参考"的双重缺失情景。
+## Fallback Order
 
----
+1. User-uploaded raster images, if at least three are structurally similar and are not screenshots of Version A.
+2. Seed-site literature raster figures recorded in `style_refs/manifest.json` when they are route, framework, method, or workflow diagrams.
+3. Closest Custom_gallery raster anchors selected through `templates/technicalroute/Custom_gallery/gallery_index.json`.
+4. Neutral academic infographic style if the discipline gallery has no usable raster anchor.
 
-## Fallback 三档（按可用资源逐档降级）
+At every level, semantic content still comes only from `content.yaml`.
 
-### 档位 A · 用户能补 ≥ 3 张参考图
+## Fallback A - User Provides At Least Three Images
 
-最优 fallback：让用户上传任意 3 张**结构相似**的图（不必同主题、不必同学科），跳到 offline 模式：
-
-```bash
-python3 scripts/literature_search.py offline \
-    --hints <user_uploaded_dir> \
-    --out <project>/style_refs/
-```
-
-> "结构相似"指：archetype 一致（同是 thinking / method / workflow），sub_variant 接近（同是 quad / core-steps / horizontal-pipeline 等）。学科 / 主题 / 文字内容可以完全不同，因为风格参考只取**视觉骨架**。
-
-### 档位 B · 用 `templates/technicalroute/templates/` 中匹配 archetype 的 SVG 作风格 anchor
-
-用户没上传图，但接受标准学术 infographic 风格：用 `templates/technicalroute/templates/` 中对应 archetype + sub_variant_hint 的可编辑 SVG 作为风格 anchor（即使本图整体走 Tier 3 出 PNG）：
+Run:
 
 ```bash
-python3 scripts/generate_route_image.py prompt \
-    --content <project>/content.yaml \
-    --reference-mode atlas_only \
-    --out <project>/prompt.md
+python3 scripts/technicalroute/literature_search.py offline --hints <user_uploaded_dir> --out <route_workdir>/style_refs/ --topic "<topic>" --archetype <thinking|method|workflow>
+python3 scripts/technicalroute/literature_search.py assess --out <route_workdir>/style_refs/
 ```
 
-`prompt` 子命令在 `atlas_only` 模式下：
+Then continue:
+- Version A: choose and assemble the editable template using `image-templatedraw.md`.
+- Version B: use the offline `style_refs` as references. Call `generate_route_image.py prompt` with `--reference-mode literature` because the prompt command currently supports only `literature` and `atlas_only`.
 
-1. 读取对应 archetype 的 atlas SVG 中的形状描述（不读用户的检索结果）；
-2. prompt 的 `[STYLE PROFILE]` 字段直接来自 atlas SVG 的注释段；
-3. **不**给图像模型传 reference image — 走纯文本到图模式；
-4. 在 prompt 头部插入：
+## Fallback B - Atlas-Only From Internal Assets
 
+Use when online and user references are unavailable or weak.
+
+Actions:
+- Inspect `templates/technicalroute/Custom_gallery/gallery_index.json` and select discipline-matched raster files; do not invent file paths.
+- Do not use `templates/technicalroute/templates/*.svg`, a PPTX editable route page, or a screenshot of Version A as an AI reference.
+- Record `reference_mode: gallery_only_fallback` and `fallback_note` in route `spec_lock.md`.
+- Generate Version A normally through `assemble`.
+- Generate Version B with the refs-plan bridge:
+
+```bash
+python3 scripts/technicalroute/literature_search.py prepare-ai-refs --topic "<paper title / keywords>" --discipline <discipline> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs
+python3 scripts/technicalroute/generate_route_image.py prompt --archetype <thinking|method|workflow> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode atlas_only --out <route_workdir>/prompt_ai.md
+python3 scripts/technicalroute/generate_route_image.py run-ai-variant --prompt <route_workdir>/prompt_ai.md --aspect_ratio 16:9 --filename route_ai_<id> --out <route_workdir>/output --refs-plan <route_workdir>/style_refs/route_ai_refs.json --out-svg <project_path>/svg_output/<NN>_route_ai.svg
 ```
-[ATLAS-ONLY MODE]
-No literature reference images available. Render using ONLY the shape recipes
-specified in [STRUCTURE] and the discipline-default color discipline from
-[COLOR DISCIPLINE]. Default to a clean, restrained, academic-poster look with
-generous white space, thin strokes, flat fills, and no decorative flourishes.
-Treat the [STRUCTURE] block as the single source of layout truth.
-```
 
-### 档位 C · 模型生不出可用图
+The prompt must include an atlas-only clause: no literature references are available, so the model must use only the declared structure, shape recipes, deck color roles, and article-derived content.
 
-档位 B 仍失败 → 触发"半成品交付"：
+## Fallback C - AI Output Remains Unusable
 
-1. 把当前 prompt + atlas SVG + content.yaml + contract.md 一并打包；
-2. 输出指引让用户去 ChatGPT / Gemini / Midjourney 网页版手动生成；
-3. 由 SKILL.md Step 6 验收清单确认。
+If Version B fails after reasonable retries:
+- Keep Version A as the reliable editable deliverable.
+- Package `prompt_ai.md`, `content.yaml`, `contract.md`, selected template key, and any reference manifest in the route workdir.
+- Insert a clearly labeled placeholder or a low-label AI draft only if the user accepts it.
+- Record the limitation in the final `ppt_outline_cn.md` QA report.
 
----
+Retry policy:
+- First failure: refine the prompt with the failed checklist item and stronger negative constraints.
+- Second failure: change image backend if available.
+- Third failure: stop regenerating and report the limitation.
 
-## 文献缺失对 contract 的影响（重写流程）
+## Contract Update
 
-如果 `assess` 失败，**回到 contract.md** 重新填一行：
+When falling back, update `contract.md` Section 9:
 
-```text
-## 6. Reference 模式
-mode: atlas_only           # 从 literature 降级
+```yaml
+mode: atlas_only
 expected_refs_count: 0
-note: <为什么没找到 — 例如 "学科为某新兴交叉领域，Google Scholar 与 Semantic Scholar 均 < 3 命中"; 或 "用户上传的 PDF 引用文献未提供 figure URL，且关键词 X 在中文数据库未命中">
+fallback_note: "<reason search or references were unavailable>"
 ```
 
-降级后再让用户**再次确认 contract**，避免出现"用户以为我们用了文献参考但其实没有"的误差。
+Ask for user confirmation only if the user expected literature-based visual references or the fallback changes the intended meaning. Otherwise continue with the recorded fallback.
 
----
+## Relationship To Version A
 
-## 与 `templates/technicalroute/templates/` 的关系
+Reference scarcity does not block Version A. Template assembly depends on:
+- a valid `content.yaml`;
+- a selected `template_key`;
+- a complete `slot_map`;
+- resolved project colors.
 
-`templates/technicalroute/templates/` 提供 18 张可编辑 SVG 模板（详见 `templates/technicalroute/templates/templates_index.json` + `templates/technicalroute/templates/README.md`）。这些 SVG 在本 skill 中担**两个角色**：
+If no template fits, do not silently replace Version A with Version B. Instead choose the closest editable template, simplify content, or report the missing template fit.
 
-1. **Tier 2 装配源**——主流路径下，`generate_route_image.py assemble` 直接把 content.yaml 注入这些 SVG，产出可编辑成品；
-2. **atlas-only fallback**（本文件场景）——当文献检索 + Custom_gallery 双双拿不到 anchor 时，`prompt --reference-mode atlas_only` 把对应模板的几何骨架 / 占位符布局 / 命名色板抽出来注入 prompt（不传 `--reference` 图），让模型按"标准学术 infographic"风格出 PNG。
+## Do Not
 
-两个角色用同一批 SVG 文件，只是消费方式不同。Tier 2 是"装"（替换占位符）；atlas-only fallback 是"看"（提取结构特征）。
-
----
-
-## 何时**不要**触发 fallback
-
-- 已经有 ≥ 5 张参考图，质量评分 ≥ 0.5 — 此时按正常 SKILL.md Step 2 流程；
-- 用户上传了已有论文 figure 想"重绘 / 风格化" — 走档位 A 的 offline 模式即可，不算 fallback；
-- 文献中有合适的 figure 但**用户主动要求不参考**（如担心版权 / 风格冲突） — 写到 contract `reference_mode: atlas_only` 并照档位 B 走。
-
----
-
-## 校验
-
-`generate_route_image.py audit` 在 PNG 出图后会复核：
-
-- atlas_only 模式下生成的图是否仍然符合 archetype 视觉约束（panel 数 / 流向 / 配色）；
-- atlas_only 模式下 reviewer-risk Q4（"配色是否承担信息含义"）是否在图中体现；
-
-不符合则触发 SKILL.md Step 6 的 `--refine` 重出循环。
-
+- Do not fabricate a search result, DOI, style reference, or downloaded file.
+- Do not copy text from Custom_gallery to compensate for missing source content.
+- Do not stop the whole PPT generation only because online references failed.
+- Do not present atlas-only output as literature-guided output.

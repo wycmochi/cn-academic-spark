@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-content_schema.py · 校验 content.yaml 是否符合 references/content-schema.md 中的契约。
+content_schema.py · 校验 content.yaml 是否符合 references/technicalroute/content-schema.md 中的契约。
 
 Usage:
   python3 content_schema.py validate <project>/content.yaml

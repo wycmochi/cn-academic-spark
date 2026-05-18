@@ -4,11 +4,12 @@ This directory contains user-facing scripts for conversion, project setup, SVG p
 
 ## Directory Layout
 
-- Top-level `scripts/`: runnable entry scripts
+- Top-level `scripts/`: primary runnable entry scripts; workflow packages expose their CLI as `<package>/cli.py`
 - `scripts/source_to_md/`: source-document → Markdown converters (`pdf_to_md.py`, `doc_to_md.py`, `excel_to_md.py`, `ppt_to_md.py`, `web_to_md.py`)
 - `scripts/image_backends/`: internal provider implementations used by `image_gen.py`
 - `scripts/tts_backends/`: internal TTS provider implementations used by `notes_to_audio.py`
-- `scripts/template_import/`: internal PPTX reference-preparation helpers used by `pptx_template_import.py`
+- `scripts/template_import/`: PPTX reference-preparation workflow (`cli.py`, `layout_guard.py`, `register.py`, manifest helpers)
+- `scripts/pptx_to_svg/`: reverse converter package and CLI (`cli.py`) used by template import and diagnostics
 - `scripts/svg_finalize/`: internal post-processing helpers used by `finalize_svg.py`
 - `scripts/docs/`: topic-focused script documentation
 - `scripts/assets/`: static assets consumed by scripts
@@ -40,8 +41,8 @@ python3 scripts/update_repo.py
 
 | Area | Primary scripts | Documentation |
 |------|-----------------|---------------|
-| Conversion | `source_to_md/pdf_to_md.py`, `source_to_md/doc_to_md.py`, `source_to_md/excel_to_md.py`, `source_to_md/ppt_to_md.py`, `source_to_md/web_to_md.py` | [docs/conversion.md](./docs/conversion.md) |
-| Project management | `project_manager.py`, `batch_validate.py`, `generate_examples_index.py`, `error_helper.py`, `pptx_template_import.py` | [docs/project.md](./docs/project.md) |
+| Conversion | `source_to_md/pdf_to_md.py`, `source_to_md/doc_to_md.py`, `source_to_md/excel_to_md.py`, `source_to_md/ppt_to_md.py`, `source_to_md/web_to_md.py`, `pptx_to_svg/cli.py` | [docs/conversion.md](./docs/conversion.md) |
+| Project management | `project_manager.py`, `batch_validate.py`, `generate_examples_index.py`, `error_helper.py`, `template_import/cli.py` | [docs/project.md](./docs/project.md) |
 | SVG pipeline | `finalize_svg.py`, `svg_to_pptx.py`, `total_md_split.py`, `svg_quality_checker.py`, `animation_config.py`, `notes_to_audio.py` | [docs/svg-pipeline.md](./docs/svg-pipeline.md) |
 | Spec maintenance | `update_spec.py` | [docs/update_spec.md](./docs/update_spec.md) |
 | Image tools | `image_gen.py`, `analyze_images.py`, `gemini_watermark_remover.py` | [docs/image.md](./docs/image.md) |
@@ -58,6 +59,7 @@ python3 scripts/source_to_md/ppt_to_md.py <deck.pptx>
 python3 scripts/source_to_md/doc_to_md.py <file.docx>
 python3 scripts/source_to_md/excel_to_md.py <workbook.xlsx>
 python3 scripts/source_to_md/web_to_md.py <url>
+python3 scripts/pptx_to_svg/cli.py <deck.pptx>
 ```
 
 Project setup:
@@ -71,9 +73,9 @@ python3 scripts/project_manager.py validate <project_path>
 Template source import:
 
 ```bash
-python3 scripts/pptx_template_import.py <template.pptx>
-python3 scripts/pptx_template_import.py <template.pptx> --manifest-only
-python3 scripts/pptx_template_import.py <template.pptx> --inheritance-mode both
+python3 scripts/template_import/cli.py <template.pptx>
+python3 scripts/template_import/cli.py <template.pptx> --manifest-only
+python3 scripts/template_import/cli.py <template.pptx> --inheritance-mode both
 ```
 
 Post-processing and export:
@@ -101,10 +103,11 @@ python3 scripts/update_repo.py --skip-pip
 
 ## Recommendations
 
-- Keep one user-facing entry point per workflow at the top level of `scripts/`
+- Keep one user-facing entry point per workflow: either a top-level script or a workflow package `cli.py`
 - Move provider-specific or helper internals into subdirectories
 - Prefer the unified entry points `project_manager.py`, `finalize_svg.py`, and `image_gen.py`
 - Prefer `svg_final/` over `svg_output/` when exporting
+- Keep the default `finalize_svg.py` placeholder prompt cleanup enabled when exporting decks built from user PPTX templates
 
 ## Related Docs
 
@@ -115,4 +118,5 @@ python3 scripts/update_repo.py --skip-pip
 - [Troubleshooting](./docs/troubleshooting.md)
 - [Skill Entry](../SKILL.md)
 
-_Last updated: 2026-04-09_
+_Last updated: 2026-05-17_
+

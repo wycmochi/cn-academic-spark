@@ -1,221 +1,133 @@
-# Citation Style · 引文规范（四条路线通用）
+# Citation Style
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在任何页面需要引用文献、论文图表或参考文献页时读取；它规定 GB/T 7714 编号、页脚、参考文献页和中英文字体混排。
 
-> ⚠️ **主路径 = SVG**。引文页脚的实际写入由 SVG `<text>` + `<tspan>` 完成，混合字体分 tspan。详见 [executor-academic.md §2.2 引文页脚](executor-academic.md#22-引文页脚-citation_footer) 与 §2.3 tspan 分段规则。
->
-> 本文件主要规定**条目格式（GB/T 7714）**与**引文密度**，对 SVG / python-pptx 两种写入路径通用。§III 以下的 python-pptx 代码仅在 `svg_to_pptx` 链路不可用时作 fallback 参考。
+The main path is SVG. Citation footers are written as SVG `<text>` plus mixed-font `<tspan>` runs, then converted to editable DrawingML. Direct python-pptx citation writing is only a fallback idea; do not use it unless the SVG path is unavailable.
 
-只要 PPT 正文中出现了他人的观点 / 数据 / 图表 / 模型，都必须满足三件事：
+Whenever a slide uses another author's claim, data, figure, table, model, formula, policy text, or web resource, three things are required:
+1. A body marker such as `[n]`.
+2. A footer entry or reference-page entry matching `[n]`.
+3. Mixed-font segmentation for CJK and Latin / numeric text.
 
-1. **正文角标**：在引用句末加 `[n]`，n 与该页页脚或参考文献页中的条目编号一一对应。
-2. **页脚完整条目**：用 8pt 浅灰列出该页用到的完整 GB/T 7714 引用，置于 `bottom_banner` 上方。
-3. **混合字体**：中文字符用 *微软雅黑*；数字、年份、卷期、页码、英文字母、DOI、URL 一律用 *Times New Roman*。
+## Default Style
 
-中文文献用中文，英文文献保留英文原文，**不要互译**。
+Use GB/T 7714 numbered citation style by default. Number references in first-appearance order. The same number must be used in body markers, figure captions, citation footers, and reference pages.
 
----
+Do not translate citation titles across languages. Keep Chinese-language sources in their original Chinese form when the output deck is allowed to contain Chinese; keep English-language sources in English. If the surrounding document must remain English-only, use placeholders in templates and fill final Chinese entries at deck-generation time.
 
-## 默认格式 · GB/T 7714（顺序编码制）
+## Common Entry Templates
 
-PPT 答辩 / 课程报告 / 综述讲解默认使用 GB/T 7714—2015 的顺序编码格式。引文条目按**正文中首次出现的顺序**编号，与正文角标 `[n]` 对应。
+Use these structures when building `citation_footer` or reference pages:
 
-### 各类型条目模板（直接复制可用）
-
-**中文期刊论文**：
-```
-[1] 董文鸳. 我国谷歌学术搜索研究综述[J]. 新世纪图书馆, 2011, 9: 43-45.
-```
-结构：`[序号] 作者. 题目[J]. 期刊名, 出版年, 卷(期): 起止页码.`
-
-**英文期刊论文**：
-```
-[2] Smith J, Doe A, Wang L. Title of the paper here[J]. Nature, 2024, 612(7940): 215-223.
-```
-结构：`[序号] 作者. 题目[J]. 期刊名, 年, 卷(期): 起止页码.`
-作者多于 3 人：列前 3 + `等` / `et al.`。
-
-**中文会议论文**：
-```
-[3] 张三, 李四. 文章标题[C]//会议名称. 出版地: 出版社, 2020: 12-18.
-```
-
-**英文会议论文**：
-```
-[4] Brown K, Lee M. Paper title[C]//Proceedings of NeurIPS 2023. Vancouver: NeurIPS Foundation, 2023: 4521-4533.
-```
-
-**中文专著**：
-```
-[5] 李四. 学术写作规范[M]. 北京: 高等教育出版社, 2019.
-```
-
-**英文专著**：
-```
-[6] Murphy K P. Probabilistic Machine Learning: An Introduction[M]. Cambridge: MIT Press, 2022.
-```
-
-**学位论文**：
-```
-[7] 王五. 论文题目[D]. 北京: 清华大学, 2023.
-```
-
-**政策文件 / 标准 / 报告**（Route B 常用）：
-```
-[8] 国务院办公厅. 关于推动 XXX 发展的指导意见: 国办发〔2024〕12 号[Z]. 2024-05-12.
-[9] 国家统计局. 2024 年国民经济和社会发展统计公报[R]. 北京: 国家统计局, 2025.
-```
-
-**报纸文章**：
-```
-[10] 记者张某. 文章标题[N]. 人民日报, 2024-08-15(02).
-```
-
-**电子资源 / 网页**：
-```
-[11] 国家统计局. 第七次全国人口普查公报[EB/OL]. (2021-05-11)[2025-05-01]. https://www.stats.gov.cn/...
-```
-结构：`[序号] 作者. 题目[EB/OL]. (发布日期)[引用日期]. URL.`
-
-**预印本**：
-```
-[12] Lee A, Chen B. Paper title[EB/OL]. (2024-09-10)[2025-04-20]. arXiv:2409.05678.
-```
-
----
-
-## 文献类型标识符速查
-
-| 标识 | 含义 |
+| Source type | Template |
 |---|---|
-| `[J]` | 期刊文章 |
-| `[C]` | 会议论文 |
-| `[M]` | 专著 |
-| `[D]` | 学位论文 |
-| `[R]` | 报告 |
-| `[Z]` | 政策 / 标准 / 法规 |
-| `[N]` | 报纸文章 |
-| `[EB/OL]` | 电子资源 / 网页 |
-| `[DS/OL]` | 在线数据集 |
-| `[CP/OL]` | 在线软件 / 代码 |
+| Journal article | `[n] Author A, Author B. Title[J]. Journal, Year, Volume(Issue): pages.` |
+| Conference paper | `[n] Author A, Author B. Title[C]//Proceedings Name. Place: Publisher, Year: pages.` |
+| Monograph | `[n] Author. Book Title[M]. Place: Publisher, Year.` |
+| Thesis | `[n] Author. Thesis Title[D]. City: Institution, Year.` |
+| Report | `[n] Organization. Report Title[R]. City: Organization, Year.` |
+| Policy / standard | `[n] Organization. Policy or Standard Title: document number[Z]. Date.` |
+| Newspaper | `[n] Author. Article Title[N]. Newspaper, Date(Page).` |
+| Web resource | `[n] Organization. Page Title[EB/OL]. (Published date)[Accessed date]. URL.` |
+| Online dataset | `[n] Organization. Dataset Title[DS/OL]. Version. (Published date)[Accessed date]. URL or DOI.` |
+| Online software / code | `[n] Author or Organization. Software Title[CP/OL]. Version. (Published date)[Accessed date]. URL.` |
+| Preprint | `[n] Author A, Author B. Title[EB/OL]. (Published date)[Accessed date]. arXiv:xxxx.xxxxx or DOI.` |
 
----
+If there are more than three authors, list the first three and use `et al.` for English entries or the target-language equivalent for Chinese entries.
 
-## 备选格式 · APA / MLA（用户明确要求时）
+## Citation Markers In Slide Body
 
-**APA 第 7 版**：
-```
-董文鸳. (2011). 我国谷歌学术搜索研究综述. 新世纪图书馆, 9, 43-45.
-Smith, J., Doe, A., & Wang, L. (2024). Title of the paper. Nature, 612(7940), 215-223.
-```
-正文角标改为 `(董, 2011)` / `(Smith et al., 2024)`，不用方括号数字。
+Rules:
+- Put `[n]` at the end of the cited sentence or caption.
+- Use a smaller size than body text when possible.
+- Use neutral gray or the deck text color; do not use brick red for citation markers.
+- Insert a normal half-width space before `[n]` if needed for readability.
+- Segment brackets and numbers as Latin / numeric runs.
 
-**MLA 第 9 版**：
-```
-董文鸳. "我国谷歌学术搜索研究综述." 新世纪图书馆, vol. 9, 2011, pp. 43-45.
-Smith, John, et al. "Title of the Paper." Nature, vol. 612, no. 7940, 2024, pp. 215-223.
-```
-正文角标改为 `(董 43)` / `(Smith et al. 215)`，作者 + 页码。
+## Footer Rules
 
-切换格式时同时改：①正文角标形式 ②页脚 / 参考文献页条目 ③ Step 3 询问环节的勾选记录。
+Every cited evidence page should include `citation_footer` unless the page is a high-density reference-matrix page that explicitly points to a full reference page.
 
----
+Footer placement:
+- above `bottom_banner`;
+- above page number when both would collide;
+- never over a figure, formula, or table;
+- use the footer zone reserved in `spec_lock.md`.
 
-## python-pptx 实现要点（fallback only）
+Footer style:
+- font size: 8-11 px;
+- fill: `#888888` on light backgrounds, or a muted light gray on dark backgrounds;
+- line height: 1.0-1.2;
+- no boxes, shadows, decorative rules, or brick-red emphasis;
+- no more than three full entries on an ordinary slide.
 
-> 仅在 `svg_to_pptx.py` 链路不可用、必须直接调 python-pptx 写 PPTX 时使用。主路径请走 SVG `<tspan>`。
+If a slide needs more than three entries:
+- show the first three plus a pointer to the reference page;
+- move the complete list to `references_page`;
+- for Route D concept matrices, use only markers inside the matrix and place full entries on the reference page.
 
-### 1 · 引文页脚的位置
+## Mixed-Font SVG Contract
 
-每页页脚区在 `bottom_banner` **上方**留出固定带状区域（高约 1.5–2.0 cm），从左到右铺满除 logo 外的宽度。如该页没有底部横幅（甘特图、参考文献页），则页脚紧贴页面底部 0.5 cm。
+Any citation containing CJK plus Latin letters, numbers, DOI strings, journal metadata, or URLs must be split into `<tspan>` runs:
 
-参数（在 `LAYOUT` 中）：
-- `cite_h = 1.6` （cm，页脚带高度）
-- `cite_top_offset = layout["slide_h"] - layout["banner_h"] - cite_h` （从顶向下定位）
-- `cite_left = layout["margin_left"]`
-- `cite_w = layout["slide_w"] - layout["margin_left"] - layout["margin_right"]`
-
-### 2 · 中英文混排的多 run 写法
-
-python-pptx 的 `run.font.name` 只对该 run 生效，所以**必须把中文段、英文/数字段拆成多个 run**，每个 run 单独设字体。简化伪代码：
-
-```python
-def add_citation_run(paragraph, text, is_chinese, size_pt=8, color_hex='888888'):
-    run = paragraph.add_run()
-    run.text = text
-    run.font.name = '微软雅黑' if is_chinese else 'Times New Roman'
-    run.font.size = Pt(size_pt)
-    run.font.color.rgb = rgb(color_hex)
-
-def write_citation_line(paragraph, citation_text):
-    # 用正则切分：连续的中文字符为一段，连续的非中文为一段
-    import re
-    parts = re.findall(r'[一-鿿]+|[^一-鿿]+', citation_text)
-    for part in parts:
-        is_zh = bool(re.match(r'[一-鿿]', part))
-        add_citation_run(paragraph, part, is_zh)
+```svg
+<text x="60" y="650" font-size="10" fill="#888888">
+  <tspan font-family="Microsoft YaHei, Source Han Sans SC, sans-serif">[1] Author. Title</tspan>
+  <tspan font-family="Times New Roman, serif">[J]. Journal, 2025, 80(3): 512-528. DOI: ...</tspan>
+</text>
 ```
 
-调用时一行一条引用：
+Use CJK fonts for Chinese text. Use `Times New Roman` or the declared Latin serif stack for:
+- numbers;
+- years;
+- volume / issue / pages;
+- English journal names;
+- DOI;
+- URL;
+- Latin author names.
 
-```python
-tf = footer_box.text_frame
-tf.word_wrap = True
-for i, cite in enumerate(citations_for_this_slide):
-    p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
-    p.space_before = Pt(1)
-    write_citation_line(p, cite)
-```
+Do not put Chinese journal names in `Times New Roman`.
 
-### 3 · 正文角标 `[n]` 的样式
+## Figure And Table Source Captions
 
-正文里的 `[n]`：
-- 字号比正文小 1–2pt（如正文 14pt，角标 12pt）；
-- 颜色用主题强调色或正文灰，不要红；
-- 与前一个字之间留半角空格（python-pptx 中加 ` `，不是 ` `）；
-- 同样按照中英文规则分 run：方括号和数字属于"非中文"，用 Times New Roman。
+When embedding a source figure:
+- add a concise caption near the figure;
+- include a marker such as `Source: Fig. 2 in [3]`;
+- include the full entry in the footer or reference page.
 
-### 4 · 单页引用条目数量上限
+When using a complex table screenshot:
+- use `crop: meet`;
+- do not crop away row / column labels;
+- add the source marker near the table;
+- cite the original paper, report, or dataset.
 
-8pt 灰字、行高 1.0、页脚带 1.6cm 高、宽约 30cm 的情况下：
-- 单条平均长度 ≤ 60 字符 → 可放 2 条；
-- 单条 60–100 字符 → 1 条；
-- 超过 4 条 → 不要硬塞，前 3 条 + `等，详见参考文献页 P{n}`，把完整列表挪到独立的参考文献页。
+## Route-Specific Citation Density
 
-Route D（综述讲解）一定会触发"挪到独立页"，参见 [route-literature-review.md](route-literature-review.md) 的"分级 1 · 极高密度页"。
+| Route | Citation density | Reference page |
+|---|---|---|
+| Route A academic paper | Low to medium; the paper itself is the main source | Optional but recommended |
+| Route B course / policy / case report | Medium; policy, news, statistics, academic literature may mix | Optional |
+| Route C proposal | High; research status and feasibility claims require sources | Required |
+| Route D literature review | Very high; concept matrices may contain many references | Required, may span multiple pages |
 
-### 5 · 颜色与对比度
+## Reference Page Rules
 
-- 默认灰：`#888888`（在白底上 4.5:1 对比度，AA 级可读，不抢注意力）；
-- 深主题（极少数情况）：用 `#BBBBBB` 防止过暗；
-- 不要用纯黑或带饱和度的颜色，否则会与正文抢眼。
+Use `references_page` content type.
 
-### 6 · 字号选择
+Rules:
+- full entries in citation-number order;
+- no missing numbers, duplicates, or numbering gaps;
+- 10 px or equivalent readable size for reference pages;
+- two columns are allowed for dense decks;
+- keep header if the template requires it;
+- omit bottom banner if it would reduce readability;
+- preserve mixed-font runs.
 
-| 场景 | 字号 |
-|---|---|
-| 普通页底部页脚条目 | 8pt |
-| 参考文献独立页（Route D 的 P16） | 10pt |
-| 正文角标 `[n]` | 比正文小 1–2pt |
-| 图注尾部"图来源：[3]" | 与图注同号（一般 9pt） |
+## Self-Check
 
----
-
-## 与各路线的对接清单
-
-| 路线 | 引用密度 | 是否需要独立参考文献页 | 默认引用形式 |
-|---|---|---|---|
-| Route A · 学术论文 | 低（论文本体即来源） | 可选（答辩时建议有） | GB/T 7714 |
-| Route B · 课程报告 | 中（含政策、新闻、统计） | 可选 | GB/T 7714（必须含 [Z]/[N]/[EB/OL] 多类型） |
-| Route C · 开题报告 | 高（国内外现状） | **必须有**，按引用顺序 | GB/T 7714 |
-| Route D · 文献综述 | **极高** | **必须有，可跨多页** | GB/T 7714（顺序编码制） |
-
----
-
-## 自检清单（生成后逐页检查）
-
-- [ ] 正文每个 `[n]` 都能在页脚或参考文献页找到对应条目；
-- [ ] 没有"裸"引用（出现外部观点但没有标 `[n]`）；
-- [ ] 中文条目里的英文期刊名 / DOI / 页码全部走 Times New Roman，中文走微软雅黑；
-- [ ] 页脚条目颜色为浅灰 `#888888`，不抢注意力；
-- [ ] 引文条目没有遮挡 `bottom_banner` 或图片；
-- [ ] 同一文献在同一页只出现一次完整条目；
-- [ ] 参考文献页（如有）的编号与正文角标完全一致、无跳号无重号。
+- [ ] Every body marker resolves to a footer or reference-page entry.
+- [ ] No external claim appears without a marker.
+- [ ] No source figure appears without a caption and citation.
+- [ ] Footer entries do not overlap bottom banners or page numbers.
+- [ ] Dense Route D pages point to a full reference page when footers cannot fit.
+- [ ] Mixed CJK / Latin / numeric citation text is segmented by `<tspan>`.
+- [ ] Citation color is muted and never brick red.

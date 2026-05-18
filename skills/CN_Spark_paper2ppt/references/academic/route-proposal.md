@@ -1,152 +1,184 @@
-# Route C · 开题报告 PPT 路线
+# Route C Proposal
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 4 判断为开题报告、研究计划或 proposal defense 时读取；它规定研究问题、技术路线、可行性、计划进度和预期成果页面。
 
-> 本路线规定 Strategist 阶段生成 `design_spec.md §IX` 的页面结构与论证骨架。Executor 在 [executor-academic.md](executor-academic.md) §3 中按 `content_type` 落地到 SVG。
+Use this route for thesis proposal defense, opening report, undergraduate capstone proposal, grant-style academic proposal, or research plan.
 
-适用：硕博开题答辩、本科毕设开题、基金 / 项目立项答辩。
+## Selection Signals
 
-## 选这条路的标志
+Choose Route C when:
+- the input is a proposal, opening report, research plan, or grant application;
+- it contains research objectives, planned methods, schedule, feasibility, or expected results;
+- reviewers care about value, feasibility, technical route, timeline, expected contribution, and risk control.
 
-- 输入是开题报告书 / 立项申请书 / 毕设开题表；
-- 必含**研究计划 / 时间安排** → 必出甘特图；
-- 评审关注：选题价值、可行性、技术路线、时间分配、预期成果。
+Route C must distinguish existing evidence from planned work.
 
-## 论证骨架（problem-to-plan）
+## Narrative Skeleton
 
-```
-问题与价值 → 国内外研究现状 → 研究空缺 → 研究目标与内容
-         → 技术路线 → 研究框架 → 关键科学问题 → 拟解决方法
-         → 研究计划（甘特图） → 预期成果与创新点 → 可行性与风险
-```
+Use a problem-to-plan axis:
 
-## 默认页面结构（14–18 页）
-
-```
-P1  封面：题目 + 学生 + 导师 + 学科 + 学校 + 答辩日期
-P2  目录
-P3  研究背景与意义（text_flow + 一句话主旨横幅）
-P4  国内外研究现状（bullet_analysis，按"国外/国内"或"主流方向"分列）
-P5  研究空缺 / 待解决问题
-P6  研究目标（一句话居中放大）
-P7  研究内容（3–5 项，对应后续各章节）
-P8  关键科学问题（结论式 bullet）
-P9  技术路线（pipeline 版式，矢量流程图，必有）
-P10 研究框架（matrix_framework 版式，必有）
-P11 主要方法 / 模型（含必要公式）
-P12 数据来源与实验设计
-P13 研究计划甘特图（必有）
-P14 预期成果（论文 / 专利 / 数据集 / 代码 / 应用）
-P15 创新点（不超过 3 条，明确具体）
-P16 可行性分析与风险预案
-P17 参考文献（按引用顺序）
-P18 致谢 / Q&A
+```text
+problem and value -> research status -> gap -> objectives and content -> technical route -> research framework -> key questions -> methods -> schedule -> expected contribution -> feasibility and risk
 ```
 
-## 甘特图
+## Default Page Structure
 
-数据结构由用户提供或脚本生成，建议形式：
-
-```python
-gantt_data = {
-    "total_months": 24,
-    "start_label": "2025年09月",
-    "tasks": [
-        {"name": "文献调研与综述", "start": 1, "duration": 4, "color": "1F3864"},
-        {"name": "数据采集与清洗", "start": 3, "duration": 5, "color": "2E5984"},
-        {"name": "方法设计与原型", "start": 6, "duration": 6, "color": "4472C4"},
-        {"name": "实验与对比验证", "start": 10, "duration": 8, "color": "5B9BD5"},
-        {"name": "论文撰写与投稿", "start": 18, "duration": 6, "color": "C00000"},
-        {"name": "中期检查", "start": 12, "duration": 0, "color": "FFC000", "milestone": True},
-        {"name": "预答辩", "start": 22, "duration": 0, "color": "FFC000", "milestone": True},
-    ],
-}
+```text
+P01 Cover: title, student, advisor, discipline, institution, defense date
+P02 Agenda
+P03 Research Background And Significance
+P04 Research Status: foreign / domestic or stream-based
+P05 Research Gap / Problem To Solve
+P06 Research Objectives
+P07 Research Content: 3-5 work packages
+P08 Key Scientific Questions
+P09 Technical Route: Step 5.5 required if complex
+P10 Research Framework: variables, modules, outputs
+P11 Main Method / Model: include formulas if needed
+P12 Data Source / Experiment Design
+P13 Research Schedule: Gantt chart
+P14 Expected Results
+P15 Innovation Points: no more than three
+P16 Feasibility And Risk Plan
+P17 References
+P18 Acknowledgement / Q&A
 ```
 
-生成实现见 `scripts/route_helpers.py:generate_gantt_chart`；输出是 matplotlib PNG，整张图占满页面。**注意：甘特图当前以 PNG 嵌入，是 Route C 中**唯一**允许位图的页**——因为 matplotlib 输出在 PowerPoint 中无法逐节点修改。用户若要可编辑甘特图，提供脚本 + 数据文件即可，他们改数据后重生成；不要在 PPT 里手画甘特条。
+Typical length: 14-18 slides.
 
-里程碑用菱形 + 黄色 (`FFC000`)，长任务条用克制蓝色调（`1F3864 / 4472C4 / 5B9BD5`），写作期用强调红 (`C00000`)。
+## Required Pages
 
-## 公式页生成规范（P11）
+Route C should include:
+- research background;
+- research status;
+- gap / problem;
+- objectives;
+- research content;
+- TechnicalRoute page pair if route is complex;
+- research framework page when variables or modules are numerous;
+- method / model page;
+- data or experiment design page;
+- Gantt chart page;
+- expected contribution page;
+- feasibility and risk page;
+- reference page.
+- standalone summary page before the final thank-you / Q&A page.
 
-开题报告中的公式页不只是“把公式贴上去”，而是要帮助评审快速看懂**技术路线中的推导顺序、变量含义与使用场景**。默认按以下两种形式二选一：
+## TechnicalRoute Placement
 
-### 形式 A · 模块化步骤公式页（默认优先）
+Use SKILL.md Step 5.5 when the proposal includes:
+- multi-stage data collection and analysis;
+- experiment plus model plus validation;
+- multiple variables, constructs, or modules;
+- difficult-to-explain research content;
+- a route that reviewers must understand quickly.
 
-适用于：
-- 公式较多，但每一步解释较短；
-- 需要强调“步骤 1 → 步骤 2 → 步骤 3”的计算链；
-- 希望一页内完成方法总览。
+The route pages must be consecutive:
+- `<module_number> Research Route: Editable Template Version`
+- `<module_number> Research Route: AI Reference Version`
 
-实现方式：
-- 每个步骤一个圆角模块卡片；
-- 卡片内部按“步骤标题 → 核心公式 → 结果式 → 一句说明”纵向排布；
-- 优先调用 `scripts/route_helpers.py:make_formula_slide(..., formula_mode="modular", ...)`；
-- 复杂公式仍用 `formula_to_png` 渲染，但整体布局保持模块化，而不是散落摆放。
+The editable template version is the authoritative version for PPT editing. The AI version is a reference option for visual comparison.
 
-建议字段：
-```python
-formula_content = [
-    {
-        "step": 1,
-        "title": "步骤一：定义倾向得分",
-        "equation": r"P(X)=P(S_{it}=1|X_{i,t-1})=\\frac{1}{1+e^{-(\\beta_0+\\sum_k \\beta_k X_{k,i,t-1})}}",
-        "note": "先基于干预前协变量估计处理概率。"
-    },
-    {
-        "step": 2,
-        "title": "步骤二：样本匹配",
-        "equation": r"d(i,j)=\\|p_i-p_j\\|",
-        "result": r"j^*=\\arg\\min_j d(i,j)",
-        "note": "依据倾向得分距离寻找最相近控制样本。"
-    },
-]
+## Gantt Chart Rules
+
+Use `content_type: gantt`.
+
+Preferred implementation:
+- use `templates/charts/gantt_chart.svg`;
+- make tasks editable where possible;
+- show task name, start period, duration, and milestone;
+- use restrained blue tones for normal tasks;
+- use a small warning or accent color for writing, review, or defense milestones only when useful.
+
+A full-page Gantt may omit bottom banner to avoid covering the timeline. Keep title, date scale, and milestone labels readable.
+
+Suggested task types:
+- literature review;
+- data collection and cleaning;
+- method design and prototype;
+- experiment and comparison;
+- paper writing and submission;
+- midterm check;
+- pre-defense;
+- final defense.
+
+## Formula Page Rules
+
+Proposal formulas should help reviewers understand:
+- variable definitions;
+- model objective;
+- estimation strategy;
+- metric construction;
+- robustness logic.
+
+Use `formula_step` by default:
+- step title;
+- rendered formula PNG;
+- result expression if needed;
+- one explanation sentence.
+
+Use `formula_paragraph` when formulas belong to different sections, such as variable definition, objective function, estimation strategy, and robustness handling.
+
+Formula order must match the technical route and research design. Do not create a Word-like page with formulas scattered in paragraphs.
+
+## Innovation Page Rules
+
+Innovation points:
+- no more than three;
+- classify when possible: theoretical, methodological, application, data, or system contribution;
+- each point must be specific and testable;
+- avoid vague claims such as "important theoretical and practical value."
+
+## Feasibility And Risk Rules
+
+Feasibility should cite or state concrete support:
+- available dataset;
+- equipment or platform;
+- pilot result;
+- collaborator or field access;
+- prior code / method basis;
+- schedule buffer.
+
+Risk plan should name:
+- risk;
+- trigger condition;
+- fallback method;
+- impact on schedule.
+
+## Citation Rules
+
+Route C has high citation requirements:
+- research status pages need markers for major claims;
+- reference page is required;
+- sources must be verifiable;
+- do not accept vague sources such as "found online" or "senior student said."
+
+Use GB/T 7714 numbering. Keep reference page numbering aligned with body markers.
+
+## Speaker Notes Focus
+
+- Background: state the research value in one sentence.
+- Research status: progress from existing work to gap.
+- TechnicalRoute: speak along nodes and identify where innovation appears.
+- Gantt: speak by milestone, not month by month.
+- Innovation: be concrete and limited.
+- Feasibility: state what has already been secured.
+- Risk: show control, not uncertainty avoidance.
+
+## Page Brief Fields
+
+Every Route C page should include:
+
+```yaml
+content_type: gantt
+page_rhythm: dense
+visual_requirement: chart
+citations: ["[5]"]
+planned_vs_completed: planned
+bottom_banner_text: "One proposal-specific claim."
 ```
 
-### 形式 B · 标题分段公式页
+For planned pages, mark whether the content is `completed_basis`, `planned_method`, `expected_result`, or `risk_control`.
 
-适用于：
-- 公式较多，且每段之间有明显的流程切换；
-- 需要在公式中间插入“为什么这样做 / 在什么条件下使用 / 与前一步如何衔接”的解释；
-- 例如“变量定义 → 目标函数 → 估计策略 → 稳健性处理”。
+## Closing Page Rule
 
-实现方式：
-- 页面按 2–3 个模块分段；
-- 每段顶部用深色标题条分隔；
-- 标题下放解释文字，右侧或下方放对应公式组；
-- 调用 `scripts/route_helpers.py:make_formula_slide(..., formula_mode="sectioned", ...)`。
-
-### 选择原则
-
-- 默认优先使用**形式 A（模块化）**；
-- 只有当公式之间存在较强流程说明、条件切换或参数解释时，才升级为**形式 B（标题分段）**；
-- 不要把公式页做成大段正文中夹一条公式的 Word 翻版；
-- 公式顺序必须与技术路线、研究设计或估计流程一致，不能脱离论证主轴单独堆砌。
-
-## 版式特化
-
-| 页类型 | 版式建议 |
-|---|---|
-| 技术路线 | 全宽 pipeline，5–7 节点，箭头单向；不要 1:1 分栏 |
-| 研究框架 | 三段式 matrix_framework：左维度 / 中模块 / 右产出 |
-| 公式 | 优先模块化步骤公式页；复杂公式用 `formula_to_png`，整页用 `make_formula_slide` 组织，不要零散摆放 |
-| 甘特图 | 整页放图，**不加底部横幅以免遮挡**，标题与日期标尺要清晰可读 |
-| 创新点 | 居中 3 条带编号卡片，每条一句话 |
-| 可行性 | 左可行性右风险两栏对照 |
-
-## 引文（Route C 特化）
-
-开题对引文质量要求最高，建议：
-
-- 列出参考文献页（P17）单独使用 10pt 字号、按引用顺序排，序号与正文 `[n]` 一一对应；
-- 国内外研究现状页（P4）的每个论点末必须有角标；该页页脚列至少 3 条 GB/T 7714 条目；
-- 中英文混排时，中文用微软雅黑，英文/数字用 Times New Roman，逐 run 写入；
-- 不接受"网上找的""学长说的"，所有引用都要可查证。
-
-实现见 [citation-style.md](citation-style.md)。
-
-## 演讲词重点（Route C 特化）
-
-- 背景页：把研究价值用一句话说穿（"如果做成，将解决 X 卡点"）；
-- 技术路线页：边讲边指节点，强调创新点出现在哪一步；
-- 甘特图页：按里程碑讲，不要逐月念；强调时间冗余、风险窗口；
-- 创新点：明确"理论创新 / 方法创新 / 应用创新"分类；
-- 可行性：交代设备、数据、合作来源已落实；不要说"如果时间允许"。
+The summary / conclusion page and the final thank-you / Q&A page must be separate slides. Do not combine 总结, Summary, or conclusion bullets with 谢谢大家, Thank you, acknowledgements, or Q&A prompts on one slide.

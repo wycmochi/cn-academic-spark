@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "root": "templates/technicalroute/Custom_gallery",
+  "contract": "Raster-only style/structure anchors for TechnicalRoute AI Version B. These images never provide semantic labels; all visible content must come from the source paper.",
+  "forbidden_reference_types": [
+    ".svg",
+    ".pptx",
+    ".ppt",
+    ".odp",
+    ".key"
+  ],
+  "disciplines": {
+    "transportation": {
+      "label_zh": "交通运输 / 城市交通 / 轨道交通",
+      "aliases": [
+        "transportation",
+        "traffic",
+        "urban transit",
+        "metro",
+        "rail transit",
+        "mobility",
+        "built environment",
+        "交通",
+        "城市交通",
+        "轨道交通",
+        "地铁",
+        "出行"
+      ],
+      "default_archetype": "workflow",
+      "refs": [
+        {
+          "label": "algorithm-workflow",
+          "file": "transportation/algorithm-workflow.jpg",
+          "archetype": "method",
+          "sub_variant": "algorithm-workflow",
+          "keywords": [
+            "algorithm",
+            "model mechanism",
+            "workflow",
+            "methodological innovation",
+            "算法",
+            "模型原理",
+            "机制图"
+          ],
+          "source_manifest": "transportation/trans-manifest.json"
+        },
+        {
+          "label": "whole-paper-thinking",
+          "file": "transportation/全文思路.png",
+          "archetype": "workflow",
+          "sub_variant": "whole-paper-workflow",
+          "keywords": [
+            "whole paper",
+            "research route",
+            "multi-source",
+            "全文思路",
+            "研究路线",
+            "技术路线"
+          ],
+          "source_manifest": "transportation/trans-manifest.json"
+        },
+        {
+          "label": "technical-route-model-data",
+          "file": "transportation/技术路线-模型数据.png",
+          "archetype": "workflow",
+          "sub_variant": "model-data-route",
+          "keywords": [
+            "technical roadmap",
+            "multiple models",
+            "model data",
+            "技术路线",
+            "模型数据",
+            "模型路线"
+          ],
+          "source_manifest": "transportation/trans-manifest.json"
+        },
+        {
+          "label": "data-processing-flow",
+          "file": "transportation/数据处理流程.png",
+          "archetype": "workflow",
+          "sub_variant": "data-processing",
+          "keywords": [
+            "data processing",
+            "data pipeline",
+            "data integration",
+            "数据处理",
+            "数据流程"
+          ],
+          "source_manifest": "transportation/trans-manifest.json"
+        },
+        {
+          "label": "review-structure",
+          "file": "transportation/review-structure.jpg",
+          "archetype": "thinking",
+          "sub_variant": "review-structure",
+          "keywords": [
+            "review",
+            "survey",
+            "literature structure",
+            "综述",
+            "文献结构"
+          ],
+          "source_manifest": "transportation/trans-manifest.json"
+        },
+        {
+          "label": "review-process",
+          "file": "transportation/review-process.jpg",
+          "archetype": "workflow",
+          "sub_variant": "review-process",
+          "keywords": [
+            "review process",
+            "survey workflow",
+            "综述流程",
+            "文献筛选"
+          ],
+          "source_manifest": "transportation/trans-manifest.json"
+        }
+      ]
+    }
+  }
+}

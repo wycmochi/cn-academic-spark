@@ -24,6 +24,8 @@ if __name__ == "__main__" and any(arg in {"-h", "--help", "help"} for arg in sys
 import os
 import time
 import threading
+import mimetypes
+from pathlib import Path
 from google import genai
 from google.genai import types
 from image_backends.backend_common import (
@@ -51,6 +53,18 @@ VALID_IMAGE_SIZES = ["512px", "1K", "2K", "4K"]
 DEFAULT_MODEL = "gemini-3.1-flash-image-preview"
 
 
+def _reference_part(path: str):
+    """Load a local reference image as a Gemini multimodal input part."""
+    ref_path = Path(path).expanduser()
+    if not ref_path.is_file():
+        raise FileNotFoundError(f"Reference image not found: {path}")
+    mime_type = mimetypes.guess_type(str(ref_path))[0] or "image/png"
+    data = ref_path.read_bytes()
+    if hasattr(types.Part, "from_bytes"):
+        return types.Part.from_bytes(data=data, mime_type=mime_type)
+    return types.Part(inline_data=types.Blob(data=data, mime_type=mime_type))
+
+
 # ╔══════���═══════════════════════════════════════════════��═══════════╗
 # ║  Image Generation                                               ║
 # ╚══════════════════════════════════════════════════════════════════╝
@@ -58,7 +72,8 @@ DEFAULT_MODEL = "gemini-3.1-flash-image-preview"
 def _generate_image(api_key: str, prompt: str,
                     aspect_ratio: str = "1:1", image_size: str = "1K",
                     output_dir: str = None, filename: str = None,
-                    model: str = DEFAULT_MODEL, base_url: str = None) -> str:
+                    model: str = DEFAULT_MODEL, base_url: str = None,
+                    reference_images: list[str] | None = None) -> str:
     """
     Image generation via Gemini API (streaming).
 
@@ -94,6 +109,10 @@ def _generate_image(api_key: str, prompt: str,
     print(f"  Prompt:       {prompt[:120]}{'...' if len(prompt) > 120 else ''}")
     print(f"  Aspect Ratio: {aspect_ratio}")
     print(f"  Image Size:   {image_size}")
+    if reference_images:
+        print(f"  References:   {len(reference_images)}")
+        for ref in reference_images:
+            print(f"    - {Path(ref).name}")
     print()
 
     start_time = time.time()
@@ -115,9 +134,13 @@ def _generate_image(api_key: str, prompt: str,
     chunk_count = 0
     total_bytes = 0
 
+    contents = [prompt]
+    if reference_images:
+        contents.extend(_reference_part(ref) for ref in reference_images)
+
     for chunk in client.models.generate_content_stream(
         model=model,
-        contents=[prompt],
+        contents=contents,
         config=config,
     ):
         elapsed = time.time() - start_time
@@ -162,7 +185,8 @@ def _generate_image(api_key: str, prompt: str,
 def generate(prompt: str,
              aspect_ratio: str = "1:1", image_size: str = "1K",
              output_dir: str = None, filename: str = None,
-             model: str = None, max_retries: int = MAX_RETRIES) -> str:
+             model: str = None, max_retries: int = MAX_RETRIES,
+             reference_images: list[str] | None = None) -> str:
     """
     Gemini image generation with automatic retry.
 
@@ -179,6 +203,7 @@ def generate(prompt: str,
         filename: Output filename (without extension)
         model: Model name (default: gemini-3.1-flash-image-preview)
         max_retries: Maximum number of retries
+        reference_images: Optional local images used as style/structure anchors
 
     Returns:
         Path of the saved image file
@@ -207,7 +232,7 @@ def generate(prompt: str,
         try:
             return _generate_image(api_key, prompt,
                                    aspect_ratio, image_size, output_dir,
-                                   filename, model, base_url)
+                                   filename, model, base_url, reference_images)
         except Exception as e:
             last_error = e
             if attempt < max_retries and is_rate_limit_error(e):

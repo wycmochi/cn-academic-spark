@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PPT Master - Project Utilities Module
+Project Utilities Module
 
 Provides common functions for project information parsing and validation,
 reusable by other tools.

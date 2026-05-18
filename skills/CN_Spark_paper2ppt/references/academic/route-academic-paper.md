@@ -1,118 +1,157 @@
-# Route A · 学术论文 PPT 路线
+# Route A Academic Paper
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 4 判断为单篇学术论文讲解时读取；它提供 question-to-evidence 的页面结构和学术论文汇报重点。
 
-> 本路线规定 Strategist 阶段生成 `design_spec.md §IX` 时的页面结构与论证骨架，与具体 pipeline 无关。Executor 在 [executor-academic.md](executor-academic.md) §3 中按 `content_type` 落地到 SVG。
+Use this route for one journal or conference paper. The deck explains the research question, importance, methods, evidence, interpretation, contribution, and limits of one paper.
 
-适用：单篇期刊或会议论文的讲解 / 答辩 / 组会汇报。
+## Selection Signals
 
-## 选这条路的标志
+Choose Route A when:
+- the input is one paper with abstract, introduction, methods, results, and discussion;
+- the user asks to present the paper in a group meeting, journal club, defense, seminar, or class;
+- the target talk is usually 15-25 minutes;
+- the expected deck size is usually 10-16 slides.
 
-- 输入是一篇有明确 abstract / introduction / methods / results / discussion 的论文 PDF；
-- 用户需求是"把这篇论文做成 PPT 讲给组里 / 答辩老师听"；
-- 时长一般 15–25 分钟，10–16 页。
+If the user provides several papers and wants synthesis, use Route D. If the material is a proposal, use Route C.
 
-## 论证骨架（按论文类型挑一个）
+## Narrative Skeleton
 
-读完论文后，把它归到下面一种，决定页面顺序：
+First classify paper type using `paper-type-guidance.md`, then choose the route skeleton.
 
-| 论文类型 | 推荐论证轴 | 关键页面顺序 |
+| Paper type | Narrative axis | Key order |
 |---|---|---|
-| 机制/发现型 | question-to-evidence | 现象 → 未知机制 → 假设 → 实验设计 → 证据链 → 机制模型 → 局限 |
-| 方法/算法/工具型 | problem-to-solution | 瓶颈 → 方案 → 架构 → 评估 → 与基线对比 → 消融/鲁棒 → 适用边界 |
-| 资源/数据集/图谱型 | workflow-to-validation | 资源动机 → 设计 → 生产流程 → 质量控制 → 主要图景 → 验证 → 复用 |
-| 临床/人群/干预型 | design-to-inference | 临床问题 → 设计 → 队列/终点 → 主结果 → 亚组/敏感性 → 偏倚/局限 |
-| 材料/化学/工程型 | design-to-performance | 目标性能 → 设计原理 → 合成/制备 → 表征 → 性能 → 机理 → 稳定性/边界 |
+| Discovery / mechanism | question-to-evidence | phenomenon, unknown mechanism, hypothesis, design, evidence chain, model, limitations |
+| Methods / AI / tool / algorithm | problem-to-solution | bottleneck, proposed method, architecture, evaluation, baseline comparison, ablation / robustness, boundary |
+| Resource / dataset / atlas | workflow-to-validation | motivation, resource design, production workflow, QC, landscape, validation, reuse |
+| Clinical / population / intervention | design-to-inference | problem, study design, cohort / endpoint, primary result, subgroup / sensitivity, bias / implication |
+| Materials / chemistry / engineering | design-to-performance | target property, design principle, fabrication, characterization, performance, mechanism, stability / boundary |
 
-## 默认页面结构（12–16 页）
+Do not simply translate source section headings. Convert them into claim-based slide titles.
 
-按 1.5 分钟/页估算，给 15–22 分钟的讲解配 12–14 页是普遍合适的，超过 16 页除非材料非常复杂。
+## Default Page Structure
 
+For a 15-22 minute presentation, 12-14 slides is often enough. Exceed 16 slides only when the paper is complex.
+
+```text
+P01 Cover: title, authors, affiliation, journal / year, DOI
+P02 Agenda: 4-6 module anchors
+P03 Research Background: why the problem matters
+P04 Current Gap: bottleneck, controversy, or unresolved mechanism
+P05 Research Question: one central question or hypothesis
+P06 Research Design / Technical Route: Step 5.5 if complex
+P07 Method Framework / Model Architecture: matrix or architecture page
+P08 Key Evidence 1: source figure plus interpretation rail
+P09 Key Evidence 2: source figure, chart, table, or formula
+P10 Key Evidence 3: validation, control, ablation, or sensitivity
+P11 Mechanism / Integrated Interpretation
+P12 Contribution And Reuse Value
+P13 Limitations And Open Questions
+P14 Summary And Outlook
+P15 References: optional but recommended
+P16 Thank You / Q&A
 ```
-P1  封面：题目 + 作者 + 单位 + 期刊&年份 + DOI
-P2  目录：4–6 条章节锚点
-P3  研究背景与意义（text_flow，含底部横幅一句话主旨）
-P4  当前空缺 / 瓶颈 / 争议（bullet_analysis）
-P5  核心问题 / 假设（一句话居中放大）
-P6  研究设计 / 技术路线（pipeline 版式，矢量流程图）
-P7  研究框架 / 模型架构（matrix_framework 版式）
-P8  关键证据 1（results_chart，一张主图 + 解读条）
-P9  关键证据 2（同上）
-P10 关键证据 3 或 验证/对照实验
-P11 机制 / 模型 / 综合解释
-P12 创新点与可复用价值（结论式 bullet）
-P13 局限与开放问题
-P14 总结与展望 + 致谢
-P15 备用：参考文献完整列表（可选，按引用顺序）
+
+Adjust page count by paper type:
+- method papers need more method / evaluation / ablation pages;
+- mechanism papers need more evidence-chain pages;
+- clinical papers need design, endpoints, primary result, subgroup, and bias pages;
+- resource papers need QC, landscape, validation, and reuse pages.
+
+## Required Page Types
+
+Minimum Route A deck:
+- source overview;
+- background gap;
+- central question or hypothesis;
+- method / workflow / research design;
+- at least two result evidence pages;
+- interpretation / discussion;
+- contribution and limitations;
+- summary;
+- references when footer capacity is insufficient.
+- separate final thank-you / Q&A page.
+
+Complex method routes, full-paper workflows, and framework diagrams should use SKILL.md Step 5.5:
+- Version A: editable template SVG route page;
+- Version B: AI reference route image page;
+- two pages inserted consecutively.
+
+## Evidence Page Layout
+
+Every key evidence page should use this hierarchy:
+1. Hero source figure / chart / formula / complex table screenshot.
+2. Narrow interpretation rail with one conclusion and 2-3 notes.
+3. Citation marker near the evidence object.
+4. `citation_footer` above the bottom banner.
+5. Bottom banner restating the page claim.
+
+Do not place a dense source figure in a 1:1 split where labels become unreadable. Crop the relevant subpanel when necessary, but preserve axes, scale bars, labels, and captions needed for interpretation.
+
+## Figure Selection
+
+Select figures for argument value, not completeness.
+
+Priority:
+1. research design or workflow;
+2. main result or mechanism figure;
+3. validation / control / ablation;
+4. model architecture or mechanism diagram;
+5. application or implication visual.
+
+A 12-14 slide paper deck usually needs 4-8 strong visuals. More figures often make every figure too small.
+
+## Formula Page Rules
+
+Only expand formulas when they are necessary:
+- without the formula, the audience cannot follow the method;
+- the formula carries the paper's methodological contribution;
+- later result pages refer back to an objective function, update rule, metric, or decision criterion.
+
+Use `references/academic/formula-rendering.md` and `scripts/latex_formula_to_png.py --block-json` for complex formulas. The formula role, complete equation, and variable definitions must be rendered together as one PNG image.
+
+Default `formula_step` order:
+1. variable definition;
+2. core computation;
+3. objective / constraint;
+4. inference output.
+
+Use `formula_paragraph` only when formulas belong to separate sections, such as encoding, alignment, decoding, training, and inference.
+
+Do not copy every notation from the paper. Move supplementary derivations to backup pages or omit them.
+
+## Citation Rules
+
+- The paper's DOI, venue, and year should appear on the cover.
+- Pages using the paper's own figures or data cite the paper.
+- Works cited inside the paper are included only when the PPT repeats those external claims.
+- A full reference page is optional but recommended for defense or formal seminar settings.
+
+Use `citation-style.md` for GB/T 7714 formatting and mixed-font SVG segmentation.
+
+## Speaker Notes Focus
+
+- Cover: introduce the paper and state its biggest novelty in one sentence.
+- Background: explain why the problem matters to the audience.
+- Method: explain intuition before symbols.
+- Results: state the conclusion before figure details.
+- Statistics: give intuitive interpretation, not only values.
+- Limitations: be honest and specific.
+- Summary: connect the contribution to the audience's research direction.
+
+## Page Brief Fields
+
+Every Route A page in `design_spec.md` section IX should include:
+
+```yaml
+content_type: results_chart
+page_rhythm: dense
+visual_requirement: source_figure
+citation_footer: ["[1]"]
+bottom_banner_text: "One sentence claim."
+speaker_note_goal: "Explain the evidence and transition to the next claim."
 ```
 
-每张证据页都按以下"证据层次"排版：
+For TechnicalRoute pages, include route job id, Version A / B paths, and consecutive PPT page ids.
 
-1. 主图（hero figure）— 占页面主导；
-2. 窄解读条（narrow rail）— 给一句结论式说明 + 2–3 条要点；
-3. **页脚 GB/T 7714 引用条目**（8pt 灰）— 见 [citation-style.md](citation-style.md)；
-4. 底部横幅 — 用 1 句话复述本页主张。
+## Closing Page Rule
 
-## 版式选择速查
-
-| 页类型 | content_type | 推荐版式特征 |
-|---|---|---|
-| 封面 | cover | 全屏深蓝 + 居中标题；不放装饰 |
-| 目录 | toc | 左侧章节列表，右侧用细线分隔，无图 |
-| 背景 / 引言 | text_flow | 2–4 条要点 + 一个小型背景示意（可无） |
-| 空缺 / 争议 | bullet_analysis | 左文右图（或 3 列对照），右侧给一张现状图 |
-| 技术路线 | pipeline | 全宽流程图，节点 4–6 个，箭头单向 |
-| 研究框架 | matrix_framework | 左维度、中模块、右输出三列结构 |
-| 关键证据 | results_chart | 单 hero 图 + 窄解读条，绝不 1:1 分栏 |
-| 表格对比 | table_compare | 原生 `add_table`，斑马底，不放截图 |
-| 总结 | conclusion | 左成果右展望两栏，开放排版无多余框 |
-
-## 图怎么选
-
-Route A 的选图原则是**为论证选图**，不是把每张原图都摆上去。优先级：
-
-1. 研究设计 / 流程图；
-2. 主结果（mechanism、main result、benchmark）；
-3. 验证 / 对照 / 消融；
-4. 机制示意图 / 模型架构；
-5. 应用或意义图。
-
-一份 12–14 页的论文 PPT 通常只放 4–8 张图就够了。多放只会让每张缩小到看不清。原图密度过高时，**裁切**关键子面板（Fig 2b / 2d）后再放，不要把整张 Fig 2 缩到一个角落。
-
-## 公式页生成规范
-
-Route A 的公式只在“方法确实需要解释”时展开，不要把论文原文中的每一条记号都搬上 PPT。判断标准：
-- 不解释公式，听众就看不懂方法主线；
-- 公式本身承载论文创新；
-- 后续结果页需要回扣某个目标函数、更新项或判别准则。
-
-默认优先采用**模块化步骤公式页**：
-- 按“变量定义 → 核心计算 → 目标函数 / 约束 → 推断输出”排序；
-- 每一块只放一组主公式和一句中文解释；
-- 调用 `scripts/route_helpers.py:make_formula_slide(..., formula_mode="modular", ...)`；
-- 更适合算法页、模型页、机制解释页。
-
-当一页中存在明显的流程切换或需要较多过渡说明时，改用**标题分段公式页**：
-- 如“编码阶段 / 对齐阶段 / 解码阶段”；
-- 或“主模型 / 损失项 / 训练策略 / 推断规则”；
-- 调用 `make_formula_slide(..., formula_mode="sectioned", ...)`。
-
-展示要求：
-- 公式顺序必须与 P6 技术路线、P7 研究框架一致；
-- 复杂公式用 `formula_to_png`，简单符号关系可直接 Unicode；
-- 若某公式只是补充推导，不是主线，可移到备份页而不是主讲页。
-
-## 演讲词重点（Route A 特化）
-
-- 引言页：交代为什么这个问题重要、能跟听众的研究/兴趣勾连；
-- 方法页：方法的**直觉**先于符号，例如"这个网络的本质是在做……"；
-- 结果页：先说结论再说证据细节；统计量给"直觉解读"（"p = 0.001 意味着……"）；
-- 局限页：诚实指出，不要回避；这是答辩里加分项。
-
-详见 [speaker-notes.md](speaker-notes.md)。
-
-## 引文（Route A 特化）
-
-- 论文本体的 DOI / 期刊年份 → 封面与每张涉及该文核心数据的页都列；
-- 论文中引用的他人工作（"……方法首先由 Smith 等提出[3]"）→ 仅当 PPT 复述了该工作时才在本 PPT 列；
-- 答辩场景：建议保留 P15 完整参考文献页，按 GB/T 7714 排序，用 10pt 中文 / 数字英文混排。
-
-实现细节见 [citation-style.md](citation-style.md)。
+The summary / conclusion page and the final thank-you / Q&A page must be separate slides. Do not combine 总结, Summary, or conclusion bullets with 谢谢大家, Thank you, acknowledgements, or Q&A prompts on one slide.

@@ -1,94 +1,150 @@
-# Route B · 课程报告 PPT 路线
+# Route B Course Report
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 4 判断为课程报告、政策报告或案例分析时读取；它组织背景、问题、分析、建议和课堂汇报型结论。
 
-> 本路线规定 Strategist 阶段生成 `design_spec.md §IX` 的页面结构与论证骨架。Executor 在 [executor-academic.md](executor-academic.md) §3 中按 `content_type` 落地到 SVG。
+Use this route for undergraduate or graduate course presentations, policy analysis, case analysis, issue briefings, and thematic academic reports not centered on one specific paper.
 
-适用：本科 / 研究生课程汇报；常见为政策解读、案例分析、时政背景类、专题综合报告。
+## Selection Signals
 
-## 选这条路的标志
+Choose Route B when:
+- the input is a course assignment, research report, policy review, case analysis, or thematic material;
+- the user wants academic rigor plus policy, news, case, or statistical visuals;
+- grading likely emphasizes logic, coverage, source quality, and visualization clarity rather than one empirical hypothesis.
 
-- 输入是课程作业的研报、议题分析、政策评估、案例研究；
-- 用户希望 PPT 既有学术性，又能放时政图 / 政策卡 / 数据统计图；
-- 评分依据通常是逻辑、覆盖广度、可视化清晰度，而不是单一假设的实证强度。
+If one paper dominates the content, use Route A. If the goal is multi-paper synthesis, use Route D.
 
-## 论证骨架
+## Narrative Skeleton
 
-按 "背景 → 问题 → 分析 → 案例 / 数据 → 结论 / 建议" 走，比单篇论文更线性。可按下面任一种调整：
+Default axis:
 
-- **政策解读型**：政策背景 → 政策内容 → 影响主体 → 数据证据 → 评价与建议；
-- **案例分析型**：行业/事件背景 → 案例选取 → 数据与现象 → 跨案例比较 → 启示；
-- **议题专题型**：议题缘起 → 现状描述 → 主要观点对比 → 证据与数据 → 个人立场。
-
-## 默认页面结构（12–18 页）
-
-```
-P1  封面：题目 + 课程名 + 班级 + 学号 + 老师 + 日期
-P2  目录
-P3  议题背景 / 时事缘起（text_flow，含时政背景图）
-P4  议题为什么重要（bullet_analysis，配数据统计卡）
-P5  核心问题与本汇报范围
-P6  关键概念 / 政策条文梳理（matrix_framework）
-P7  现状 / 数据卡（policy_stat_cards 多卡阵列）
-P8  分析视角一（含小图 / 表）
-P9  分析视角二
-P10 分析视角三
-P11 案例 / 事例（含照片或新闻图）
-P12 跨视角整合与对比（table_compare）
-P13 个人观点 / 建议（结论式 bullet）
-P14 局限与延伸思考
-P15 参考资料（含新闻、政策文件、学术文献，分类列）
+```text
+background -> problem -> analysis framework -> evidence / data -> case or comparison -> synthesis -> recommendation / reflection
 ```
 
-## 时政 / 政策图怎么处理
+Variants:
+- Policy interpretation: policy background, policy content, affected stakeholders, evidence, evaluation, suggestions.
+- Case analysis: industry or event background, case choice, phenomenon and data, cross-case comparison, implications.
+- Thematic issue report: origin of the issue, current status, view comparison, evidence and data, position.
 
-- 用户上传图片时：用 `insert_policy_image`（见 `scripts/route_helpers.py`），给图加灰色细边框 + 居中图注，图注末加来源（"图：新华社"或 "图：央视新闻"）；
-- 用户只给关键词：在 PPT 里用占位符 + 标注"待替换：建议关键词「XXX」配图"，让用户最后人工替换，避免使用未经授权的网图；
-- 数据统计：用 `insert_policy_stat_card`（深底大数字 + 标签 + 来源）做卡片阵列，2–4 张一行；
-- 政策原文摘录：放在浅灰底卡片里，左侧加深色竖条，类似引文块。
+## Default Page Structure
 
-## 版式特化
+```text
+P01 Cover: title, course, class, student, instructor, date
+P02 Agenda
+P03 Topic Background: current event, policy context, or issue origin
+P04 Why The Issue Matters: data cards or concise evidence
+P05 Core Question And Scope
+P06 Key Concepts / Policy Text / Analytical Dimensions
+P07 Current Status / Statistics: policy_stat_cards or chart
+P08 Analysis Perspective 1
+P09 Analysis Perspective 2
+P10 Analysis Perspective 3
+P11 Case / Event / Example
+P12 Cross-Perspective Comparison
+P13 Position / Recommendation / Reflection
+P14 Limitations And Extension
+P15 References
+```
 
-| 页类型 | 版式建议 |
+Typical length: 12-18 slides. Shorter class talks may merge perspectives; longer policy reports may add data and case pages.
+
+## Required Pages
+
+- Topic scope page.
+- Core question page.
+- Source / evidence base page.
+- Framework or concept page.
+- At least two analysis pages.
+- Synthesis or recommendation page.
+- References page when many source types are used.
+- Separate final thank-you / Q&A page.
+
+## Image And Policy Visual Handling
+
+If the user provides images:
+- use them as source assets;
+- add a caption and source marker;
+- preserve aspect ratio;
+- do not crop away key context.
+
+If the user only provides keywords:
+- prefer official or citeable images;
+- otherwise use a placeholder plan and tell the user what image should be added;
+- avoid unauthorized random web images.
+
+For statistics:
+- use charts or `policy_stat_cards`;
+- every number needs a source;
+- explain what the number means, not only what it is.
+
+For policy text:
+- place excerpt in a light panel with an accent bar;
+- keep excerpt short;
+- cite the policy document.
+
+## Layout Specialization
+
+| Page type | Layout |
 |---|---|
-| 背景 | 上图下文，政策图占 60% 上方，下方 2–3 条文字 |
-| 统计 | 4 张数据卡平铺，每张：大号数字 + 标签 + 来源（8pt 灰） |
-| 政策条文 | 浅灰底卡片 + 深色竖线，原文居中、出处右下 |
-| 对比 | 原生表格，行=维度，列=主体/方案 |
-| 案例 | 左图右文，图 60%，文 40%；图加灰描边 |
+| Background | Image or event context plus short text |
+| Statistics | 2-4 data cards or one chart |
+| Policy text | Light quotation panel with source marker |
+| Comparison | Native SVG table |
+| Case | Image / timeline first, analysis second |
+| Recommendation | 3-4 claim cards or open conclusion layout |
 
-## 公式页生成规范
+## Formula Page Rules
 
-Route B 通常不是重公式路线，但若课程报告涉及模型、评价指标或政策量化方法，公式页也必须按**教学解释逻辑**组织，而不是散落摆放。
+Route B is usually not formula-heavy. Use formula pages only when the report includes:
+- evaluation metrics;
+- index construction;
+- scoring model;
+- policy effect measurement;
+- statistical test;
+- simple economic or public-policy model.
 
-默认优先采用**模块化步骤公式页**：
-- 适合“指标定义 → 计算方式 → 结果解释”；
-- 尤其适合指数构造、评分模型、效应测度、统计检验；
-- 用 `make_formula_slide(..., formula_mode="modular", ...)`，让听众一眼看到步骤链。
+Default `formula_step`:
+- metric definition;
+- calculation;
+- interpretation;
+- how it answers the report question.
 
-若公式之间夹杂大量制度背景、适用条件或案例说明，则改用**标题分段公式页**：
-- 例如“变量口径”“模型设定”“结果解释”三段；
-- 或“政策前评估 / 政策后评估 / 对比指标”三段；
-- 用 `make_formula_slide(..., formula_mode="sectioned", ...)`。
+Use `formula_paragraph` when formulas need institutional context, variable definitions, or policy-specific assumptions.
 
-要求：
-- 优先解释“公式为什么服务于本报告问题”，而不是纯数学推导；
-- 与分析页、案例页前后呼应；
-- 如果公式不是汇报主轴，只保留一页方法概览即可，不要压缩过多推导细节。
+## Citation Rules
 
-## 引文（Route B 特化）
+Route B often mixes source types:
+- academic papers;
+- policy documents;
+- news reports;
+- government statistics;
+- websites;
+- image sources.
 
-课程报告的引用源比论文更杂：
+Use GB/T 7714 entries with correct type markers such as `[J]`, `[Z]`, `[N]`, `[R]`, `[EB/OL]`, and `[DS/OL]`. Every policy quote, statistic, and news image must be traceable.
 
-- **学术文献** → 用 GB/T 7714 完整条目，写入页脚（8pt 灰）；
-- **政策文件** → `国务院办公厅. 关于XXX的意见: 国办发〔2024〕12号[Z]. 2024-05-12.`；
-- **新闻报道** → `记者. 文章标题[N]. 报纸名, 出版日期(版次).`；
-- **网页/统计公报** → `国家统计局. 2024 年国民经济和社会发展统计公报[EB/OL]. (2025-02-28)[2025-05-01]. https://...`；
-- **图片来源** → 在图注尾部加 "图来源：XXX"，并把对应文献编号也写入页脚。
+## Speaker Notes Focus
 
-具体多 run 写法、混合字体见 [citation-style.md](citation-style.md)。
+- Background: orient the audience with a concrete event or scenario.
+- Data cards: explain what each number implies.
+- Case pages: tell the timeline or story first, then analyze.
+- Position pages: state the view clearly when the assignment allows it.
+- Recommendations: connect each suggestion to evidence.
 
-## 演讲词重点（Route B 特化）
+## Page Brief Fields
 
-- 背景页：把听众拉进议题，用"近期一则新闻……"或"今年 X 月……"切入；
-- 数据卡页：每个数字要解读"这意味着……"；
-- 案例页：先讲故事 / 时间线，再给数据；
-- 观点页：明确个人立场，不要含糊；课程报告允许有立场。
+Every Route B page should include:
+
+```yaml
+content_type: policy_stat_cards
+page_rhythm: dense
+visual_requirement: chart
+citations: ["[2]", "[4]"]
+bottom_banner_text: "One evidence-based claim."
+source_type: policy_report
+```
+
+Mark summary / implication pages as exempt only when they genuinely synthesize prior evidence.
+
+## Closing Page Rule
+
+The summary / conclusion page and the final thank-you / Q&A page must be separate slides. Do not combine 总结, Summary, or conclusion bullets with 谢谢大家, Thank you, acknowledgements, or Q&A prompts on one slide.

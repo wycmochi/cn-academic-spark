@@ -459,10 +459,9 @@ def convert_circle(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
 def convert_line(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
     """Convert SVG <line> to DrawingML shape.
 
-    Lines with marker-start / marker-end are converted using the 'line' preset
-    geometry (prstGeom prst="line") so that PowerPoint renders native arrow
-    heads (headEnd / tailEnd) correctly.  Plain lines (no markers) continue to
-    use custom geometry which is sufficient and avoids flipH/flipV complexity.
+    Lines are converted using the 'line' preset geometry
+    (prstGeom prst="line") so that PowerPoint treats connectors and arrows as
+    native low-risk shapes instead of repair-prone custom geometry.
     """
     x1 = ctx_x(_f(elem.get('x1')), ctx)
     y1 = ctx_y(_f(elem.get('y1')), ctx)
@@ -487,12 +486,9 @@ def convert_line(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
     off_y = px_to_emu(min_y)
 
     # Determine if this line carries arrow markers.
-    has_marker = bool(
-        _get_attr(elem, 'marker-start', ctx) or
-        _get_attr(elem, 'marker-end', ctx)
-    )
-
-    if has_marker:
+    # Always use the native line preset. Marked and unmarked SVG lines both
+    # become low-risk PowerPoint connectors instead of <a:custGeom>.
+    if True:
         # ----------------------------------------------------------------
         # Preset geometry approach: prstGeom prst="line"
         # PowerPoint only renders headEnd / tailEnd on lines whose geometry
@@ -544,40 +540,162 @@ def convert_line(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
             f'</p:spPr>'
             f'</p:sp>'
         )
-    else:
-        # ----------------------------------------------------------------
-        # Custom geometry (original behaviour) for plain lines.
-        # ----------------------------------------------------------------
-        w = max(abs(x2 - x1), 1)
-        h = max(abs(y2 - y1), 1)
-        w_emu = px_to_emu(w)
-        h_emu = px_to_emu(h)
-
-        lx1 = px_to_emu(x1 - min_x)
-        ly1 = px_to_emu(y1 - min_y)
-        lx2 = px_to_emu(x2 - min_x)
-        ly2 = px_to_emu(y2 - min_y)
-
-        geom = (
-            f'<a:custGeom>'
-            f'<a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/>'
-            f'<a:rect l="l" t="t" r="r" b="b"/>'
-            f'<a:pathLst><a:path w="{w_emu}" h="{h_emu}">'
-            f'<a:moveTo><a:pt x="{lx1}" y="{ly1}"/></a:moveTo>'
-            f'<a:lnTo><a:pt x="{lx2}" y="{ly2}"/></a:lnTo>'
-            f'</a:path></a:pathLst>'
-            f'</a:custGeom>'
-        )
-        xml = _wrap_shape(
-            shape_id, f'Line {shape_id}',
-            off_x, off_y, w_emu, h_emu,
-            geom, '<a:noFill/>', stroke, rot=rot,
-        )
-
     return ShapeResult(
         xml=xml,
         bounds_emu=(off_x, off_y, off_x + w_emu, off_y + h_emu),
     )
+
+
+def _clone_line_style(
+    elem: ET.Element,
+    *,
+    keep_start_marker: bool = False,
+    keep_end_marker: bool = False,
+) -> ET.Element:
+    """Clone stroke/marker style for a line segment."""
+    segment = ET.Element(elem.tag, dict(elem.attrib))
+    segment.attrib.pop('transform', None)
+    if not keep_start_marker:
+        segment.attrib.pop('marker-start', None)
+    if not keep_end_marker:
+        segment.attrib.pop('marker-end', None)
+    return segment
+
+
+def _native_line_from_slide_points(
+    elem: ET.Element,
+    ctx: ConvertContext,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    *,
+    name_prefix: str = 'Line',
+) -> ShapeResult | None:
+    """Build a native PowerPoint line preset from already-scaled slide points."""
+    min_x = min(x1, x2)
+    min_y = min(y1, y2)
+    w = abs(x2 - x1)
+    h = abs(y2 - y1)
+    w_emu = max(px_to_emu(w), 1)
+    h_emu = max(px_to_emu(h), 1)
+    off_x = px_to_emu(min_x)
+    off_y = px_to_emu(min_y)
+
+    stroke_op = get_stroke_opacity(elem, ctx)
+    stroke = build_stroke_xml(elem, ctx, stroke_op)
+
+    flip_h = x1 > x2
+    flip_v = y1 > y2
+    flip_attr = ''
+    if flip_h and flip_v:
+        flip_attr = ' flipH="1" flipV="1"'
+    elif flip_h:
+        flip_attr = ' flipH="1"'
+    elif flip_v:
+        flip_attr = ' flipV="1"'
+
+    shape_id = ctx.next_id()
+    xml = (
+        f'<p:sp>'
+        f'<p:nvSpPr>'
+        f'<p:cNvPr id="{shape_id}" name="{_xml_escape(f"{name_prefix} {shape_id}")}"/>'
+        f'<p:cNvSpPr/><p:nvPr/>'
+        f'</p:nvSpPr>'
+        f'<p:spPr>'
+        f'<a:xfrm{flip_attr}>'
+        f'<a:off x="{off_x}" y="{off_y}"/>'
+        f'<a:ext cx="{w_emu}" cy="{h_emu}"/>'
+        f'</a:xfrm>'
+        f'<a:prstGeom prst="line"><a:avLst/></a:prstGeom>'
+        f'<a:noFill/>'
+        f'{stroke}'
+        f'</p:spPr>'
+        f'</p:sp>'
+    )
+    return ShapeResult(
+        xml=xml,
+        bounds_emu=(off_x, off_y, off_x + w_emu, off_y + h_emu),
+    )
+
+
+def _combine_shape_results(results: list[ShapeResult]) -> ShapeResult | None:
+    if not results:
+        return None
+    bounds = [r.bounds_emu for r in results if r.bounds_emu is not None]
+    if not bounds:
+        return ShapeResult(xml='\n'.join(r.xml for r in results))
+    min_x = min(b[0] for b in bounds)
+    min_y = min(b[1] for b in bounds)
+    max_x = max(b[2] for b in bounds)
+    max_y = max(b[3] for b in bounds)
+    return ShapeResult(
+        xml='\n'.join(r.xml for r in results),
+        bounds_emu=(min_x, min_y, max_x, max_y),
+    )
+
+
+def _line_segments_from_points(
+    elem: ET.Element,
+    ctx: ConvertContext,
+    points: list[tuple[float, float]],
+    *,
+    close: bool = False,
+    name_prefix: str = 'Polyline',
+) -> ShapeResult | None:
+    """Convert a straight polyline/polygon outline to native line presets."""
+    if len(points) < 2:
+        return None
+    slide_points = [(ctx_x(x, ctx), ctx_y(y, ctx)) for x, y in points]
+    pairs = list(zip(slide_points, slide_points[1:]))
+    if close:
+        pairs.append((slide_points[-1], slide_points[0]))
+    if not pairs:
+        return None
+
+    results: list[ShapeResult] = []
+    last_idx = len(pairs) - 1
+    for idx, (start, end) in enumerate(pairs):
+        segment_elem = _clone_line_style(
+            elem,
+            keep_start_marker=(idx == 0),
+            keep_end_marker=(idx == last_idx),
+        )
+        result = _native_line_from_slide_points(
+            segment_elem, ctx,
+            start[0], start[1], end[0], end[1],
+            name_prefix=name_prefix,
+        )
+        if result:
+            results.append(result)
+    return _combine_shape_results(results)
+
+
+def _path_is_stroked_outline(elem: ET.Element, ctx: ConvertContext) -> bool:
+    fill = _get_attr(elem, 'fill', ctx)
+    fill_opacity = _get_attr(elem, 'fill-opacity', ctx)
+    return fill == 'none' or fill_opacity == '0'
+
+
+def _linear_path_points(commands: list[PathCommand]) -> tuple[list[tuple[float, float]], bool] | None:
+    if not commands or any(cmd.cmd not in {'M', 'L', 'Z'} for cmd in commands):
+        return None
+    points: list[tuple[float, float]] = []
+    closed = False
+    for cmd in commands:
+        if cmd.cmd == 'M':
+            if points:
+                return None
+            points.append((cmd.args[0], cmd.args[1]))
+        elif cmd.cmd == 'L':
+            if not points:
+                return None
+            points.append((cmd.args[0], cmd.args[1]))
+        elif cmd.cmd == 'Z':
+            closed = True
+    if len(points) < 2:
+        return None
+    return points, closed
 
 
 # ---------------------------------------------------------------------------
@@ -605,6 +723,17 @@ def convert_path(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
         r_match = re.search(r'rotate\(\s*([-\d.]+)', transform)
         if r_match:
             rot = int(float(r_match.group(1)) * ANGLE_UNIT)
+
+    linear = _linear_path_points(commands)
+    if linear and rot == 0 and _path_is_stroked_outline(elem, ctx):
+        points, closed = linear
+        if tx or ty:
+            points = [(x + tx, y + ty) for x, y in points]
+        result = _line_segments_from_points(
+            elem, ctx, points, close=closed, name_prefix='PathLine',
+        )
+        if result:
+            return result
 
     path_xml, min_x, min_y, width, height = path_commands_to_drawingml(
         commands, ctx.translate_x + tx, ctx.translate_y + ty,
@@ -661,10 +790,24 @@ def _parse_points(points_str: str) -> list[tuple[float, float]]:
 
 
 def convert_polygon(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
-    """Convert SVG <polygon> to DrawingML custom geometry shape."""
+    """Convert SVG <polygon> to DrawingML.
+
+    Unfilled polygon outlines are emitted as native line segments. Filled
+    polygons stay as custom geometry because PowerPoint has no reliable native
+    preset for arbitrary closed shapes and preserving the fill is more
+    important than decomposing the outline.
+    """
     points = _parse_points(elem.get('points', ''))
     if not points:
         return None
+
+    transform = elem.get('transform')
+    if not transform and _path_is_stroked_outline(elem, ctx):
+        result = _line_segments_from_points(
+            elem, ctx, points, close=True, name_prefix='PolygonLine',
+        )
+        if result:
+            return result
 
     commands = [PathCommand('M', [points[0][0], points[0][1]])]
     for px_, py_ in points[1:]:
@@ -716,10 +859,18 @@ def convert_polygon(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None
 
 
 def convert_polyline(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
-    """Convert SVG <polyline> to DrawingML custom geometry shape."""
+    """Convert SVG <polyline> to native PowerPoint line segments."""
     points = _parse_points(elem.get('points', ''))
     if not points:
         return None
+
+    transform = elem.get('transform')
+    if not transform:
+        result = _line_segments_from_points(
+            elem, ctx, points, close=False, name_prefix='Polyline',
+        )
+        if result:
+            return result
 
     commands = [PathCommand('M', [points[0][0], points[0][1]])]
     for px_, py_ in points[1:]:
@@ -985,11 +1136,147 @@ def _build_run_xml(
 </a:r>'''
 
 
+_TRANSFORM_NUMBER_RE = re.compile(r'[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?')
+
+
+def _parse_transform_numbers(raw_args: str) -> list[float]:
+    return [float(n) for n in _TRANSFORM_NUMBER_RE.findall(raw_args)]
+
+
+def _text_translate_scale(transform: str) -> tuple[float, float, float, float]:
+    """Extract translate/scale components that affect a text frame position.
+
+    SVG authors often position text with ``transform="translate(x y)"`` while
+    leaving x/y at zero. The converter used to ignore that transform for text
+    elements, which made native PowerPoint output place labels at the slide
+    origin. Rotation is handled later through DrawingML's ``rot`` attribute, so
+    this helper intentionally consumes only translation and scale.
+    """
+    tx = ty = 0.0
+    sx = sy = 1.0
+    for name, raw_args in re.findall(r'([A-Za-z]+)\(([^)]*)\)', transform or ''):
+        nums = _parse_transform_numbers(raw_args)
+        lname = name.lower()
+        if lname == 'translate' and nums:
+            tx += nums[0]
+            ty += nums[1] if len(nums) > 1 else 0.0
+        elif lname == 'scale' and nums:
+            sx *= nums[0]
+            sy *= nums[1] if len(nums) > 1 else nums[0]
+    return tx, ty, sx, sy
+
+
+def _apply_local_text_transform(
+    x: float,
+    y: float,
+    ctx: ConvertContext,
+    tx: float,
+    ty: float,
+    sx: float,
+    sy: float,
+) -> tuple[float, float]:
+    return ctx_x(x * sx + tx, ctx), ctx_y(y * sy + ty, ctx)
+
+
+_TEXTBOX_CHROME_TOKENS = (
+    'page-number', 'pagenum', 'sldnum', 'footer', 'citation', 'reference',
+    'logo', 'school',
+)
+_TEXTBOX_CONTENT_TOKENS = (
+    'caption', 'body', 'label', 'item', 'node', 'card', 'bullet', 'content',
+)
+
+
+def _text_role_blob(elem: ET.Element) -> str:
+    return ' '.join(str(elem.get(k, '')) for k in ('id', 'class', 'data-role')).lower()
+
+
+def _text_has_declared_shape(elem: ET.Element) -> bool:
+    return any(
+        elem.get(k) is not None
+        for k in (
+            'data-shape-x', 'data-shape-y', 'data-shape-width', 'data-shape-height',
+            'data-container-x', 'data-container-y', 'data-container-width', 'data-container-height',
+        )
+    )
+
+
+def _suspicious_explicit_textbox(
+    elem: ET.Element,
+    box_x_svg: float,
+    box_w_svg: float,
+    text_x_svg: float,
+    text_anchor: str,
+) -> bool:
+    """Detect generator mistakes that pin content text to the slide origin.
+
+    The Spark executor should write card-local text boxes. Some generated SVGs
+    instead assign body/caption text a full-slide `data-box-x=0,width=1280`.
+    Trusting that contract makes PowerPoint place all text at the left edge.
+    Only true master/chrome text such as footers, citations, page numbers,
+    logos and school marks is allowed to use wide boxes.
+    """
+    if _text_has_declared_shape(elem):
+        return False
+    role_blob = _text_role_blob(elem)
+    if any(token in role_blob for token in _TEXTBOX_CHROME_TOKENS):
+        return False
+    anchor = (text_anchor or 'start').lower()
+    if box_w_svg >= 1000 and box_x_svg <= 8 and anchor == 'start' and text_x_svg >= box_x_svg + 40:
+        return True
+    if box_w_svg >= 1200 and any(token in role_blob for token in _TEXTBOX_CONTENT_TOKENS):
+        return True
+    return False
+
+
+def _optional_textbox_rect(
+    elem: ET.Element,
+    ctx: ConvertContext,
+    tx: float = 0.0,
+    ty: float = 0.0,
+    sx: float = 1.0,
+    sy: float = 1.0,
+) -> tuple[float, float, float, float] | None:
+    """Read an explicit SVG-authored text-box rectangle.
+
+    Normal SVG <text> has only a baseline point, so the converter estimates a
+    PowerPoint text box from the string width. That estimate is fragile for
+    user-provided templates where a text frame is meant to align with a
+    visible card, banner, or placeholder. Executors can lock the intended
+    frame by adding data-box-* attributes to <text>.
+    """
+    x_attr = elem.get('data-box-x') or elem.get('data-textbox-x')
+    y_attr = elem.get('data-box-y') or elem.get('data-textbox-y')
+    w_attr = elem.get('data-box-width') or elem.get('data-textbox-width')
+    h_attr = elem.get('data-box-height') or elem.get('data-textbox-height')
+    if None in (x_attr, y_attr, w_attr, h_attr):
+        return None
+    box_x_svg = _f(x_attr) * sx + tx
+    box_y_svg = _f(y_attr) * sy + ty
+    box_w_svg = _f(w_attr) * abs(sx)
+    box_h_svg = _f(h_attr) * abs(sy)
+    text_x_svg = _f(elem.get('x')) * sx + tx
+    text_anchor = _get_attr(elem, 'text-anchor', ctx) or 'start'
+    if _suspicious_explicit_textbox(elem, box_x_svg, box_w_svg, text_x_svg, text_anchor):
+        return None
+
+    x, y = ctx_x(box_x_svg, ctx), ctx_y(box_y_svg, ctx)
+    w = ctx_w(box_w_svg, ctx)
+    h = ctx_h(box_h_svg, ctx)
+    if w <= 0 or h <= 0:
+        return None
+    return x, y, w, h
+
+
 def convert_text(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
     """Convert SVG <text> to DrawingML text shape with multi-run support."""
-    x = ctx_x(_f(elem.get('x')), ctx)
-    y = ctx_y(_f(elem.get('y')), ctx)
-    font_size = _f(_get_attr(elem, 'font-size', ctx), 16) * ctx.scale_y
+    text_transform = elem.get('transform', '')
+    local_tx, local_ty, local_sx, local_sy = _text_translate_scale(text_transform)
+    x, y = _apply_local_text_transform(
+        _f(elem.get('x')), _f(elem.get('y')), ctx,
+        local_tx, local_ty, local_sx, local_sy,
+    )
+    font_size = _f(_get_attr(elem, 'font-size', ctx), 16) * ctx.scale_y * local_sy
     font_weight = _get_attr(elem, 'font-weight', ctx) or '400'
     font_family_str = _get_attr(elem, 'font-family', ctx) or ''
     text_anchor = _get_attr(elem, 'text-anchor', ctx) or 'start'
@@ -1026,22 +1313,32 @@ def convert_text(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
     if not full_text.strip():
         return None
 
-    # Estimate text dimensions
-    text_width = estimate_text_width(full_text, font_size, font_weight) * 1.15
-    text_height = font_size * 1.5
-    padding = font_size * 0.1
-
-    # Adjust position based on text-anchor
-    if text_anchor == 'middle':
-        box_x = x - text_width / 2 - padding
-    elif text_anchor == 'end':
-        box_x = x - text_width - padding
+    explicit_box = _optional_textbox_rect(elem, ctx, local_tx, local_ty, local_sx, local_sy)
+    if explicit_box is not None:
+        box_x, box_y, box_w, box_h = explicit_box
+        wrap_mode = elem.get('data-wrap') or elem.get('data-text-wrap') or 'square'
+        autofit_xml = '<a:normAutofit fontScale="65000" lnSpcReduction="20000"/>'
     else:
-        box_x = x - padding
+        # Estimate text dimensions for ordinary baseline text. Keep a slightly
+        # conservative box so PowerPoint does not clip glyphs after font
+        # substitution.
+        text_width = estimate_text_width(full_text, font_size, font_weight) * 1.15
+        text_height = font_size * 1.5
+        padding = font_size * 0.1
 
-    box_y = y - font_size * 0.85
-    box_w = text_width + padding * 2
-    box_h = text_height + padding
+        # Adjust position based on text-anchor
+        if text_anchor == 'middle':
+            box_x = x - text_width / 2 - padding
+        elif text_anchor == 'end':
+            box_x = x - text_width - padding
+        else:
+            box_x = x - padding
+
+        box_y = y - font_size * 0.85
+        box_w = text_width + padding * 2
+        box_h = text_height + padding
+        wrap_mode = 'none'
+        autofit_xml = '<a:spAutoFit/>'
 
     # Letter spacing
     spc_attr = ''
@@ -1059,7 +1356,6 @@ def convert_text(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
     # box so its center lands where SVG would place the rotated visual center —
     # otherwise rotated y-axis labels etc. drift to the wrong location.
     text_rot = 0
-    text_transform = elem.get('transform', '')
     if text_transform:
         rot_match = re.search(
             r'rotate\(\s*([-\d.]+)(?:[\s,]+([-\d.]+)[\s,]+([-\d.]+))?',
@@ -1120,8 +1416,8 @@ def convert_text(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
 {shape_effect_xml}
 </p:spPr>
 <p:txBody>
-<a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="t" anchorCtr="0">
-<a:spAutoFit/>
+<a:bodyPr wrap="{wrap_mode}" lIns="0" tIns="0" rIns="0" bIns="0" anchor="t" anchorCtr="0">
+{autofit_xml}
 </a:bodyPr>
 <a:lstStyle/>
 <a:p>

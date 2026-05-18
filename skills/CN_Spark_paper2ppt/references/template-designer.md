@@ -1,6 +1,7 @@
 > See shared-standards.md for common technical constraints.
 
 # Template Designer — Template Design Role
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在创建或复用模板时读取；它定义模板设计规范、索引字段和模板库结构。
 
 ## Core Mission
 
@@ -14,7 +15,7 @@ Generate reusable page templates for the **global template library** based on a 
 - **Output location**: `templates/layouts/<template_name>/`
 - **Input**: finalized template brief (template ID, display name, category, applicable scenarios, tone, theme mode, canvas format, optional reference assets)
 
-When the workflow provides a PPTX reference source, the effective input package comes from the unified `pptx_template_import.py` preparation workspace and becomes:
+When the workflow provides a PPTX reference source, the effective input package comes from the unified `template_import/cli.py` preparation workspace and becomes:
 
 - finalized template brief
 - `manifest.json` — single source of truth (slide size, theme, per-master themes, assets, asset map, placeholders, layouts, masters, slides, SVG file paths, page-type candidates)
@@ -87,7 +88,7 @@ Extension page types beyond the canonical four (transition / appendix / disclaim
 - Cluster slides from `manifest.json` by `pageType` + visual structure (column count, hero-image vs. icon-grid vs. quote, etc.)
 - One SVG per cluster — do **not** emit a variant for a cluster represented by a single source slide unless that slide is structurally distinct from existing variants
 - One variant per visually distinct cluster — let the source's structural diversity drive the count. Collapse only **near-duplicates** (same column count, same hero element, same content density); do not collapse genuine structural differences just to keep the variant count down. If you find yourself wanting one variant per source slide, that is the signal the user should be in `mirror` mode, not `fidelity`
-- Record every emitted page in `design_spec.md §V Page Roster` and in the `pages` field of the `layouts_index.json` entry (auto-collected by `register_template.py`)
+- Record every emitted page in `design_spec.md §V Page Roster` and in the `pages` field of the `layouts_index.json` entry (auto-collected by `template_import/register.py`)
 
 > Variants reuse the parent type's placeholder set — see §4 (Placeholder Reference) below.
 
@@ -103,7 +104,7 @@ When the brief sets `Replication mode: mirror`, the role does **not** abstract o
 
 **Why mirror has no placeholders**: it is consumed as a **visual reference** rather than a templated form. Executor's mirror path (see [executor-base.md](executor-base.md) §1.1) copies the chosen mirror page into the project and edits text elements in place against the project content — no `{{}}` substitution happens. This keeps the library asset 100% verbatim and lets the user re-discover the source deck by browsing `templates/layouts/<template_id>/` directly.
 
-**What mirror is not**: a pixel-perfect re-rendering pipeline test. Charts, SmartArt, OLE objects, and EMF / WMF media that fail to round-trip in `pptx_template_import.py` will fail the same way in mirror. If the import workspace has missing media or unsupported objects, mirror inherits those gaps — the user should be told before generation begins.
+**What mirror is not**: a pixel-perfect re-rendering pipeline test. Charts, SmartArt, OLE objects, and EMF / WMF media that fail to round-trip in `template_import/cli.py` will fail the same way in mirror. If the import workspace has missing media or unsupported objects, mirror inherits those gaps — the user should be told before generation begins.
 
 ---
 
@@ -173,11 +174,11 @@ Sections to **omit** from template `design_spec.md` (sourced elsewhere — listi
 |---|---|
 | SVG technical constraints / Mandatory rules / Prohibited elements | `shared-standards.md` §1 |
 | PPT compatibility rules (`<g opacity>`, inline-styles-only, etc.) | `shared-standards.md` |
-| Generic layout pattern library (centered card / 三栏 / timeline / …) | `design_spec_reference.md` §V |
+| Generic layout pattern library (centered card / three-column / timeline / …) | `design_spec_reference.md` §V |
 | Generic spacing bands (margin 40-60px, card gap 20-32px, etc.) | `design_spec_reference.md` §V |
 | Generic font-size hierarchy (cover 2.5-5x body, page title 1.5-2x, …) | `design_spec_reference.md` §IV |
 | Canonical placeholder table (`{{TITLE}}`, `{{PAGE_NUM}}`, …) | §4 below |
-| Content methodology (pyramid / SCQA / MECE / 金字塔) | `strategist.md` |
+| Content methodology (pyramid / SCQA / MECE) | `strategist.md` |
 | "Usage Instructions" boilerplate (copy template / select page / …) | `create-template.md` |
 | Created Date / Page Count rows | not a library-level field |
 
@@ -193,6 +194,13 @@ Templates must strictly follow the finalized template brief and the generated `d
 
 If PPTX import output exists:
 - Prefer imported theme colors and fonts over visually guessed values
+- For user-provided PPTX templates, the extracted RGB HEX palette from
+  `manifest.json.palette` has the highest priority over academic defaults,
+  route-diagram defaults, and generic brand defaults. Record this priority in
+  `design_spec.md` and preserve the colors exactly as `#RRGGBB`.
+- Focus identity extraction on school emblem / logo, school or institution
+  name, and department / college / lab name. These are more important than
+  copying every decorative shape from the source PPTX.
 - Reuse exported `assets/` images directly — `<image>` references in `svg/` already point at canonical files
 - Treat page-type candidates from `manifest.pageTypeCandidates` as hints, not guarantees
 
@@ -366,7 +374,7 @@ This section describes downstream reuse. The `Template_Designer` role itself is 
 templates/layouts/
 ├── google_style/      # Google Material Design style
 ├── academic_defense/  # Academic defense style
-└── 招商银行/          # China Merchants Bank brand style
+└── china_merchants_bank/          # China Merchants Bank brand style
 ```
 
 ---

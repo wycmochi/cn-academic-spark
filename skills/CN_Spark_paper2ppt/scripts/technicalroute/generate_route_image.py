@@ -4,9 +4,12 @@ generate_route_image.py · 把 content.yaml + style_profile.md 拼成 prompt，�
 PPT engine 的 ``scripts/image_gen.py`` 做多后端生图。
 
 子命令：
-  prompt   读 content.yaml + style_profile.md + archetype skeleton → 生成 prompt.md
-  run      读 prompt.md + 参考图 → 调 image_gen.py 出 PNG
-  embed    把生成的 PNG 嵌入 PPT engine 项目的某张 SVG 页面
+  contract       写 Diagram Contract 骨架
+  prompt         读 content.yaml + style_profile.md + archetype skeleton → 生成 prompt_ai.md
+  assemble       依据 technicalroute templates 装配 A 版可编辑 SVG
+  run-ai-variant 读 prompt_ai.md + 参考图 → 调 image_gen.py 生成 B 版 AI PNG
+  run            run-ai-variant 的兼容别名
+  embed          把生成的 PNG 嵌入 PPT engine 项目的某张 SVG 页面
 
 默认 backend = gemini（gemini-3-pro-image-preview，即 nano banana pro），
 环境变量 ``IMAGE_BACKEND`` / ``GEMINI_API_KEY`` 由用户在 PPT engine 的 ``.env`` 中配置。
@@ -25,6 +28,8 @@ PPT engine 的 ``scripts/image_gen.py`` 做多后端生图。
 from __future__ import annotations
 
 import argparse
+import base64
+import io
 import json
 import os
 import re
@@ -35,6 +40,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 import textwrap
+from html import escape as xml_escape
 from pathlib import Path
 from typing import Iterable
 
@@ -50,7 +56,7 @@ REFS_DIR = PAPER2PPT_ROOT / "references" / "technicalroute"
 
 
 def _resolve_image_gen() -> Path:
-    """Locate the PPT engine's image_gen.py via env-var overrides, then sibling fallback.
+    """Locate the PPT engine's image_gen.py via env-var overrides, then sibling default.
 
     Returns the resolved Path (may not exist; caller checks ``.exists()``).
     """
@@ -315,19 +321,33 @@ def cmd_prompt(args: argparse.Namespace) -> int:
     rendered = render_skeleton(skeleton, content)
     cn_block = build_chinese_content_block(content)
 
-    prompt = "\n\n".join(
-        [
-            COMMON_PREAMBLE.strip(),
-            "[STRUCTURE]",
-            rendered.strip(),
-            "[STYLE PROFILE]",
-            style_extra or "(none)",
-            "[CHINESE CONTENT — render exactly as written, no translation]",
-            cn_block,
-            "[NEGATIVE]",
-            NEGATIVE.strip(),
-        ]
-    )
+    reference_mode = getattr(args, "reference_mode", "literature")
+    ref_clause = ""
+    if reference_mode == "atlas_only":
+        ref_clause = "\n\n".join([
+            "[ATLAS-ONLY MODE]",
+            "No literature or Custom_gallery reference images are available. Render using ONLY",
+            "[STRUCTURE], [SHAPE RECIPES], [COLOR DISCIPLINE], and the article-derived",
+            "[CHINESE CONTENT] as layout truth. Default to a clean, restrained, academic-poster",
+            "look with generous white space, thin strokes, flat fills, and no decorative flourishes.",
+        ])
+
+    prompt_parts = [
+        COMMON_PREAMBLE.strip(),
+        "[STRUCTURE]",
+        rendered.strip(),
+        "[STYLE PROFILE]",
+        style_extra or "(none)",
+        "[CHINESE CONTENT — render exactly as written, no translation]",
+        cn_block,
+    ]
+    if ref_clause:
+        prompt_parts.append(ref_clause)
+    prompt_parts.extend([
+        "[NEGATIVE]",
+        NEGATIVE.strip(),
+    ])
+    prompt = "\n\n".join(prompt_parts)
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -343,32 +363,425 @@ def cmd_prompt(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _find_generated_image(out_dir: Path, filename: str, before: set[Path] | None = None) -> Path | None:
+    """Find the image created by image_gen.py for a stable route filename."""
+    image_exts = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"]
+    if filename:
+        stem = Path(filename).stem
+        candidates: list[Path] = []
+        candidates.extend(out_dir / f"{stem}{ext}" for ext in image_exts)
+        candidates.extend(sorted(out_dir.glob(f"{stem}.*")))
+        for candidate in candidates:
+            if candidate.is_file() and candidate.suffix.lower() in image_exts:
+                return candidate.resolve()
+        return None
+
+    before = before or set()
+    candidates = [
+        candidate for candidate in out_dir.iterdir()
+        if candidate.is_file()
+        and candidate.suffix.lower() in image_exts
+        and candidate.resolve() not in before
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+    return candidates[0].resolve()
+
+
+def _fallback_output_path(out_dir: Path, filename: str) -> Path:
+    stem = Path(filename).stem if filename else "route_ai_local_fallback"
+    if not stem:
+        stem = "route_ai_local_fallback"
+    return (out_dir / f"{stem}.png").resolve()
+
+
+def _load_route_font(size: int, *, bold: bool = False):
+    from PIL import ImageFont
+
+    candidates = []
+    if bold:
+        candidates.extend([r"C:/Windows/Fonts/msyhbd.ttc", r"C:/Windows/Fonts/simhei.ttf"])
+    candidates.extend([
+        r"C:/Windows/Fonts/msyh.ttc",
+        r"C:/Windows/Fonts/simhei.ttf",
+        r"C:/Windows/Fonts/simsun.ttc",
+        "/System/Library/Fonts/PingFang.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ])
+    for candidate in candidates:
+        try:
+            path = Path(candidate)
+            if path.exists():
+                return ImageFont.truetype(str(path), size=size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def _pil_text_width(draw, text: str, font) -> int:
+    if not text:
+        return 0
+    bbox = draw.textbbox((0, 0), text, font=font)
+    return int(bbox[2] - bbox[0])
+
+
+def _pil_wrap(draw, text: str, font, max_width: int, *, max_lines: int = 3) -> list[str]:
+    text = re.sub(r"\s+", " ", str(text or "").strip())
+    if not text:
+        return []
+    tokens = list(text) if re.search(r"[\u4e00-\u9fff]", text) else text.split(" ")
+    sep = "" if re.search(r"[\u4e00-\u9fff]", text) else " "
+    lines: list[str] = []
+    current = ""
+    for token in tokens:
+        candidate = token if not current else current + sep + token
+        if _pil_text_width(draw, candidate, font) <= max_width:
+            current = candidate
+            continue
+        if current:
+            lines.append(current)
+        current = token
+        if len(lines) >= max_lines:
+            break
+    if current and len(lines) < max_lines:
+        lines.append(current)
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+    if len(lines) == max_lines and _pil_text_width(draw, lines[-1], font) > max_width:
+        while lines[-1] and _pil_text_width(draw, lines[-1] + "…", font) > max_width:
+            lines[-1] = lines[-1][:-1]
+        lines[-1] += "…"
+    return lines
+
+
+def _prompt_snippets(prompt: str, count: int = 5) -> list[str]:
+    snippets: list[str] = []
+    seen: set[str] = set()
+    skip_prefixes = (
+        "A high-resolution", "Flat 2D", "Typography:", "Canvas:", "No ",
+        "[", "NEGATIVE", "Use ", "Do not", "Render ",
+    )
+    for raw in prompt.splitlines():
+        line = raw.strip(" \t-•*#0123456789.、:：")
+        if not line or len(line) < 6:
+            continue
+        if any(line.startswith(prefix) for prefix in skip_prefixes):
+            continue
+        if not re.search(r"[\u4e00-\u9fffA-Za-z]", line):
+            continue
+        line = re.sub(r"\s+", " ", line)
+        key = line.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        snippets.append(line[:90])
+        if len(snippets) >= count:
+            break
+    defaults = [
+        "问题提出与研究对象界定",
+        "指标构建、数据整理与变量识别",
+        "模型解释、机制检验与稳健性分析",
+        "结果归纳、异质性比较与规划启示",
+        "形成可汇报的全文技术路线图",
+    ]
+    while len(snippets) < count:
+        snippets.append(defaults[len(snippets)])
+    return snippets[:count]
+
+
+def _render_local_route_fallback(prompt: str, out_dir: Path, filename: str, reason: str) -> Path:
+    try:
+        from PIL import Image, ImageDraw
+    except Exception as exc:
+        raise RuntimeError("Local route fallback requires Pillow when image generation backend is unavailable.") from exc
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = _fallback_output_path(out_dir, filename)
+    width, height = 1280, 720
+    image = Image.new("RGBA", (width, height), "#FFFFFF")
+    draw = ImageDraw.Draw(image)
+    font_title = _load_route_font(34, bold=True)
+    font_subtitle = _load_route_font(17)
+    font_stage = _load_route_font(18, bold=True)
+    font_body = _load_route_font(14)
+    font_badge = _load_route_font(12)
+
+    draw.rectangle((0, 0, width, 92), fill="#0B3A66")
+    draw.rectangle((0, 0, 12, 92), fill="#D00000")
+    draw.text((34, 28), "AI全文技术路线图", fill="#FFFFFF", font=font_title)
+    subtitle = "本地兜底生成：根据 prompt_ai.md 摘取全文研究链路，确保 Version B 页面不断链"
+    draw.text((34, 102), subtitle, fill="#334155", font=font_subtitle)
+    draw.rounded_rectangle((965, 28, 1220, 62), radius=10, fill="#E8F1FA", outline="#B9D1EA", width=1)
+    draw.text((982, 38), f"fallback: {reason[:25]}", fill="#24527A", font=font_badge)
+
+    snippets = _prompt_snippets(prompt, 5)
+    labels = ["问题提出", "指标与数据", "模型解释", "结果验证", "规划启示"]
+    colors = ["#2563EB", "#0EA5E9", "#10B981", "#F59E0B", "#D00000"]
+    card_w, card_h = 204, 310
+    gap = 28
+    start_x = 62
+    y = 220
+    for idx, (label, snippet, color) in enumerate(zip(labels, snippets, colors), start=1):
+        x = start_x + (idx - 1) * (card_w + gap)
+        draw.rounded_rectangle((x, y, x + card_w, y + card_h), radius=16, fill="#FFFFFF", outline="#CBD5E1", width=2)
+        draw.rounded_rectangle((x, y, x + card_w, y + 58), radius=16, fill=color)
+        draw.rectangle((x, y + 42, x + card_w, y + 58), fill=color)
+        draw.ellipse((x + 16, y + 16, x + 46, y + 46), fill="#FFFFFF")
+        draw.text((x + 24, y + 20), str(idx), fill=color, font=font_stage)
+        draw.text((x + 58, y + 19), label, fill="#FFFFFF", font=font_stage)
+        lines = _pil_wrap(draw, snippet, font_body, card_w - 32, max_lines=6)
+        ty = y + 90
+        for line in lines:
+            draw.text((x + 16, ty), line, fill="#334155", font=font_body)
+            ty += 24
+        draw.rounded_rectangle((x + 18, y + card_h - 74, x + card_w - 18, y + card_h - 26), radius=10, fill="#F8FAFC", outline="#E2E8F0")
+        draw.text((x + 32, y + card_h - 58), "论文内容驱动", fill=color, font=font_body)
+        if idx < 5:
+            ax1 = x + card_w + 6
+            ay = y + card_h / 2
+            ax2 = ax1 + gap - 12
+            draw.line((ax1, ay, ax2, ay), fill="#94A3B8", width=3)
+            draw.polygon([(ax2, ay), (ax2 - 10, ay - 7), (ax2 - 10, ay + 7)], fill="#94A3B8")
+
+    draw.text((64, 666), "说明：图像后端或参考图链路不可用时生成此兜底 PNG；真实 AI 后端可用时会自动替换为模型生成图。", fill="#64748B", font=font_badge)
+    image.save(out_path, format="PNG")
+    return out_path
+
+
+def _create_ai_slide_if_requested(args: argparse.Namespace, image_path: Path) -> int:
+    out_svg = getattr(args, "out_svg", "") or ""
+    if not out_svg:
+        return 0
+    ns = argparse.Namespace(
+        image=str(image_path),
+        out_svg=out_svg,
+        title=getattr(args, "title", "") or "Research Route: AI Reference Version",
+        subtitle=getattr(args, "subtitle", "") or "Generated from article content plus available route anchors",
+        caption=getattr(args, "caption", "") or "AI reference route diagram; semantic content follows the source material",
+        footer=getattr(args, "footer", "") or "",
+        page_number=getattr(args, "page_number", "") or "",
+        format=getattr(args, "format", "ppt169") or "ppt169",
+        bbox=getattr(args, "bbox", "") or "",
+    )
+    return cmd_create_ai_slide(ns)
+
+
+def _finish_local_route_fallback(args: argparse.Namespace, prompt: str, out_dir: Path, reason: str) -> int:
+    if getattr(args, "no_local_fallback", False):
+        print(f"Error: {reason}; local fallback is disabled by --no-local-fallback.", file=sys.stderr)
+        return 2
+    try:
+        generated = _render_local_route_fallback(prompt, out_dir, getattr(args, "filename", ""), reason)
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    print(f"Warning: {reason}. Created a deterministic local route PNG so Version B is not missing.", file=sys.stderr)
+    print(f"OK: route_ai_image_path = {generated}")
+    slide_rc = _create_ai_slide_if_requested(args, generated)
+    return slide_rc
+
+
+def _load_refs_plan(args: argparse.Namespace) -> None:
+    plan_path_raw = getattr(args, "refs_plan", "") or ""
+    if not plan_path_raw:
+        return
+    plan_path = Path(plan_path_raw).expanduser().resolve()
+    if not plan_path.is_file():
+        raise FileNotFoundError(f"refs plan not found: {plan_path}")
+    data = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan_refs = [str(Path(item).expanduser().resolve()) for item in data.get("refs") or []]
+    forbidden = {".svg", ".pptx", ".ppt", ".odp", ".key"}
+    bad = [ref for ref in plan_refs if Path(ref).suffix.lower() in forbidden]
+    if bad:
+        raise ValueError("refs plan contains forbidden AI reference file(s): " + ", ".join(bad))
+    args.refs = list(dict.fromkeys((args.refs or []) + plan_refs))
+    if not getattr(args, "refs_manifest", "") and data.get("refs_manifest"):
+        args.refs_manifest = str(Path(data["refs_manifest"]).expanduser().resolve())
+    if data.get("gallery_only"):
+        args.gallery_only = True
+    args._refs_plan_mode = data.get("mode", "")
+
+
+def _manifest_reference_paths(manifest_path: Path) -> set[Path]:
+    """Load allowed academic-search refs collected from the seed_sites.json workflow."""
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"style refs manifest not found: {manifest_path}")
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"style refs manifest is not valid JSON: {manifest_path}: {exc}") from exc
+    refs = data.get("refs") or []
+    if not isinstance(refs, list):
+        raise ValueError(f"style refs manifest has invalid refs list: {manifest_path}")
+
+    allowed: set[Path] = set()
+    base = manifest_path.parent
+    for item in refs:
+        if not isinstance(item, dict):
+            continue
+        local_file = str(item.get("local_file") or item.get("downloaded") or "").strip()
+        if not local_file:
+            continue
+        candidate = Path(local_file)
+        if not candidate.is_absolute():
+            candidate = base / candidate
+        if candidate.is_file():
+            allowed.add(candidate.resolve())
+    return allowed
+
+
+def _classify_ai_reference(
+    ref_path: Path,
+    *,
+    custom_gallery_root: Path,
+    manifest_allowed: set[Path],
+) -> str | None:
+    try:
+        ref_path.relative_to(custom_gallery_root)
+        return "gallery"
+    except ValueError:
+        pass
+    if ref_path in manifest_allowed:
+        return "literature_manifest"
+    return None
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     prompt_path = Path(args.prompt)
     if not prompt_path.exists():
-        print(f"❌ prompt 不存在：{prompt_path}", file=sys.stderr)
+        print(f"Error: prompt not found: {prompt_path}", file=sys.stderr)
         return 2
     prompt = prompt_path.read_text(encoding="utf-8")
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    try:
+        _load_refs_plan(args)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"Error: invalid --refs-plan: {exc}", file=sys.stderr)
+        return 2
+
     if not IMAGE_GEN_PY.exists():
+        return _finish_local_route_fallback(
+            args,
+            prompt,
+            out_dir,
+            f"image_gen.py was not found at {IMAGE_GEN_PY}",
+        )
+
+    refs: list[str] = []
+    ref_sources: list[str] = []
+    raster_suffixes = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+    custom_gallery_root = (PAPER2PPT_ROOT / "templates" / "technicalroute" / "Custom_gallery").resolve()
+    manifest_allowed: set[Path] = set()
+    if getattr(args, "refs_manifest", ""):
+        try:
+            manifest_allowed = _manifest_reference_paths(Path(args.refs_manifest).expanduser().resolve())
+        except (OSError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 2
+    for ref in args.refs or []:
+        ref_path = Path(ref).expanduser()
+        if not ref_path.is_file():
+            print(f"Error: reference image not found: {ref}", file=sys.stderr)
+            return 2
+        ref_resolved = ref_path.resolve()
+        if ref_resolved.suffix.lower() == ".svg":
+            print(
+                f"Error: SVG references are forbidden for AI image generation: {ref_resolved}\n"
+                "Use article-derived content.yaml for semantics and Custom_gallery raster images "
+                "(.png/.jpg/.webp/.bmp) for style anchors.",
+                file=sys.stderr,
+            )
+            return 2
+        if ref_resolved.suffix.lower() not in raster_suffixes:
+            print(f"Error: unsupported reference image type for AI generation: {ref_resolved}", file=sys.stderr)
+            return 2
+        ref_source = _classify_ai_reference(
+            ref_resolved,
+            custom_gallery_root=custom_gallery_root,
+            manifest_allowed=manifest_allowed,
+        )
+        if ref_source is None:
+            manifest_hint = (
+                f" or listed in {Path(args.refs_manifest).expanduser().resolve()}"
+                if getattr(args, "refs_manifest", "") else ""
+            )
+            print(
+                "Error: AI route references must come from exactly two sources: "
+                f"templates/technicalroute/Custom_gallery/{manifest_hint}. "
+                f"Rejected: {ref_resolved}",
+                file=sys.stderr,
+            )
+            return 2
+        if getattr(args, "gallery_only", False):
+            try:
+                ref_resolved.relative_to(custom_gallery_root)
+            except ValueError:
+                print(
+                    f"Error: --gallery-only allows refs only under {custom_gallery_root}; got {ref_resolved}",
+                    file=sys.stderr,
+                )
+                return 2
+        refs.append(str(ref_resolved))
+        ref_sources.append(ref_source)
+
+    if not refs:
+        if getattr(args, "allow_no_ref_fallback", False):
+            print(
+                "Warning: no route reference images were provided; proceeding without refs "
+                "because --allow-no-ref-fallback was explicitly set.",
+                file=sys.stderr,
+            )
+        else:
+            return _finish_local_route_fallback(
+                args,
+                prompt,
+                out_dir,
+                "no Custom_gallery/style_refs raster references were provided",
+            )
+    if refs and not any(source == "gallery" for source in ref_sources):
         print(
-            "❌ 未找到 image_gen.py：\n"
-            f"   尝试路径：{IMAGE_GEN_PY}\n"
-            "\n"
-            "paper2ppt 内置 TechnicalRoute 依赖本 skill 的 scripts/image_gen.py 做生图。请任选一种修复：\n"
-            "  1. 设置 IMAGE_GEN_PATH=/abs/path/to/image_gen.py 直接指向脚本；\n"
-            "  2. 设置 PAPER2PPT_ROOT=/abs/path/to/CN_Spark_paper2ppt 指向本 paper2ppt skill 根目录。\n",
+            "Error: Version B AI route generation requires at least one discipline "
+            "Custom_gallery raster anchor.",
             file=sys.stderr,
         )
         return 2
+    if refs and not getattr(args, "gallery_only", False):
+        if not getattr(args, "refs_manifest", ""):
+            print(
+                "Error: Version B AI route generation requires --refs-manifest "
+                "pointing to the research-search style_refs/manifest.json generated "
+                "from references/technicalroute/seed_sites.json. Use --gallery-only "
+                "only when academic search produced no usable "
+                "route/framework/workflow figure references.",
+                file=sys.stderr,
+            )
+            return 2
+        if not any(source == "literature_manifest" for source in ref_sources):
+            print(
+                "Error: Version B AI route generation requires at least one "
+                "academic-search route/framework/workflow raster reference listed "
+                "in style_refs/manifest.json from the seed_sites.json workflow.",
+                file=sys.stderr,
+            )
+            return 2
 
+    backend_name = (getattr(args, "backend", "") or os.environ.get("IMAGE_BACKEND") or "openai").strip()
+    model_name = (getattr(args, "model", "") or "").strip()
+    if not model_name and backend_name == "openai":
+        model_name = os.environ.get("OPENAI_MODEL") or "gpt-image-2"
+
+    before = {item.resolve() for item in out_dir.iterdir() if item.is_file()}
     cmd = [
         sys.executable,
         str(IMAGE_GEN_PY),
-        prompt,
+        "--prompt-file",
+        str(prompt_path),
         "--aspect_ratio",
         args.aspect_ratio,
         "--image_size",
@@ -376,75 +789,255 @@ def cmd_run(args: argparse.Namespace) -> int:
         "-o",
         str(out_dir),
     ]
-    if args.refs:
-        for ref in args.refs:
+    if backend_name:
+        cmd.extend(["--backend", backend_name])
+    if model_name:
+        cmd.extend(["--model", model_name])
+    if args.filename:
+        cmd.extend(["--filename", args.filename])
+    if refs:
+        for ref in refs:
             cmd.extend(["--reference", ref])
 
     env = os.environ.copy()
-    env.setdefault("IMAGE_BACKEND", "gemini")
-    print("▶", " ".join(cmd))
+    env.setdefault("PYTHONUTF8", "1")
+    display_cmd = cmd.copy()
+    print(">> " + " ".join(display_cmd))
     rc = subprocess.run(cmd, env=env).returncode
+
     if rc != 0:
-        print("⚠️ image_gen.py 失败，尝试 fallback（去掉参考图重试）")
-        cmd = [c for c in cmd if c not in {"--reference"} and not any(c == r for r in (args.refs or []))]
-        rc = subprocess.run(cmd, env=env).returncode
-    return rc
+        if refs and getattr(args, "allow_no_ref_fallback", False):
+            print(
+                "Warning: image generation with references failed; retrying without references "
+                "because --allow-no-ref-fallback was explicitly set.",
+                file=sys.stderr,
+            )
+            cmd_no_refs = [
+                sys.executable,
+                str(IMAGE_GEN_PY),
+                "--prompt-file",
+                str(prompt_path),
+                "--aspect_ratio",
+                args.aspect_ratio,
+                "--image_size",
+                args.image_size,
+                "-o",
+                str(out_dir),
+            ]
+            if backend_name:
+                cmd_no_refs.extend(["--backend", backend_name])
+            if model_name:
+                cmd_no_refs.extend(["--model", model_name])
+            if args.filename:
+                cmd_no_refs.extend(["--filename", args.filename])
+            rc = subprocess.run(cmd_no_refs, env=env).returncode
+        else:
+            if refs:
+                print(
+                    "Warning: image_gen.py failed while reference images were enabled. "
+                    "The references were not dropped silently; falling back to a deterministic "
+                    "local PNG so the Version B slide remains present.",
+                    file=sys.stderr,
+                )
+            return _finish_local_route_fallback(
+                args,
+                prompt,
+                out_dir,
+                f"image_gen.py failed with exit code {rc}",
+            )
+
+    generated = _find_generated_image(out_dir, args.filename, before)
+    if generated is None:
+        expected = f"{Path(args.filename).stem}.[png|jpg|jpeg|webp|bmp|gif]" if args.filename else "a new image file"
+        return _finish_local_route_fallback(
+            args,
+            prompt,
+            out_dir,
+            f"image_gen.py exited successfully but {expected} was not found in {out_dir}",
+        )
+
+    print(f"OK: route_ai_image_path = {generated}")
+    return _create_ai_slide_if_requested(args, generated)
 
 
 # ---------------------------------------------------------------------------
-# 嵌入到 paper2ppt SVG
+# ??? paper2ppt SVG
 # ---------------------------------------------------------------------------
 
 
 def cmd_embed(args: argparse.Namespace) -> int:
-    image_path = Path(args.image)
-    target_svg = Path(args.target)
+    """Inject a generated route image into an existing SVG as embedded PNG bytes.
+
+    This legacy command is kept for compatibility, but it must never write a
+    path-only href for TechnicalRoute AI images. The exported PPTX must contain
+    a real embedded PNG media part.
+    """
+    image_path = Path(args.image).expanduser().resolve()
+    target_svg = Path(args.target).expanduser().resolve()
     if not image_path.is_file():
-        print(f"❌ image 不存在：{image_path}", file=sys.stderr)
+        print(f"Error: image not found: {image_path}", file=sys.stderr)
         return 2
     if not target_svg.is_file():
-        print(f"❌ 目标 SVG 不存在：{target_svg}", file=sys.stderr)
+        print(f"Error: target SVG not found: {target_svg}", file=sys.stderr)
         return 2
 
-    # 把图片复制到 paper2ppt project 的 images/
-    project_root = target_svg.parent
-    while project_root.parent != project_root and not (project_root / "images").is_dir():
-        project_root = project_root.parent
-    images_dir = project_root / "images"
-    images_dir.mkdir(parents=True, exist_ok=True)
-    dst = images_dir / image_path.name
-    if dst.resolve() != image_path.resolve():
-        dst.write_bytes(image_path.read_bytes())
-
-    # 解析 bbox
     try:
         x, y, w, h = (int(v.strip()) for v in args.bbox.split(","))
     except Exception:
-        print(f"❌ bbox 格式应为 'x,y,w,h'：{args.bbox}", file=sys.stderr)
+        print(f"Error: bbox must be 'x,y,w,h': {args.bbox}", file=sys.stderr)
         return 2
 
-    href = f"../images/{dst.name}"
+    try:
+        href = _png_data_uri(image_path)
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    href_escaped = xml_escape(href, quote=True)
+    source_name = xml_escape(image_path.name, quote=True)
+    caption = xml_escape(args.caption or "")
     image_tag = (
-        f'  <g id="injected_route_image">\n'
-        f'    <image href="{href}" x="{x}" y="{y}" width="{w}" height="{h}"'
-        f' preserveAspectRatio="xMidYMid meet"/>\n'
+        f'  <g id="injected_route_image" data-route-source="embedded-png">\n'
+        f'    <image id="technicalroute-ai-reference-image" href="{href_escaped}" '
+        f'data-ai-image-source="{source_name}" '
+        f'x="{x}" y="{y}" width="{w}" height="{h}" preserveAspectRatio="xMidYMid meet"/>\n'
     )
-    if args.caption:
+    if caption:
         cap_y = y + h + 18
         image_tag += (
-            f'    <text x="{x + w // 2}" y="{cap_y}" font-size="11" fill="#888"'
-            f' text-anchor="middle" font-family="Microsoft YaHei,Source Han Sans SC,sans-serif">'
-            f"{args.caption}</text>\n"
+            f'    <text x="{x + w // 2}" y="{cap_y}" font-size="11" fill="#888" '
+            f'text-anchor="middle" font-family="Microsoft YaHei,Source Han Sans SC,sans-serif">'
+            f"{caption}</text>\n"
         )
     image_tag += "  </g>\n"
 
     svg_text = target_svg.read_text(encoding="utf-8")
     if "</svg>" not in svg_text:
-        print("❌ 目标 SVG 缺少 </svg>", file=sys.stderr)
+        print("Error: target SVG is missing </svg>", file=sys.stderr)
         return 2
     new_svg = svg_text.replace("</svg>", image_tag + "</svg>", 1)
     target_svg.write_text(new_svg, encoding="utf-8")
-    print(f"✅ 已注入 <image> 到 {target_svg}（href={href}, bbox={args.bbox}）")
+    print(f"OK: embedded PNG data URI into {target_svg} (bbox={args.bbox})")
+    return 0
+
+
+def _copy_image_for_svg(image_path: Path, target_svg: Path) -> str:
+    # Copy a route image into project images/ and return an href relative to target SVG.
+    if target_svg.parent.name in {"svg_output", "svg_final"}:
+        project_root = target_svg.parent.parent
+    else:
+        project_root = target_svg.parent
+        while project_root.parent != project_root:
+            if (project_root / "images").is_dir() or (project_root / "spec_lock.md").is_file():
+                break
+            project_root = project_root.parent
+    images_dir = project_root / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    dst = images_dir / image_path.name
+    if dst.resolve() != image_path.resolve():
+        dst.write_bytes(image_path.read_bytes())
+    return os.path.relpath(dst, target_svg.parent).replace(os.sep, "/")
+
+
+def _png_data_uri(image_path: Path) -> str:
+    """Return a data:image/png URI so PPTX export embeds bytes, not an external link."""
+    data = image_path.read_bytes()
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        png_bytes = data
+    else:
+        try:
+            from PIL import Image
+        except ImportError as exc:
+            raise RuntimeError(
+                "Version B AI route images must be embedded as PNG. "
+                f"The source file is not PNG ({image_path.name}); install Pillow or make image_gen.py output PNG."
+            ) from exc
+        with Image.open(image_path) as img:
+            converted = img.convert("RGBA")
+            buffer = io.BytesIO()
+            converted.save(buffer, format="PNG")
+            png_bytes = buffer.getvalue()
+    return "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii")
+
+
+def _parse_bbox_arg(raw: str) -> tuple[int, int, int, int]:
+    try:
+        x, y, w, h = (int(float(v.strip())) for v in raw.split(","))
+    except Exception as exc:
+        raise ValueError(f"bbox must be 'x,y,w,h', got: {raw}") from exc
+    if w <= 0 or h <= 0:
+        raise ValueError(f"bbox width and height must be positive, got: {raw}")
+    return x, y, w, h
+
+
+def cmd_create_ai_slide(args: argparse.Namespace) -> int:
+    # Create a standalone SVG slide that embeds the Version B AI route image.
+    image_path = Path(args.image).expanduser().resolve()
+    if not image_path.is_file():
+        print(f"Error: image not found: {image_path}", file=sys.stderr)
+        return 2
+
+    out_svg = Path(args.out_svg).expanduser().resolve()
+    out_svg.parent.mkdir(parents=True, exist_ok=True)
+
+    if args.format == "ppt43":
+        width, height = 1024, 768
+        default_bbox = "64,126,896,520"
+    else:
+        width, height = 1280, 720
+        default_bbox = "70,116,1140,520"
+
+    try:
+        x, y, w, h = _parse_bbox_arg(args.bbox or default_bbox)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        href = _png_data_uri(image_path)
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    title = xml_escape(args.title or "Research Route: AI Reference Version")
+    subtitle = xml_escape(args.subtitle or "")
+    caption = xml_escape(args.caption or "AI-generated reference route diagram; semantic content is source-grounded.")
+    footer = xml_escape(args.footer or "")
+    page_number = xml_escape(args.page_number or "")
+    href_escaped = xml_escape(href, quote=True)
+    source_name = xml_escape(image_path.name, quote=True)
+
+    subtitle_svg = ""
+    if subtitle:
+        subtitle_svg = (
+            f'  <text id="slide-subtitle" x="64" y="86" font-size="15" fill="#595959" '
+            f'font-family="Microsoft YaHei, Arial, sans-serif">{subtitle}</text>\n'
+        )
+    caption_y = min(height - 58, y + h + 22)
+    footer_svg = ""
+    if footer:
+        footer_svg = (
+            f'  <text id="citation-footer" x="64" y="{height - 28}" font-size="10" fill="#777777" '
+            f'font-family="Microsoft YaHei, Arial, sans-serif">{footer}</text>\n'
+        )
+    page_svg = ""
+    if page_number:
+        page_svg = (
+            f'  <text id="page-number" x="{width - 42}" y="{height - 26}" font-size="12" fill="#777777" '
+            f'text-anchor="end" font-family="Arial, sans-serif">{page_number}</text>\n'
+        )
+
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">
+  <rect id="slide-bg" x="0" y="0" width="{width}" height="{height}" fill="#FFFFFF"/>
+  <text id="slide-title" x="64" y="58" font-size="30" font-weight="700" fill="#1F1F1F" font-family="Microsoft YaHei, Arial, sans-serif">{title}</text>
+{subtitle_svg}  <g id="technicalroute-ai-reference" data-route-version="B" data-route-source="ai-reference">
+    <image id="technicalroute-ai-reference-image" data-ai-image-source="{source_name}" href="{href_escaped}" x="{x}" y="{y}" width="{w}" height="{h}" preserveAspectRatio="xMidYMid meet"/>
+    <text id="technicalroute-ai-reference-caption" x="{x + w // 2}" y="{caption_y}" font-size="11" fill="#777777" text-anchor="middle" font-family="Microsoft YaHei, Arial, sans-serif">{caption}</text>
+  </g>
+{footer_svg}{page_svg}</svg>
+'''
+    out_svg.write_text(svg, encoding="utf-8")
+    print(f"OK: created AI reference slide SVG: {out_svg}")
+    print("    image embedded: data:image/png;base64,<...>")
     return 0
 
 
@@ -640,7 +1233,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
-# assemble · 装配可编辑 SVG（Gallery-first → Template assembly 链路的 Tier 2）
+# assemble · 装配 A 版可编辑 SVG（Template SVG variant）
 # ---------------------------------------------------------------------------
 
 TEMPLATES_DIR = PAPER2PPT_ROOT / "templates" / "technicalroute" / "templates"
@@ -750,15 +1343,16 @@ def cmd_assemble(args) -> int:
     sections = _parse_spec_lock(spec_lock)
 
     source = _section_as_dict(sections.get("source_choice", []))
-    template_key = source.get("template_key") or args.template_key
+    legacy_template = _section_as_dict(sections.get("template_version", []))
+    template_key = (
+        args.template_key
+        or source.get("template_key")
+        or legacy_template.get("template_key")
+        or "pipeline_with_stages"
+    )
     if not template_key or template_key.lower() == "none":
-        print(
-            "❌ spec_lock.md §source_choice.template_key is empty or `none`.\n"
-            "   `assemble` requires a concrete template_key. If none matches, "
-            "fall through to `run` (which calls image_gen.py for PNG output).",
-            file=sys.stderr,
-        )
-        return 2
+        template_key = "pipeline_with_stages"
+
 
     template_path = TEMPLATES_DIR / f"{template_key}.svg"
     if not template_path.is_file():
@@ -777,6 +1371,15 @@ def cmd_assemble(args) -> int:
     content_data = _load_content_yaml(content_path)
 
     slot_map = _section_as_dict(sections.get("slot_map", []))
+    preset_slot_map_path = TEMPLATES_DIR / f"{template_key}.slot_map.json"
+    if preset_slot_map_path.is_file():
+        try:
+            preset_data = json.loads(preset_slot_map_path.read_text(encoding="utf-8"))
+            for key, value in (preset_data.get("slot_map") or {}).items():
+                slot_map.setdefault(key, value)
+        except json.JSONDecodeError as exc:
+            print(f"鉂?Invalid slot-map preset JSON: {preset_slot_map_path}: {exc}", file=sys.stderr)
+            return 2
     color_var_map = _section_as_dict(sections.get("color_var_map", []))
     colors = _section_as_dict(sections.get("colors", []))
     glossary = [k for k, _ in sections.get("glossary_preserve", [])]
@@ -839,6 +1442,8 @@ def cmd_assemble(args) -> int:
         quoted_key = f'"var({var_name})"'
         target_section_key = color_var_map.get(quoted_key) or color_var_map.get(
             f"var({var_name})"
+        ) or color_var_map.get(
+            var_name
         )
         if not target_section_key:
             print(
@@ -880,18 +1485,19 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="paper2ppt built-in TechnicalRoute · image prompt + gen + embed")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_prompt = sub.add_parser("prompt", help="拼装 prompt → prompt.md")
+    p_prompt = sub.add_parser("prompt", help="拼装 prompt → prompt_ai.md")
     p_prompt.add_argument("--archetype", choices=["thinking", "method", "workflow"])
     p_prompt.add_argument("--content", required=True, help="content.yaml")
     p_prompt.add_argument("--style", help="style_profile.md (optional)")
-    p_prompt.add_argument("--out", required=True, help="prompt.md")
+    p_prompt.add_argument("--reference-mode", choices=["literature", "atlas_only"], default="literature", help="参考模式；atlas_only 时在 prompt 中写入无参考图引导")
+    p_prompt.add_argument("--out", required=True, help="prompt_ai.md")
     p_prompt.set_defaults(func=cmd_prompt)
 
     p_asm = sub.add_parser(
         "assemble",
         help=(
-            "装配可编辑 SVG（Tier 2 路径）：读 spec_lock.md 中选好的 template_key，"
-            "用 content.yaml 替换占位符 + 用 §colors 替换 var(--*) → 输出可编辑 .svg"
+            "装配 A 版可编辑 SVG：读 spec_lock.md 中选好的 template_key，"
+            "用 content.yaml 替换占位符 + 用 §colors 替换 var(--*) → 输出 route_template_*.svg"
         ),
     )
     p_asm.add_argument("--spec-lock", required=True, help="项目的 spec_lock.md 路径")
@@ -904,27 +1510,97 @@ def main(argv: Iterable[str] | None = None) -> int:
     p_asm.add_argument("--out", required=True, help="输出 .svg 路径")
     p_asm.set_defaults(func=cmd_assemble)
 
+    def add_run_args(p):
+        p.add_argument("--prompt", required=True)
+        p.add_argument("--aspect_ratio", default="16:9")
+        p.add_argument("--image_size", default="2K")
+        p.add_argument(
+            "--backend",
+            default="",
+            help="Image backend passed to image_gen.py. Defaults to IMAGE_BACKEND, or openai when unset.",
+        )
+        p.add_argument(
+            "--model",
+            default="",
+            help="Image model passed to image_gen.py. For default openai backend this resolves to OPENAI_MODEL or gpt-image-2.",
+        )
+        p.add_argument("--refs", nargs="*", default=[])
+        p.add_argument(
+            "--refs-manifest",
+            default="",
+            help="style_refs/manifest.json from the seed_sites.json-driven literature_search.py workflow; only refs listed here may be used as academic-search references.",
+        )
+        p.add_argument(
+            "--refs-plan",
+            default="",
+            help="route_ai_refs.json from literature_search.py prepare-ai-refs; expands refs and refs-manifest.",
+        )
+        p.add_argument(
+            "--gallery-only",
+            action="store_true",
+            help="Require all --refs to be raster images under templates/technicalroute/Custom_gallery.",
+        )
+        p.add_argument("--filename", default="", help="输出文件名（不含扩展名），用于稳定命名 route_ai_<id>")
+        p.add_argument("--out", required=True)
+        p.add_argument("--out-svg", default="", help="Optional svg_output/<NN>_route_ai.svg path; when set, run-ai-variant also creates the embedded Version B slide.")
+        p.add_argument("--title", default="Research Route: AI Reference Version")
+        p.add_argument("--subtitle", default="")
+        p.add_argument("--caption", default="")
+        p.add_argument("--footer", default="")
+        p.add_argument("--page-number", default="")
+        p.add_argument("--format", choices=["ppt169", "ppt43"], default="ppt169")
+        p.add_argument("--bbox", default="", help="Optional x,y,w,h image box for --out-svg.")
+        p.add_argument(
+            "--allow-no-ref-fallback",
+            action="store_true",
+            help="Explicitly allow a retry without reference images when ref-based generation fails.",
+        )
+        p.add_argument(
+            "--no-local-fallback",
+            action="store_true",
+            help="Fail instead of creating a deterministic local PNG when image generation cannot complete.",
+        )
+        p.set_defaults(func=cmd_run)
+
     p_run = sub.add_parser(
         "run",
         help=(
-            "Tier 3 兜底：模板装不出可编辑 SVG 时调 image_gen.py 出 PNG。"
+            "兼容别名：生成 B 版 AI参考 PNG。建议新流程使用 run-ai-variant。"
             "默认 backend = gemini（nano banana pro），可切 qwen（image2）等。"
-            "把 Custom_gallery / style_refs 图当 --refs 喂进去作风格 anchor。"
         ),
     )
-    p_run.add_argument("--prompt", required=True)
-    p_run.add_argument("--aspect_ratio", default="16:9")
-    p_run.add_argument("--image_size", default="2K")
-    p_run.add_argument("--refs", nargs="*", default=[])
-    p_run.add_argument("--out", required=True)
-    p_run.set_defaults(func=cmd_run)
+    add_run_args(p_run)
 
-    p_emb = sub.add_parser("embed", help="把生成的 PNG 嵌入 paper2ppt 的一张 SVG")
+    p_run_ai = sub.add_parser(
+        "run-ai-variant",
+        help=(
+            "生成 B 版 AI参考 PNG：把 Custom_gallery / style_refs 图当 --refs 喂进去作风格 anchor。"
+            "这是与 assemble 并列的必跑产物，不是模板失败后的补救路径。"
+        ),
+    )
+    add_run_args(p_run_ai)
+
+    p_emb = sub.add_parser("embed", help="Compatibility: inject a generated route PNG into an existing SVG as embedded PNG bytes")
     p_emb.add_argument("--image", required=True)
-    p_emb.add_argument("--target", required=True, help="目标 SVG 路径（svg_output/<NN>_<page>.svg）")
-    p_emb.add_argument("--bbox", required=True, help="x,y,w,h（如 '60,120,1160,500'）")
+    p_emb.add_argument("--target", required=True, help="Target SVG path (svg_output/<NN>_<page>.svg)")
+    p_emb.add_argument("--bbox", required=True, help="x,y,w,h, for example 60,120,1160,500")
     p_emb.add_argument("--caption", default="")
     p_emb.set_defaults(func=cmd_embed)
+
+    p_ai_slide = sub.add_parser(
+        "create-ai-slide",
+        help="Create a standalone SVG page for the Version B AI reference image.",
+    )
+    p_ai_slide.add_argument("--image", required=True, help="Generated route_ai image path")
+    p_ai_slide.add_argument("--out-svg", required=True, help="Target svg_output/<NN>_route_ai.svg path")
+    p_ai_slide.add_argument("--title", required=True)
+    p_ai_slide.add_argument("--subtitle", default="")
+    p_ai_slide.add_argument("--caption", default="")
+    p_ai_slide.add_argument("--footer", default="")
+    p_ai_slide.add_argument("--page-number", default="")
+    p_ai_slide.add_argument("--format", choices=["ppt169", "ppt43"], default="ppt169")
+    p_ai_slide.add_argument("--bbox", default="", help="Optional x,y,w,h image box; defaults by format")
+    p_ai_slide.set_defaults(func=cmd_create_ai_slide)
 
     p_con = sub.add_parser("contract", help="scaffold contract.md（SKILL.md Step 1 用）")
     p_con.add_argument("--out", required=True, help="contract.md 输出路径")
@@ -946,6 +1622,3 @@ def main(argv: Iterable[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-

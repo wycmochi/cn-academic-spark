@@ -1,4 +1,5 @@
 # Troubleshooting
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在排查失败时读取；它说明常见错误、定位方法和修复路径。
 
 ## Validation Failed
 
@@ -42,9 +43,10 @@ Preferred sequence:
 python3 scripts/total_md_split.py <project_path>
 python3 scripts/finalize_svg.py <project_path>
 python3 scripts/svg_to_pptx.py <project_path>
+python3 scripts/pptx_openability_check.py <project_path>/exports/<exported>.pptx --fix-permissions
 ```
 
-Do not export directly from `svg_output/` when `svg_final/` exists.
+Do not force native export from `svg_final/`. Native DrawingML export must read `svg_output/` so rounded rectangles and lines remain preset shapes instead of large custom geometry. Leave `-s` unset for normal export; the exporter uses `svg_final/` only for the legacy/preview SVG-reference deck.
 
 ## Recorded Narration Missing
 

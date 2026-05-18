@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 import shutil
 import argparse
+import contextlib
+import io
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +16,8 @@ from .pptx_builder import create_pptx_with_native_svg
 from .pptx_narration import NARRATION_EXTENSIONS, find_narration_files, probe_audio_duration
 from .pptx_slide_xml import TRANSITIONS
 from .animation_config import load_animation_config, validate_animation_config
+from notes_to_docx import write_notes_docx
+from svg_quality_checker import SVGQualityChecker
 
 try:
     from pptx_animations import ANIMATIONS as _ANIMATIONS
@@ -23,6 +27,13 @@ except ImportError:
 
 def _as_dict(value: object) -> dict:
     return value if isinstance(value, dict) else {}
+
+
+def _is_final_svg_source(source: str | None) -> bool:
+    if not source:
+        return False
+    normalized = source.replace("\\", "/").rstrip("/").lower()
+    return normalized in {"final", "svg_final"} or normalized.endswith("/svg_final")
 
 
 def _recorded_narration_on_click_slides(
@@ -54,6 +65,27 @@ def _recorded_narration_on_click_slides(
     return blocked
 
 
+def _run_svg_quality_gate(
+    project_path: Path,
+    *,
+    expected_format: str | None,
+    verbose: bool,
+) -> None:
+    checker = SVGQualityChecker()
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        checker.check_directory(str(project_path), expected_format=expected_format)
+        checker.print_summary()
+    report = buffer.getvalue()
+    if checker.summary.get('errors', 0) > 0:
+        print("Error: SVG quality gate failed before PPTX export.", file=sys.stderr)
+        if report:
+            print(report, file=sys.stderr)
+        sys.exit(1)
+    if verbose and checker.summary.get('warnings', 0) > 0:
+        print(f"  [warn] SVG quality gate: {checker.summary['warnings']} warning(s)")
+
+
 def main() -> None:
     """CLI entry point for the SVG to PPTX conversion tool."""
     transition_choices = (
@@ -72,19 +104,23 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f'''
 Examples:
-    %(prog)s examples/ppt169_demo -s final    # Default: main pptx -> exports/, SVG snapshot + svg_output -> backup/<ts>/
+    %(prog)s examples/ppt169_demo             # Default: native reads svg_output/; SVG snapshot reads svg_final/
     %(prog)s examples/ppt169_demo --only native   # Only native shapes version
     %(prog)s examples/ppt169_demo --only legacy   # Only SVG image version
     %(prog)s examples/ppt169_demo -o out.pptx     # Explicit path (SVG ref -> out_svg.pptx)
 
-    # Disable transition / change transition effect
-    %(prog)s examples/ppt169_demo -t none
+    # Enable transition / change transition effect (default: no transition)
     %(prog)s examples/ppt169_demo -t push --transition-duration 1.0
 
 SVG source directory (-s):
     output   - svg_output (original version)
-    final    - svg_final (post-processed, recommended)
+    final    - svg_final (post-processed; legacy SVG-reference output only)
     <any>    - Specify a subdirectory name directly
+
+    Native DrawingML export always protects itself from svg_final because
+    svg_final may contain pathified rounded rectangles / lines that become
+    large <a:custGeom> blocks in PPTX. If -s final is passed with --only native,
+    native export automatically falls back to svg_output/.
 
 Transition effects (-t/--transition):
     {', '.join(transition_choices)}
@@ -108,16 +144,18 @@ Compatibility mode (enabled by default):
     - Requires svglib: pip install svglib reportlab
     - Use --no-compat to disable (only Office 2019+ supported)
 
-Speaker notes (enabled by default):
+Speaker notes:
     - Automatically reads Markdown notes files from the notes/ directory
     - Supports two naming conventions:
       1. Match by filename (recommended): 01_cover.md corresponds to 01_cover.svg
       2. Match by index: slide01.md corresponds to the 1st SVG (backward compatible)
-    - Use --no-notes to disable
+    - Default: write a separate speaker-notes DOCX under exports/
+    - PPTX notes are always stripped for openability; use the DOCX for speaker notes
+    - Use --no-notes to disable DOCX notes export
 
 Recorded narration:
     %(prog)s examples/ppt169_demo -s final --recorded-narration audio
-    - Keeps speaker notes when enabled
+    - Keeps notes as a separate DOCX; PPTX notes are not embedded
     - Prepares PowerPoint recorded timings and narrations
     - Requires one m4a/mp3/wav file per slide
     - Embeds per-slide audio matched by SVG filename / slide number
@@ -137,7 +175,8 @@ Recorded narration:
                              'svg_output/ (high-fidelity, preserves icons / '
                              'preserveAspectRatio / rx-ry); legacy reads '
                              'svg_final/ (PPT-internal SVG parser fallback). '
-                             'Pass output/final/<name> to force one source.')
+                             'For native DrawingML, final/svg_final is refused '
+                             'and svg_output is used instead.')
     parser.add_argument('-f', '--format', type=str,
                         choices=list(CANVAS_FORMATS.keys()), default=None,
                         help='Specify canvas format')
@@ -162,7 +201,7 @@ Recorded narration:
         return number
 
     parser.add_argument('-t', '--transition', type=str, choices=transition_choices, default=None,
-                        help='Page transition effect (default: fade, use "none" to disable)')
+                        help='Page transition effect (default: none; enable only when explicitly requested)')
     parser.add_argument('--transition-duration', type=non_negative_float, default=None,
                         help='Transition duration in seconds (default: 0.4)')
     parser.add_argument('--auto-advance', type=non_negative_float, default=None,
@@ -190,7 +229,9 @@ Recorded narration:
                              'Default: <project>/animations.json when present.')
 
     parser.add_argument('--no-notes', action='store_true',
-                        help='Disable speaker notes embedding (enabled by default)')
+                        help='Disable speaker notes DOCX export')
+    parser.add_argument('--embed-notes', action='store_true',
+                        help='Deprecated/no-op: PPTX notes are stripped for openability; speaker notes stay in DOCX.')
     parser.add_argument('--narration-audio-dir', type=str, default=None,
                         help='Low-level audio embedding from this directory; allows partial matches')
     parser.add_argument('--use-narration-timings', action='store_true',
@@ -235,7 +276,14 @@ Recorded narration:
     # preserveAspectRatio. An explicit -s overrides both branches so callers
     # can keep the previous single-source behaviour for unusual workflows.
     explicit_source = args.source is not None
-    native_source = args.source if explicit_source else 'output'
+    if explicit_source and _is_final_svg_source(args.source) and gen_native:
+        print(
+            "  Warning: native DrawingML export cannot use svg_final/-s final; "
+            "using svg_output to avoid pathified shapes and excessive custom geometry."
+        )
+        native_source = 'output'
+    else:
+        native_source = args.source if explicit_source else 'output'
     legacy_source = args.source if explicit_source else 'final'
 
     native_files: list[Path] = []
@@ -278,10 +326,20 @@ Recorded narration:
 
     verbose = not args.quiet
 
-    enable_notes = not args.no_notes
+    enable_notes = bool(args.embed_notes and not args.no_notes)
+    export_notes_docx = not args.no_notes
     notes: dict[str, str] = {}
-    if enable_notes:
+    if enable_notes or export_notes_docx:
         notes = find_notes_files(project_path, ref_files)
+    if export_notes_docx and notes:
+        try:
+            docx_path = write_notes_docx(project_path)
+            if verbose:
+                print(f"  Speaker notes DOCX: {docx_path}")
+        except Exception as exc:
+            print(f"  [warn] Speaker notes DOCX export failed: {exc}")
+    elif export_notes_docx and verbose:
+        print("  Speaker notes DOCX: no matching notes found")
 
     narration_audio: dict[str, Path] = {}
     narration_audio_dir_arg = args.recorded_narration or args.narration_audio_dir
@@ -362,11 +420,7 @@ Recorded narration:
     animation_defaults = defaults.get('animation', {}) if isinstance(defaults, dict) else {}
 
     transition_arg = args.transition
-    transition_effect = (
-        transition_arg
-        if transition_arg is not None
-        else transition_defaults.get('effect', 'fade')
-    )
+    transition_effect = transition_arg if transition_arg is not None else transition_defaults.get('effect', 'none')
     transition = None if transition_effect == 'none' else transition_effect
     transition_duration = (
         args.transition_duration
@@ -426,6 +480,12 @@ Recorded narration:
             if len(on_click_slides) > 20:
                 print(f"  ... and {len(on_click_slides) - 20} more", file=sys.stderr)
             sys.exit(1)
+
+    _run_svg_quality_gate(
+        project_path,
+        expected_format=canvas_format,
+        verbose=verbose,
+    )
 
     # svg_files is per-product (native vs legacy may now read different
     # directories); everything else is shared.

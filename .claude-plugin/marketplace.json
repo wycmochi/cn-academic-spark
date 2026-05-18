@@ -1,7 +1,7 @@
 {
   "name": "cn-academic-spark",
-  "version": "1.1.0",
-  "description": "CN-Academic-Spark: a Claude skill bundle for Chinese academic reporting. Includes a PPT engine (Generate editable and reusable .pptx files with presentation slides) and a TechnicalRoute engine (Academic Technology Roadmap Generator). ",
+  "version": "1.0.0",
+  "description": "CN-Academic-Spark is a skill package for Chinese academic paper-to-PPT workflows. It contains one skill: CN_Spark_paper2ppt, an editable Chinese academic PPT generator with an internal TechnicalRoute module for research-route and framework diagrams.",
   "owner": {
     "name": "Yuecheng Wang",
     "email": "wyc_mochi@tongji.edu.cn"
@@ -9,9 +9,9 @@
   "plugins": [
     {
       "name": "cn-academic-spark",
-      "version": "1.1.0",
+      "version": "1.0.0",
       "source": "./",
-      "description": "A reusable Claude-oriented academic skill collection for Chinese academic reporting. Ships two cooperating skills: a PPT engine for full editable Chinese-academic .pptx generation and a TechnicalRoute engine for single contract-first academic infographics (thinking / method / workflow archetypes, literature style retrieval).",
+      "description": "Claude/Codex skill package for generating editable Chinese academic PPTX decks from papers, reports, proposals, and literature reviews. The repository currently ships one skill, CN_Spark_paper2ppt, with an internal TechnicalRoute workflow for research-route / framework diagrams.",
       "author": {
         "name": "Yuecheng Wang",
         "email": "wyc_mochi@tongji.edu.cn"
@@ -20,20 +20,19 @@
         "academic",
         "pptx",
         "paper2ppt",
-        "technical-route",
-        "research-framework",
-        "thinking-map",
-        "diagram",
         "chinese",
         "svg",
         "drawingml",
         "thesis-defense",
+        "journal-club",
         "literature-review",
-        "proposal"
+        "proposal",
+        "research-framework",
+        "technical-route"
       ],
       "category": "academic",
-      "homepage": "https://github.com/wycmochi/cn-academic-spark",
-      "repository": "https://github.com/wycmochi/cn-academic-spark",
+      "homepage": "https://github.com/wycmochi/CN-Academic-PPT-Skills",
+      "repository": "https://github.com/wycmochi/CN-Academic-PPT-Skills",
       "license": "MIT"
     }
   ]

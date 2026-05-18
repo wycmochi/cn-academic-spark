@@ -1,4 +1,5 @@
 # Image Tools
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在需要了解图片相关脚本时读取；它说明 AI 生图、搜索、分析和水印处理命令。
 
 > Architecture rationale (why provider-specific config keys instead of a generic `IMAGE_API_KEY`, why permissive license filter with strict-mode escape hatch, why external refs in dev but two divergent embedding strategies for delivery): see [docs/technical-design.md "Image Acquisition & Embedding"](../../../../docs/technical-design.md#image-acquisition--embedding).
 
@@ -24,9 +25,21 @@ Backend selection:
 python3 scripts/image_gen.py "A cat" --backend openai
 python3 scripts/image_gen.py "A cinematic portrait" --backend minimax
 python3 scripts/image_gen.py "A product launch hero image" --backend qwen
-python3 scripts/image_gen.py "科技感背景图" --backend zhipu
+python3 scripts/image_gen.py "Futuristic tech background" --backend zhipu
 python3 scripts/image_gen.py "A product KV in cinematic style" --backend volcengine
 ```
+
+## `latex_formula_to_png.py`
+
+Render LaTeX-style formulas to transparent PNG files for academic PPT pages.
+
+```bash
+python3 scripts/latex_formula_to_png.py --formula "E=mc^2" --out-dir projects/demo/images/formulas
+python3 scripts/latex_formula_to_png.py --input projects/demo/formulas.txt --out-dir projects/demo/images/formulas --manifest projects/demo/images/formulas/manifest.json
+```
+
+Use this after formula OCR / transcription and before SVG page generation.
+Embed the resulting PNG with a normal `<image>` element.
 
 Configuration sources:
 

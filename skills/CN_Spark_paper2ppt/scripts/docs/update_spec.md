@@ -1,4 +1,5 @@
 # update_spec.py
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在批量更新设计规格时读取；它说明 update_spec.py 的参数和传播规则。
 
 > Architecture rationale (why narrow scope, why no backups, the spec_lock as execution contract): see [docs/technical-design.md "Spec Propagation"](../../../../docs/technical-design.md#spec-propagation-spec_lockmd-as-execution-contract).
 
@@ -7,7 +8,7 @@ Propagate a `spec_lock.md` value change to both the lock file and every `svg_out
 ## Usage
 
 ```bash
-python3 skills/ppt-master/scripts/update_spec.py <project_path> <section>.<key>=<value>
+python3 scripts/update_spec.py <project_path> <section>.<key>=<value>
 ```
 
 Bare `<key>=<value>` (no dot) is treated as `colors.<key>=<value>` for backward compat.
@@ -23,13 +24,13 @@ One invocation = one change. The tool:
 
 ```bash
 # swap the primary color deck-wide (bare key → colors.primary)
-python3 skills/ppt-master/scripts/update_spec.py projects/acme_ppt169_20260301 primary=#0066AA
+python3 scripts/update_spec.py projects/acme_ppt169_20260301 primary=#0066AA
 
 # explicit section.key form
-python3 skills/ppt-master/scripts/update_spec.py projects/acme_ppt169_20260301 colors.accent=#FF6B35
+python3 scripts/update_spec.py projects/acme_ppt169_20260301 colors.accent=#FF6B35
 
 # change the deck-wide font family
-python3 skills/ppt-master/scripts/update_spec.py projects/acme_ppt169_20260301 \
+python3 scripts/update_spec.py projects/acme_ppt169_20260301 \
   'typography.font_family="Inter", Arial, sans-serif'
 ```
 

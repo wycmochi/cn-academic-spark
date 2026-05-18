@@ -80,6 +80,7 @@ openpyxl>=3.1.0
 # gemini_watermark_remover.py - Remove watermarks from Gemini-generated images
 # gemini_watermark_remover.py - 去除 Gemini 生成图片的水印
 Pillow>=9.0.0
+matplotlib>=3.7.0
 numpy>=1.20.0
 
 # ─────────────────────────────────────────────────────────────

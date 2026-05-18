@@ -1,0 +1,256 @@
+# Image AI Generate Prompt
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5.5 生成 B AI 参考生成版时读取；它把文章内容、Custom_gallery 和文献 style_refs 合成为 AI 生图提示词并输出 PNG。
+
+This file defines Version B: the AI-generated PNG reference route diagram. Version B is generated alongside Version A, not only when template assembly fails. It gives the user a second visual interpretation for later manual choice.
+
+## Required Inputs
+
+- `<route_workdir>/contract.md`
+- `<route_workdir>/content.yaml`
+- `<route_workdir>/spec_lock.md`
+- `<route_workdir>/style_refs/manifest.json` or assessed style summary when available
+- `<route_workdir>/style_refs/style_profile.md` when available
+- selected `templates/technicalroute/Custom_gallery/` anchors
+- `references/technicalroute/seed_sites.json` as the only academic-search site configuration
+- parent project `spec_lock.md` and `design_spec.md`
+- matching archetype reference and `shape-recipes.md`
+
+## Prompt Build Order
+
+Write `<route_workdir>/prompt_ai.md` with these sections:
+
+```text
+[COMMON PREAMBLE]
+[ARCHETYPE]
+[STRUCTURE]
+[SHAPE RECIPES]
+[COLOR DISCIPLINE]
+[TYPOGRAPHY]
+[CHINESE CONTENT - render exactly as written, no translation]
+[GLOSSARY - preserve verbatim]
+[REFERENCE IMAGE USAGE]          # only when refs are provided
+[ATLAS-ONLY MODE]                # only when reference-mode is atlas_only
+[NEGATIVE]
+```
+
+The prompt must never use Custom_gallery or literature references as content sources. It must use `content.yaml` as the content truth.
+
+Version B AI images must not use Version A SVGs, assembled route SVGs, chart SVGs, or any other SVG file as image references. The AI generator's semantic source is only `content.yaml` / article outline. Visual reference inputs have exactly two allowed source classes:
+- discipline-matched raster anchors from `templates/technicalroute/Custom_gallery/`;
+- raster technical-route / framework / workflow figures recorded in `style_refs/manifest.json` by the `seed_sites.json`-driven research-search workflow.
+
+## Common Preamble
+
+Use this meaning in every AI prompt:
+
+```text
+Create a high-resolution academic infographic in the visual language of contemporary scholarly research-framework and technical-route figures. Use flat 2D vector-like style on a pure white background.
+
+The figure must read as an academic PPT route diagram, not a poster, marketing graphic, stock illustration, or decorative hero image.
+
+Complexity discipline: do not generate a simplistic 3-box flow. Use a compact but legible research-route composition with grouped panels, 4-7 meaningful nodes when the source supports them, clear phase boundaries, and enough internal structure to show data / method / mechanism / validation / output relationships.
+
+Line discipline: arrows are straight or right-angled unless the selected workflow sub_variant is circular. Borders are thin. Panel corners are modest, normally 3-8 px depending on density.
+
+Composition discipline: there must be a clear reading order. Every visible text element must correspond to content listed in the content block. Do not invent nodes, captions, authors, citations, or numbers.
+```
+
+## Archetype Structure Skeletons
+
+### Thinking `quad`
+
+Describe a 2 by 2 panel grid with optional bottom anchor. Each panel has one label and short points. Do not draw arrows between panels unless the contract says the sections are sequential.
+
+Recipes: R1 panel, R2 number badge, optional R4 bottom banner.
+
+### Thinking `cascade`
+
+Describe 3-5 ordered reasoning panels with light arrows. The reading order is sequential. Use a bottom anchor only if provided by `content.yaml`.
+
+Recipes: R1 panel, R3 thin arrow, optional R4 banner.
+
+### Thinking `twin`
+
+Describe two balanced comparison columns with a top or bottom bridge if provided. Both sides must be comparable and visually symmetric enough for fast reading.
+
+Recipes: R1 panel, R4 bridge banner, optional R3 comparison arrow.
+
+### Method `core-steps`
+
+Describe one core idea card and 2-4 step cards. Step cards may contain formula-style text and one-line interpretations.
+
+Recipes: R1 panel, R2 step pill, R5 formula box, optional R9 symbol strip, optional R10 assumption cards.
+
+### Method `vertical-stack`
+
+Describe 4-8 stacked method layers or steps. Use top-down reading order and compact annotations.
+
+Recipes: R1 panel, R2 step pill, R3 thin connector.
+
+### Method `formula-grid`
+
+Describe a formula panel grid with labels and short notes. Keep formulas visually clean and avoid saturated formula backgrounds.
+
+Recipes: R5 formula box, optional R9 symbol legend strip.
+
+### Method `mechanism-block`
+
+Describe input cards, one central mechanism block, and output cards. Use simple internal model hints only if they are grounded in the source.
+
+Recipes: R1 panel, R3 arrow, optional R7 tree or network.
+
+### Workflow `horizontal-pipeline`
+
+Describe 3-5 columns across the canvas from left to right. Column headers are short. Transitions have visible arrows and optional italic muted labels.
+
+Recipes: R1 stage panel, R3 heavy labeled arrow, optional R6 data stack, optional R8 mini chart.
+
+### Workflow `twin-track`
+
+Describe two parallel tracks that converge into one confluence node and output. Use the same content hierarchy as `content.yaml`.
+
+Recipes: R1 lane panels, R3 convergence arrows, R4 confluence label.
+
+### Workflow `funnel`
+
+Describe multiple input cards narrowing into a core mechanism and then an output. The visual emphasis is integration.
+
+Recipes: R1 input panels, R3 convergence arrows, optional R7 network.
+
+### Workflow `circular`
+
+Describe 4-6 stages in a loop only when iteration is in the source. Use mild curved arrows and keep labels short.
+
+Recipes: R1 stage panels, R3 curved-mild arrows.
+
+## Content Block
+
+Render a literal content block from `content.yaml`. It should list every text string that may appear in the image:
+
+```text
+[CHINESE CONTENT - render exactly as written, no translation]
+Title: <title>
+Subtitle: <subtitle>
+Main question: <main_question>
+Main claim: <main_claim>
+Sections / nodes / steps / formulas / stages:
+- <id>: <label> | <detail or interpretation>
+Edges:
+- <from> -> <to>: <label or relation>
+Bottom anchor:
+- <kind>: <text>
+```
+
+This block is the figure's content ground truth. The AI model must not create text outside it.
+
+## Glossary Block
+
+Use this when `glossary_preserve` is non-empty:
+
+```text
+[GLOSSARY - preserve verbatim, do not translate or paraphrase]
+- <term 1>
+- <term 2>
+```
+
+Each listed term must remain byte-identical where it appears. No spacing changes, abbreviation, transliteration, or paraphrase.
+
+## Reference Image Usage
+
+When `--refs` is non-empty, include:
+
+```text
+[REFERENCE IMAGE USAGE]
+The provided reference images are style and structure anchors only. Use them to guide panel count, grid rhythm, flow direction, color saturation, accent placement, icon density, connector weight, and whitespace.
+
+Do not copy any text, node label, formula, dataset name, place name, model name, author name, citation, caption, or specific numeric value from the references. Replace all semantic content with the content block and glossary. Any verbatim copy of reference text is forbidden.
+```
+
+Use this clause for both Custom_gallery and literature / offline style references.
+
+## Atlas-Only Clause
+
+When `--reference-mode atlas_only`, include:
+
+```text
+[ATLAS-ONLY MODE]
+No usable literature or user reference images are available. Render using only the declared structure, shape recipes, color discipline, typography rules, and article-derived content. Default to a clean restrained academic route diagram with generous whitespace, thin strokes, flat fills, and no decorative flourishes.
+```
+
+## Negative Constraints
+
+Always include:
+
+```text
+No 3D, no isometric view, no large shadows, no glow effects, no gradients, no emoji, no stock photos of people, no watermarks, no URLs, no social media logos, no rainbow palette, no decorative blobs, no freestyle curved arrows except circular workflow, no extra panels, no extra columns, no extra steps, no invented nodes, no fake citations, no fake numbers, no copied reference text, no garbled CJK, no character cutoffs, no English-only output when Chinese content is provided, no translation or abbreviation of glossary terms.
+```
+
+## Commands
+
+Prompt generation:
+
+```bash
+python3 scripts/technicalroute/generate_route_image.py prompt --archetype <thinking|method|workflow> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode <literature|atlas_only> --out <route_workdir>/prompt_ai.md
+```
+
+Reference bridge:
+
+```bash
+python3 scripts/technicalroute/literature_search.py prepare-ai-refs --topic "<paper title / keywords>" --keywords "<paper keywords>" --discipline <discipline> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs
+```
+
+`prepare-ai-refs` is the only allowed bridge into AI route generation. It reads `references/technicalroute/seed_sites.json` to build `search_plan.json`, admits only raster mechanism/model-principle/technical-route/workflow figures recorded in `style_refs/manifest.json`, selects discipline fallback anchors from `templates/technicalroute/Custom_gallery/gallery_index.json`, and writes `style_refs/route_ai_refs.json`.
+
+Image generation and immediate PPT-page embedding:
+
+```bash
+python3 scripts/technicalroute/generate_route_image.py run-ai-variant --prompt <route_workdir>/prompt_ai.md --backend openai --model gpt-image-2 --aspect_ratio 16:9 --image_size 2K --filename route_ai_<id> --out <route_workdir>/output --refs-plan <route_workdir>/style_refs/route_ai_refs.json --out-svg <project_path>/svg_output/<NN>_route_ai.svg --title "<module_number> Research Route: AI Reference Version" --caption "AI reference route diagram; semantic content follows the source material" --page-number <page_number>
+```
+
+The generated SVG must contain `<image id="technicalroute-ai-reference-image" href="data:image/png;base64,...">` with the PNG bytes embedded directly. Do not use an external, absolute, or relative href for Version B.
+
+Forbidden AI references: SVG files, PPTX/PPT files, editable Version A route pages, screenshots of editable route pages, chart templates, assembled SVGs, and any reference file not listed in `route_ai_refs.json`.
+
+Backend selection follows `.env.example`: set `IMAGE_BACKEND` plus provider-specific keys in the current environment or `.env`. Reference-image generation requires a backend whose `generate()` accepts `reference_images` (currently OpenAI-compatible and Gemini backends in this skill). If the configured backend cannot use references, the run must fail loudly or fall back to the deterministic local PNG rather than silently dropping references.
+
+## Label Reliability Fallback
+
+If the AI generator cannot render Chinese labels reliably:
+- regenerate with fewer labels and larger text areas;
+- keep only high-level labels in the image;
+- add editable SVG labels, captions, or callouts on top of the PPT page;
+- keep semantic content from `content.yaml`.
+
+Do not accept unreadable or garbled route labels as final output.
+
+## Embedding Is Mandatory
+
+Version B is not complete when only `route_ai_image_path` exists on disk. The generated image must be inserted into the deck as the next slide after Version A.
+
+Required sequence:
+1. Run `prepare-ai-refs` and verify `style_refs/route_ai_refs.json` exists.
+2. Run `run-ai-variant --refs-plan ... --out-svg ...` and verify the command prints both `OK: route_ai_image_path = ...` and `OK: created AI reference slide SVG: ...`.
+3. Confirm the generated image file exists and is not empty.
+4. Run `svg_quality_checker.py` on `svg_output/`; it must see a consecutive Version B slide with a valid PNG data URI.
+5. Run `finalize_svg.py`; it must preserve the embedded PNG data URI in `svg_final/`.
+6. Run `svg_quality_checker.py` again on `svg_final/`; it must still find `<image id="technicalroute-ai-reference-image" href="data:image/png;base64,...">` and decoded PNG bytes.
+
+If the backend is not configured, `run-ai-variant` creates a deterministic local fallback PNG unless `--no-local-fallback` is explicitly set. Do not produce a deck with only Version A.
+
+
+## Stability Note
+
+`run-ai-variant` should be called with `--out-svg` during deck generation. The command prints `OK: route_ai_image_path = ...` and, when `--out-svg` is present, immediately creates an embedded Version B SVG page. If the image backend, credentials, or reference set is unavailable, the command creates a deterministic local fallback PNG from `prompt_ai.md` so the PPT never silently loses the AI-reference route page. Use `--no-local-fallback` only when you prefer a hard failure.
+
+
+## Mandatory Reference Bridge
+
+Before `run-ai-variant`, run `scripts/technicalroute/literature_search.py prepare-ai-refs`. It creates `search_plan.json` from `references/technicalroute/seed_sites.json`, selects literature raster figures recorded in `style_refs/manifest.json`, falls back to discipline anchors in `templates/technicalroute/Custom_gallery/gallery_index.json`, and writes `route_ai_refs.json`.
+
+Then call:
+
+```bash
+python3 scripts/technicalroute/generate_route_image.py run-ai-variant --prompt <route_workdir>/prompt_ai.md --refs-plan <route_workdir>/style_refs/route_ai_refs.json --out <route_workdir>/output --out-svg <project_path>/svg_output/<NN>_route_ai.svg --title "<module_number> Research Route: AI Reference Version"
+```
+
+Forbidden references: SVG, PPTX/PPT, Version A editable route pages, or screenshots of the editable route page. `Custom_gallery` and literature figures are style/structure anchors only; semantic labels come from the paper content.

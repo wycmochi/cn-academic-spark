@@ -374,6 +374,35 @@ def _parse_filter_params(
     color = '000000'
     has_offset = False
 
+    shadow_mode = (filter_elem.get('data-pptx-shadow') or '').strip().lower()
+    if shadow_mode:
+        blur_pt = _f(filter_elem.get('data-pptx-shadow-blur-pt'), 0.0)
+        distance_pt = _f(filter_elem.get('data-pptx-shadow-distance-pt'), 0.0)
+        transparency = _f(filter_elem.get('data-pptx-shadow-transparency'), -1.0)
+        opacity_attr = _f(filter_elem.get('data-pptx-shadow-opacity'), -1.0)
+        angle = _f(filter_elem.get('data-pptx-shadow-angle'), 0.0)
+        size = _f(filter_elem.get('data-pptx-shadow-size'), 100.0)
+        raw_color = (filter_elem.get('data-pptx-shadow-color') or '#000000').strip().lstrip('#')
+        if len(raw_color) == 6 and all(c in '0123456789abcdefABCDEF' for c in raw_color):
+            color = raw_color.upper()
+        if opacity_attr >= 0:
+            opacity = max(0.0, min(1.0, opacity_attr))
+        elif transparency >= 0:
+            opacity = max(0.0, min(1.0, 1.0 - transparency))
+        return {
+            'std_dev': 0.0,
+            'dx': 0.0,
+            'dy': 0.0,
+            'opacity': opacity,
+            'color': color,
+            'has_offset': shadow_mode in {'outer', 'shadow'} or distance_pt >= 0,
+            'blur_pt': blur_pt,
+            'distance_pt': distance_pt,
+            'angle_deg': angle,
+            'size_pct': size,
+            'pptx_direct': 1.0,
+        }
+
     for child in filter_elem.iter():
         tag = child.tag.replace(f'{{{SVG_NS}}}', '')
         if tag == 'feDropShadow':
@@ -464,6 +493,18 @@ def build_shadow_xml(filter_elem: ET.Element) -> str:
         return ''
 
     p = _parse_filter_params(filter_elem)
+    if p.get('pptx_direct'):
+        blur_rad = int(float(p.get('blur_pt', 0.0)) * 12700)
+        dist = int(float(p.get('distance_pt', 0.0)) * 12700)
+        dir_angle = int((float(p.get('angle_deg', 0.0)) % 360.0) * ANGLE_UNIT)
+        sx = sy = int(float(p.get('size_pct', 100.0)) * 1000)
+        alpha_val = int(float(p['opacity']) * 100000)
+        return f'''<a:effectLst>
+<a:outerShdw blurRad="{blur_rad}" dist="{dist}" dir="{dir_angle}" sx="{sx}" sy="{sy}" algn="ctr" rotWithShape="0">
+<a:srgbClr val="{p['color']}"><a:alpha val="{alpha_val}"/></a:srgbClr>
+</a:outerShdw>
+</a:effectLst>'''
+
     std_dev = p['std_dev']
     dx = p['dx']
     dy = p['dy']
@@ -513,6 +554,8 @@ def classify_filter_effect(filter_elem: ET.Element) -> str | None:
         return None
 
     p = _parse_filter_params(filter_elem)
+    if p.get('pptx_direct'):
+        return 'shadow'
     return 'shadow' if p['has_offset'] else 'glow'
 
 

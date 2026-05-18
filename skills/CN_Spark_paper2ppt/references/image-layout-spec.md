@@ -1,6 +1,7 @@
 > See shared-standards.md for common technical constraints.
 
 # Image Layout Specification
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5 和 Step 6 放置图片时读取；它定义图片裁切、布局、比例和归因展示规则。
 
 Layout rules for pages where the image is placed **side-by-side with body text** as a container block. Strategist and Executor both follow these rules when the image's narrative intent is *side-by-side*.
 

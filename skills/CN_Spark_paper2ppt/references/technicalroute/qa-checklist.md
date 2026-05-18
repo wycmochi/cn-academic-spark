@@ -1,102 +1,122 @@
-# QA Checklist · 出图后交付前的验收
+# TechnicalRoute QA Checklist
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5.5 生成两种研究路线图后读取；它检查内容真实性、可读性、双页插入和 PPT 转换兼容性。
 
-> 灵感来自 nature-figure 的 qa-contract。**任何 PNG 在交付给用户 / 嵌入到 paper2ppt SVG 之前，必须通过这份 checklist**。由 `scripts/generate_route_image.py audit` 半自动执行 + 主代理 / 用户人工补完。
+Run this checklist for both Version A editable template SVG and Version B AI reference PNG before inserting the pages into the final deck.
 
----
+## Machine Checks
 
-## 三段验收（按严格度递增）
-
-### 1) Hard checks（机器可判，audit 子命令自动跑）
-
-- [ ] **画布比例** — 与 `contract.md §5 canvas` 一致（误差 ≤ 2%）
-- [ ] **像素宽度** — ≥ 1600 px（嵌入 PPT 不糊）
-- [ ] **文件大小** — ≥ 200 KB（< 200KB 通常意味着画面过空 / 退化）
-- [ ] **无水印 / 网址 / 社交 logo** — OCR 抽出全部文本后 grep `http` / `©` / `watermark` / 已知 stock 服务商名 → 0 命中
-- [ ] **无 emoji** — OCR 抽出文本中无 Unicode emoji 块（U+1F300–U+1FAFF）
-
-### 2) Soft checks（视觉判，主代理多模态读图判断）
-
-- [ ] **每一个可见文本**都对应 `contract.md §3 panel/stage 映射` 中的某一条
-- [ ] **没有 contract 外的节点 / 编号 / 引用**
-- [ ] **`contract.md §4 术语保留清单`中的每一项都逐字出现**（中英文混合时分别检查）
-- [ ] **配色不超过 4 种**主色（primary / secondary / accent / muted），白底深字保留
-- [ ] **强调色（accent）使用面积 ≤ 5%**，且承载语义（核心问题 / 主张 / 警示），不只是装饰
-- [ ] **panel 数与 contract §3 一致**
-- [ ] **论证流向**（自上而下 / 左→右 / 环形 / 双轨汇合）与 archetype × sub_variant 一致
-- [ ] **公式区底色为浅灰 / 白**（不是饱和色块）— 仅 archetype=method 时检查
-- [ ] **列间过渡箭头**带 italic muted 标签 — 仅 archetype=workflow horizontal-pipeline 时检查
-- [ ] **底部强调横幅**只有 0 或 1 条 — 不允许多条互相竞争注意力
-- [ ] **中文文字无错位 / 无截断 / 无乱码 CJK**
-- [ ] **中英文混排**：英 / 数字 / 拉丁字符可肉眼判出 serif（如 Times）；中文为 sans-serif（如 Yahei）
-
-### 3) Reviewer-risk checks（高严格度，对应 contract §7）
-
-- [ ] §7 Q1 识别的"最可能挑战点"在图中已被回应（例如 contract 提到"听众会问 panel 4 是不是和 panel 2 重复"→ 图中应有视觉区分让 P2 / P4 看上去不同）
-- [ ] §7 Q2 panel 减半后论证不成立（即每个 panel 都是必要的）
-- [ ] §7 Q3 引用的"他人方法 / 数据 / 概念"在 PPT 页脚已有 GB/T 7714 完整条目（这步在 paper2ppt 嵌入完成后做）
-- [ ] §7 Q4 颜色编码承担信息含义，不只是装饰
-
----
-
-## audit 子命令的输出
+Run audit for the AI PNG:
 
 ```bash
-python3 scripts/generate_route_image.py audit \
-    --image <project>/output/route_xxx.png \
-    --contract <project>/contract.md \
-    --content <project>/content.yaml \
-    --out <project>/audit_report.md
+python3 scripts/technicalroute/generate_route_image.py audit --image <route_workdir>/output/route_ai_<id>.png --content <route_workdir>/content.yaml --contract <route_workdir>/contract.md --out <route_workdir>/audit_report.md
 ```
 
-输出形如：
+For Version A, also run the normal SVG quality checker after insertion:
 
-```markdown
-# Audit Report — route_thinking_20260513.png
-
-## Hard checks (5/5 passed)
-- canvas: 16:9 ✓
-- width: 1920 px ✓
-- size: 384 KB ✓
-- no watermark / URL ✓
-- no emoji ✓
-
-## Soft checks (manual review required for 4 items)
-- contract §3 panels all visible: AUTO-CHECK skipped, please review
-- glossary preserve: AUTO-CHECK matched 4/5; "[术语 X]" missing or misrendered — needs manual confirm
-- color palette ≤ 4 hues: AUTO-CHECK passed (dominant colors: #1F4E79 #2E7D32 #C00000 #888888)
-- accent area ≤ 5%: AUTO-CHECK passed (estimate 3.2%)
-- ...
-
-## Decision
-- [ ] PASS — ready for embed
-- [x] CONDITIONAL PASS — fix missing glossary term then PASS
-- [ ] FAIL — regenerate
-
-## Recommended `--refine` instruction
-"在底部红色横幅中把 '<term-replaced-by-model>' 改回 '<term-from-glossary>'，其他不变。"
+```bash
+python3 scripts/svg_quality_checker.py <project_path>/svg_output
 ```
 
-主代理把 audit_report 给用户看：
+Machine or semi-machine checks:
+- Canvas ratio matches the target slide or declared route bbox.
+- PNG width is sufficient for PPT insertion, preferably at least 1600 px.
+- Output file is not suspiciously tiny or blank.
+- OCR or visual inspection finds no watermark, URL, stock-service logo, or social handle.
+- No emoji or decorative stock-photo elements appear.
+- Version A SVG contains editable text, not a full-slide raster image.
+- Version A SVG does not use `<foreignObject>` for critical text.
 
-- PASS → 直接进入 SKILL.md Step 6.2 嵌入；
-- CONDITIONAL PASS → 让用户决定接受还是用 `--refine` 微调；
-- FAIL → 回到 Step 5 重出，或回到 Step 4 改 prompt。
+## Content QA
 
----
+- Title matches the route scope and the parent slide module.
+- Every visible node, panel, formula, stage, and edge appears in `content.yaml`.
+- Every `content.yaml` item traces to source material, user confirmation, or `design_spec.md`.
+- No invented dataset, method, variable, metric, causal claim, citation, author name, or place name appears.
+- Source uncertainty remains visible when the route describes planned or inferred work.
+- Review diagrams synthesize literature structure rather than pretending a single paper proves all claims.
+- Proposal diagrams distinguish planned work from completed work.
+- Any third-party method, dataset, or concept that is semantically used by the slide has a GB/T 7714 citation footer or reference entry.
 
-## 多次重出后仍不过的处理
+## Visual QA
 
-最多重出 **3 轮**。每轮失败后：
+- Labels are legible at PPT size.
+- Node count is normally 5-12 unless the source requires another range.
+- A node label does not exceed three wrapped lines unless the template explicitly supports it.
+- One semantic phrase is not split into multiple stacked text boxes.
+- Text boxes do not overlap each other, connectors, badges, or icons.
+- Connectors are readable and do not cross labels unnecessarily.
+- The diagram is not overcrowded.
+- Color follows the parent deck strategy and user PPTX template palette priority.
+- Accent and brick red are used sparingly and semantically.
+- Shape radius follows route `spec_lock.md`, normally `rx=6` or smaller for dense labels.
+- Chinese / Latin / numeric mixed text follows the deck mixed-font rule in Version A.
 
-- 第 1 次失败 → `--refine` 加 negative，原 prompt 不变；
-- 第 2 次失败 → 切换 backend（gemini → qwen），原 prompt 不变；
-- 第 3 次失败 → 触发 [handling-no-references.md](handling-no-references.md) 档位 C（半成品交付，用户去网页版手动生成）。
+## Version A Editable Template QA
 
-每一轮都把失败信息追加到 `audit_report.md`，便于复盘。
+- `route_template_svg_path` exists.
+- `template_key` exists in `templates/technicalroute/templates/templates_index.json`.
+- `slot_map` covers every required placeholder in the template.
+- `color_var_map` resolves template variables to real HEX colors.
+- All text remains editable SVG text with `<text>` and `<tspan>`.
+- No whole-diagram rasterization.
+- No phrase is broken into unnatural separate text objects.
+- The page can be converted to DrawingML without losing the route structure.
 
----
+## Version B AI Reference QA
 
-## QA 时的隐私规则（继承自 nature-figure）
+- `route_ai_image_path` exists.
+- The generation command uses `--backend openai --model gpt-image-2 --aspect_ratio 16:9 --image_size 2K` unless the environment explicitly documents another supported backend/model.
+- The generation command uses `--refs-plan <route_workdir>/style_refs/route_ai_refs.json`.
+- `route_ai_refs.json` contains at least one discipline `Custom_gallery` raster anchor; if literature search found usable figures, they must be manifest-listed raster files from `style_refs/manifest.json`.
+- Academic-search references in `style_refs/manifest.json` were collected from a search plan generated from `references/technicalroute/seed_sites.json`; no separate hard-coded research website list appears in `prompt_ai.md`, route `spec_lock.md`, or project QA notes.
+- `prompt_ai.md` uses article content plus exactly these visual reference classes: Custom_gallery and research-search manifest refs. It does not use Version A SVG, assembled SVG, chart SVG, or template SVG as an AI image reference.
+- The image differs meaningfully from Version A in style or composition while preserving the same logic.
+- No reference-image text, number, caption, author, citation, institution, or place name leaks into the output.
+- If AI labels are unreliable, add editable SVG labels, callouts, or captions on top of the PPT page.
+- If the AI output cannot be made reliable after retry policy, keep Version A and report the limitation.
 
-- audit_report 中**不要**暴露用户私有路径、模板内部名、prompt 完整内容；
-- 提到失败项时用"图中第 N 个 panel"或"右下角"等位置描述，不引用模型 ID / API key / 内部 reference 文件名。
+## Reference Integrity QA
+
+Compare Version B with selected `gallery_refs` and `style_refs`:
+- Similar layout rhythm is acceptable.
+- Similar exact text is not acceptable.
+- Similar numbers, paper titles, author names, or dataset names are not acceptable.
+- A copied visual structure is acceptable only when it has been abstracted into the selected template or recipe and the content is fully replaced.
+
+## Embedding QA
+
+- Version A and Version B are inserted into consecutive PPT pages.
+- Page titles are different and include the version meaning.
+- Both pages inherit parent footer, page number, bottom banner rules, and citation policy.
+- Both output paths are recorded in project assets or route `spec_lock.md`.
+- The Version B SVG slide contains `<image id="technicalroute-ai-reference-image" href="data:image/png;base64,...">`; external, absolute, or relative href links are forbidden.
+- `finalize_svg.py` preserves the PNG data URI, and `svg_to_pptx.py` decodes it into the PPTX media folder as an embedded image object.
+- Final deck checklist marks both pages as TechnicalRoute pages.
+- Non-TechnicalRoute visual coverage rules do not mistakenly require extra images on these route pages.
+
+## Retry Policy For Version B
+
+Retry at most three times:
+1. Add a targeted refine instruction and stronger negative constraints.
+2. Change backend if available while keeping the same content.
+3. Stop, keep Version A, and record the limitation in `ppt_outline_cn.md`.
+
+Do not continue regenerating indefinitely. The editable template version is the reliable baseline.
+
+## Blocking Export Gate
+
+Run the deck-level quality gate after Version A/B insertion:
+
+```bash
+python3 scripts/svg_quality_checker.py <project_path>/svg_output
+python3 scripts/finalize_svg.py <project_path>
+python3 scripts/svg_quality_checker.py <project_path>/svg_final
+```
+
+The gate must fail if any of the following is true:
+- a Version A editable TechnicalRoute page exists without a consecutive Version B AI reference page;
+- the Version B SVG page lacks `<image id="technicalroute-ai-reference-image" ...>`;
+- the AI image href is not `data:image/png;base64,...`, has invalid base64, or does not decode to PNG bytes;
+- `run-ai-variant` failed, was skipped, or silently dropped usable `gallery_refs` / `style_refs`.
+
+Do not export PPTX until the AI reference image is generated, inserted, finalized, and verified.

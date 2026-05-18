@@ -1,4 +1,5 @@
 # Executor Common Guidelines
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 6 生成 SVG 时读取；它提供所有风格共用的模板继承、图标、图片、字体、备注和导出规则。
 
 > Style-specific content is in the corresponding `executor-{style}.md`. Technical constraints are in shared-standards.md.
 
@@ -16,6 +17,7 @@
 | Every distinct `<basename>` in `spec_lock.md page_layouts` | `templates/<chosen_template>/<basename>.svg` |
 | Every distinct chart name in `spec_lock.md page_charts` | `templates/charts/<chart_name>.svg` |
 | Chart types in `design_spec.md §VII` not covered above | `templates/charts/<chart_name>.svg` |
+| User PPTX import manifest when `template.source: user_pptx` | `templates/<chosen_template>/manifest.json` or `source_manifest.json` |
 
 **Forbidden — re-reading during generation**:
 - Layout SVG already loaded in this batch
@@ -36,6 +38,19 @@ Resolve the per-page template SVG via `spec_lock.md page_layouts` (authoritative
 3. `page_layouts` exists but **no entry** for this page → **free design**, no template inheritance.
 4. `page_layouts` section absent (legacy deck) **and** `templates/` directory exists → fall back to the page-type table below, matching by SVG filename keyword (cover/chapter/content/ending/toc). Read the matched file at first use if §1.0 batch did not cover it.
 5. No template at all → free design.
+
+### 1.2 User PPTX Template Editable Region Gate
+
+When the selected template came from a user PPTX, do not infer the writable canvas from visual appearance alone. Read the imported manifest and the current page's `templateBinding.editableContentRegion` / top-level `editableContentRegion` before drawing.
+
+Use `editableContentRegion.primary` as the default content box. Use `availableRegions` only when the chosen region's slot role matches the page need (`title`, `body`, `picture`, chart, formula, route image). Treat `forbiddenRegions`, `protectedRegions`, `titleRegion`, `footerRegion`, and `pageNumberSlot` as hard no-overlap zones.
+
+Rules:
+- Title text must fill the imported title slot or stay inside `titleRegion`; it may not cover school name, department name, logo, or header chrome.
+- Body text, source figures, formulas, charts, and route images must fit inside `editableContentRegion.primary` or a named `availableRegions` slot. Do not center content against the whole slide when a smaller writable region is supplied.
+- Footer citations and bottom banners belong in `footerRegion` or the source footer slot and should sit near the bottom edge, not mid-page.
+- In user-template mode, generate exactly one page number. If a slide/layout/master `sldNum` slot exists, use it and do not create a second fallback page number.
+- If `editableContentRegion` is missing or overlaps a protected identity region, stop and run `scripts/template_import/layout_guard.py <manifest.json>` before SVG generation.
 
 > Note: `page_layouts` disambiguates the multiple content variants modern templates ship (e.g., `graduation_defense` has 8); the legacy table cannot.
 
@@ -101,6 +116,10 @@ Before the first SVG page, output a confirmation listing: canvas dimensions, bod
 
 If a page needs a value not in `spec_lock.md`, surface it — do not silently invent one.
 
+**Body density target**: for every正文/body slide except cover, section divider, references, and ending/Q&A, use the full `editableContentRegion.primary` or built-in content region. Target at least 80% of the region's width and 75% of its height with source-grounded content. Prefer two/three-column evidence blocks, chart + explanation pairs, formula PNG + interpretation, or table + callout. Do not leave a single small card floating in a large blank body region.
+
+**Minimum readable font**: except citation/reference footers and page numbers, every visible text object must use `font-size >= 12`. If text no longer fits, increase box size, reduce gaps, or split content into a denser multi-column layout; do not shrink body text below 12.
+
 **Per-page layout rhythm — `page_rhythm` section**:
 
 Before drawing each page, look up its entry in `page_rhythm` (key format `P<NN>` matching the page index in §IX of `design_spec.md`) and apply the corresponding layout discipline:
@@ -142,16 +161,90 @@ Before drawing each page, look up its entry in `page_charts` to decide which cha
 - **Proximity**: group related elements with tight spacing; separate unrelated groups
 - **Spec adherence**: follow color, layout, canvas format, and typography in the spec
 - **Template structure**: if templates exist, inherit the visual framework
+- **Content bounds**: use `spec_lock.md canvas.safe_margin`, `title_zone_height`, `footer_zone_height`, and any user-template `editableContentRegion` to center the content inside the actual writable box, not inside the full slide.
 - **Main-agent ownership**: SVG generation must run in the main agent (not sub-agents) — pages share upstream context for cross-page visual continuity
 - **Generation rhythm**: lock global design context first, then generate pages sequentially in one continuous context. No batched groups (e.g., 5 at a time).
 - **Phased batch generation** (recommended):
-  1. **Visual Construction Phase**: generate all SVG pages sequentially for visual consistency. Use layout judgment for chart marks during the draft. **MUST embed plot-area markers** per §3.1 below on every chart page — coordinate calibration is a post-generation step (see [`workflows/verify-charts.md`](../workflows/verify-charts.md)) that depends on these markers.
+  1. **Visual Construction Phase**: generate all SVG pages sequentially for visual consistency. Use layout judgment for chart marks during the draft. **MUST embed plot-area markers** per §3.1 below on every chart page — coordinate calibration is a post-generation step (see [`conditional-workflows/verify-charts.md`](../conditional-workflows/verify-charts.md)) that depends on these markers.
   2. **Quality Check Gate**: run `python3 scripts/svg_quality_checker.py <project_path>` on `svg_output/`. Any `error` (banned features, viewBox mismatch, spec_lock drift, non-PPT-safe font, etc.) MUST be fixed on the offending page before proceeding — regenerate and re-check. Address `warning`s when straightforward. Do NOT defer to after `finalize_svg.py` — finalize rewrites SVG and masks some violations.
   3. **Logic Construction Phase**: after SVGs pass the quality check, batch-generate speaker notes for narrative continuity.
 
+### 3.0 Text Box Stability Contract
+
+One visual phrase must be authored as one SVG `<text>` element. Use inline
+`<tspan>` children only for style, font, color, or weight changes inside that
+same phrase. Do not split one phrase into adjacent sibling `<text>` elements;
+this creates stacked PowerPoint text boxes and unstable editing.
+
+Correct:
+
+```xml
+<text x="80" y="160" data-box-x="70" data-box-y="132" data-box-width="360" data-box-height="52" xml:space="preserve">
+  <tspan font-family="Microsoft YaHei,sans-serif">High </tspan><tspan font-family="Times New Roman,serif">betweenness</tspan><tspan font-family="Microsoft YaHei,sans-serif">, low </tspan><tspan font-family="Times New Roman,serif">circuity</tspan>
+</text>
+```
+
+Forbidden:
+
+```xml
+<text x="80" y="160">High</text>
+<text x="120" y="160">betweenness, low</text>
+<text x="260" y="160">circuity</text>
+```
+
+When a text label sits inside or on top of a visible rectangle, card, pill,
+banner, or placeholder, lock the intended PowerPoint text frame with all four
+attributes: `data-box-x`, `data-box-y`, `data-box-width`, and
+`data-box-height`. Also write the containing shape frame as
+`data-shape-x`, `data-shape-y`, `data-shape-width`, and
+`data-shape-height`. The SVG-to-PPTX converter uses these values as the actual
+PowerPoint text box and enables wrapping / conservative autofit inside that
+Vertical overflow rule: if text would exceed `data-box-height`, reduce font size first, then reduce vertical gaps between sibling shapes; never let text extend outside the data-box or sit on top of the bottom border.
+box. This prevents the text frame from being smaller than the shape that
+visually contains it.
+
+Mandatory numeric parameter:
+
+```yaml
+text_box_shape_inset_pt: 5
+text_box_shape_inset_px: 6.67
+text_box_center_tolerance_px: 10
+```
+
+Every text box inside a visible shape must be centered in the declared
+`data-shape-*` frame and must keep at least `5pt` (`6.67px` at 96 DPI) between
+the text box boundary and the outer shape boundary. Read this number from
+`spec_lock.md`; do not estimate it ad hoc.
+
+If text does not fit the declared box, reduce wording, add explicit line-break
+`<tspan>` rows, reduce font size within the ramp, or choose a larger slot. Do
+not allow text to extend outside the visible card/shape or beyond the slide.
+
+For academic slides, default rounded rectangles to `rx="6"` unless the selected
+template's imported slot already uses a smaller/larger radius. Do not use
+large pill-like rounding for normal evidence cards.
+
+Content blocks must carry the standard external shadow unless the imported
+user template already provides an equivalent effect. Define the filter once per
+SVG and apply it to visible shape blocks with `data-shape-block="true"`:
+
+```xml
+<filter id="themeBlockShadow" data-pptx-shadow="outer" data-pptx-shadow-transparency="0.60" data-pptx-shadow-size="102" data-pptx-shadow-blur-pt="5" data-pptx-shadow-angle="0" data-pptx-shadow-distance-pt="0">
+  <feDropShadow dx="0" dy="0.01" stdDeviation="3.75" flood-color="#000000" flood-opacity="0.40"/>
+</filter>
+```
+
+Inline `<tspan>` rules:
+- Do not put `x`, `y`, or `dy` on inline tspans used only for mixed fonts.
+- Use `dy` / `y` only for a real new line.
+- Use separate `<text>` elements only for genuinely separate text blocks such
+  as different columns, labels, or annotations.
+- Avoid negative `dy`, repeated same-baseline fragments, and overlapping text
+  boxes.
+
 ### 3.1 Chart Plot-Area Marker (MANDATORY on every chart page)
 
-> The [`verify-charts`](../workflows/verify-charts.md) workflow enumerates chart pages from `design_spec.md §VII`, then reads each page's plot-area marker to feed `svg_position_calculator.py`. Missing marker → verify-charts has to re-derive the plot area from axis lines, paying the cost on every run.
+> The [`verify-charts`](../conditional-workflows/verify-charts.md) workflow enumerates chart pages from `design_spec.md §VII`, then reads each page's plot-area marker to feed `svg_position_calculator.py`. Missing marker → verify-charts has to re-derive the plot area from axis lines, paying the cost on every run.
 
 Every SVG page that contains a data visualization chart MUST include a plot-area marker inside `<g id="chartArea">`, placed **after axis lines** and **before the first data element** (bar, line, area, point).
 
@@ -194,7 +287,7 @@ grep "chart-plot-area" <project_path>/svg_output/<current_page>.svg
 
 Format: `<NN>_<page_name>.svg` (two-digit number from 01; name matches the deck's language and the page title in the Design Spec).
 
-Examples: `01_封面.svg` / `02_目录.svg` / `03_核心优势.svg`; `01_cover.svg` / `02_agenda.svg` / `03_key_benefits.svg`.
+Examples: `01_cover.svg` / `02_agenda.svg` / `03_key_benefits.svg`.
 
 ---
 
@@ -233,11 +326,11 @@ Strategist chooses the library and inventory; Executor only implements. Library 
 
 **Searching for icons** — use terminal, zero token cost:
 ```bash
-ls skills/ppt-master/templates/icons/chunk-filled/ | grep home
-ls skills/ppt-master/templates/icons/tabler-filled/ | grep home
-ls skills/ppt-master/templates/icons/tabler-outline/ | grep chart
-ls skills/ppt-master/templates/icons/phosphor-duotone/ | grep house
-ls skills/ppt-master/templates/icons/simple-icons/ | grep github
+ls skills/CN_Spark_paper2ppt/templates/icons/chunk-filled/ | grep home
+ls skills/CN_Spark_paper2ppt/templates/icons/tabler-filled/ | grep home
+ls skills/CN_Spark_paper2ppt/templates/icons/tabler-outline/ | grep chart
+ls skills/CN_Spark_paper2ppt/templates/icons/phosphor-duotone/ | grep house
+ls skills/CN_Spark_paper2ppt/templates/icons/simple-icons/ | grep github
 ```
 
 **Abstract concept → icon name** (names for `chunk-filled`; tabler libraries use their own equivalents — verify with `ls | grep`):
@@ -287,7 +380,7 @@ Chart SVGs referenced in **VII. Visualization Reference List** are loaded once v
 
 ### 5.1 Chart Coordinate Calibration
 
-Coordinate calibration runs as a **standalone post-generation workflow**, not inside the executor pipeline. After SVG generation completes, if the deck contains data charts, run [`workflows/verify-charts.md`](../workflows/verify-charts.md) before post-processing.
+Coordinate calibration runs as a **standalone post-generation workflow**, not inside the executor pipeline. After SVG generation completes, if the deck contains data charts, run [`conditional-workflows/verify-charts.md`](../conditional-workflows/verify-charts.md) before post-processing.
 
 The executor's only obligation here is upstream: embed the `<!-- chart-plot-area ... -->` marker on every chart page during initial draft (§3.1). Verify-charts enumerates chart pages from `design_spec.md §VII` (authoritative deck plan) and uses the marker to feed `svg_position_calculator.py`.
 
@@ -350,19 +443,11 @@ After all SVG pages are finalized, enter Logic Construction Phase and write the 
 
 **Pure spoken narration**: notes are read aloud verbatim by `notes_to_audio.py` (TTS). Write only what should be spoken. No visible markers, no labeled meta-lines, no enumerated key-point lists, no duration annotations — anything you write outside the heading will be vocalized.
 
-**Per-page structure**: `# <number>_<page_title>` heading (the `#` heading line is the only thing stripped before TTS), pages separated by `---`. Body is 2–5 natural sentences carrying the page's core message. Page-to-page transitions live inside the opening sentence as natural prose ("接下来……" / "Having framed X, let's turn to Y") — no bracketed `[过渡]` / `[Transition]` tags.
+**Per-page structure**: `# <number>_<page_title>` heading (the `#` heading line is the only thing stripped before TTS), pages separated by `---`. Body is 2–5 natural sentences carrying the page's core message. Page-to-page transitions live inside the opening sentence as natural prose ("Next, ..." / "Having framed X, let's turn to Y") — no bracketed `[Transition]` tags.
 
 **Concrete examples** — same shape applies to any language; just write naturally in that language.
 
-中文 deck：
-
-```
-# 02_市场格局
-
-在明确了行业背景之后，我们来看具体的市场格局。当前线上零售集中度持续上升，前三大平台合计份额已经达到百分之六十八，腰部玩家正在被快速挤压，留给新进入者的窗口期不超过十八个月。这意味着我们的策略必须聚焦，而不是铺开。
-```
-
-英文 deck：
+Example deck:
 
 ```
 # 02_market_landscape
@@ -370,13 +455,13 @@ After all SVG pages are finalized, enter Logic Construction Phase and write the 
 Having framed the industry backdrop, let's look at the actual market landscape. Online retail concentration keeps rising — the top three platforms now hold sixty-eight percent of combined share, mid-tier players are being squeezed fast, and the window for new entrants is under eighteen months. This means our strategy has to focus, not spread.
 ```
 
-> 日本語 / 한국어 / 其他语言：照搬同样的结构，用对应语言自然书写即可。
+> For any deck language, keep the same structure and write natural spoken prose in that language.
 
-**Number readability**: TTS reads digits and symbols literally. Prefer fully-spelled forms in the language being spoken when literal pronunciation would be awkward (e.g. Chinese "百分之六十八" reads better than "68%"; "1-2分钟" reads as "一减二分钟"). Plain integers and percentages in English are fine as-is.
+**Number readability**: TTS reads digits and symbols literally. Prefer fully-spelled forms in the language being spoken when literal pronunciation would be awkward. Plain integers and percentages in English are fine as-is.
 
 **Common mistakes to avoid**:
-- Leaving any bracketed stage marker (`[过渡]` / `[Transition]` / `[Pause]` / `[Data]` / `[Scan Room]` / `[Interactive]` / `[Benchmark]` etc.) in the text — they will be read aloud literally.
-- Adding `要点：① …` / `Key points: (1) …` / `时长：2分钟` / `Duration: 2 minutes` / `Flex: …` lines — TTS will speak "要点 一 …".
+- Leaving any bracketed stage marker (`[Transition]` / `[Pause]` / `[Data]` / `[Scan Room]` / `[Interactive]` / `[Benchmark]` etc.) in the text — they will be read aloud literally.
+- Adding `Key points: (1) ...` / `Duration: 2 minutes` / `Flex: ...` lines; TTS will read them aloud literally.
 - Mixing languages within one deck's notes.
 
 ### Task 2. Split Into Per-Page Note Files
@@ -397,10 +482,13 @@ Auto-split `notes/total.md` into per-page files in `notes/`.
 # 1. Split speaker notes
 python3 scripts/total_md_split.py <project_path>
 
-# 2. SVG post-processing (auto-embed icons, images, etc.)
+# 2. Export speaker notes as DOCX
+python3 scripts/notes_to_docx.py <project_path>
+
+# 3. SVG post-processing (auto-embed icons, images, etc.)
 python3 scripts/finalize_svg.py <project_path>
 
-# 3. Export PPTX
+# 4. Export PPTX
 python3 scripts/svg_to_pptx.py <project_path>
 # Output:
 #   exports/<project_name>_<timestamp>.pptx           ← main native pptx

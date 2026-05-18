@@ -1,0 +1,28 @@
+{
+  "formula_id": "{{formula_id}}",
+  "formula_role": "{{中文公式标题，例如：客流恢复力指标}}",
+  "latex": "{{latex}}",
+  "definition_label": "式中：",
+  "variables": [
+    {
+      "symbol": "{{变量1符号}}",
+      "meaning": "{{变量1中文含义}}"
+    },
+    {
+      "symbol": "{{变量2符号}}",
+      "meaning": "{{变量2中文含义}}"
+    },
+    {
+      "symbol": "{{变量3符号}}",
+      "meaning": "{{变量3中文含义}}"
+    }
+  ],
+  "width": 1216,
+  "height": 130,
+  "layout": "compact",
+  "body_font_size": 16,
+  "title_font_size": 16,
+  "title_bold": false,
+  "formula_height": 52,
+  "background": "transparent"
+}

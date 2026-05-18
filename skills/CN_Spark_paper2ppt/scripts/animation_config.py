@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PPT Master - Animation Config Tool
+Animation Config Tool
 
 Create and validate optional per-object PPTX animation sidecar files.
 

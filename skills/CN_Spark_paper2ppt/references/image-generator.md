@@ -1,6 +1,7 @@
 > See [`image-base.md`](./image-base.md) for the common framework. For the web sourcing path, see [`image-searcher.md`](./image-searcher.md).
 
 # Image_Generator Reference Manual
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5 有 AI 生图资源时读取；它定义提示词、后端选择、输出命名和质量检查。
 
 Role definition for the **AI image generation path**: convert each `Acquire Via: ai` row into an optimized prompt, generate the image, and save it to `project/images/`.
 

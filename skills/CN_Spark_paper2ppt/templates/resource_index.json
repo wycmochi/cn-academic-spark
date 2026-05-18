@@ -1,0 +1,70 @@
+{
+  "version": "2026-05-17",
+  "contract": "Read the declared JSON/manifest index before selecting any template resource for PPT generation.",
+  "resources": [
+    {
+      "key": "layouts",
+      "index": "layouts/layouts_index.json",
+      "directory": "layouts/",
+      "selectionStage": "Step 3 - Select Template",
+      "downstream": [
+        "design_spec.md",
+        "spec_lock.md",
+        "project templates/"
+      ]
+    },
+    {
+      "key": "charts",
+      "index": "charts/charts_index.json",
+      "directory": "charts/",
+      "selectionStage": "Step 6 - SVG Page Generation",
+      "downstream": [
+        "svg_output/*.svg",
+        "svg_final/*.svg",
+        "pptx export"
+      ]
+    },
+    {
+      "key": "technicalroute_templates",
+      "index": "technicalroute/templates/templates_index.json",
+      "directory": "technicalroute/templates/",
+      "selectionStage": "Step 5.5 - TechnicalRoute",
+      "downstream": [
+        "route_template_*.svg",
+        "route_ai_*.png",
+        "route_ai slide SVG"
+      ]
+    },
+    {
+      "key": "technicalroute_gallery",
+      "index": "technicalroute/Custom_gallery/*/trans-manifest.json",
+      "directory": "technicalroute/Custom_gallery/",
+      "selectionStage": "Step 5.5 - TechnicalRoute AI Reference",
+      "downstream": [
+        "prompt_ai.md",
+        "route_ai_image_path"
+      ]
+    },
+    {
+      "key": "formula",
+      "index": "formula/formula_templates_index.json",
+      "schema": "formula/formula_block_schema.json",
+      "directory": "formula/",
+      "selectionStage": "Formula page planning",
+      "downstream": [
+        "scripts/latex_formula_to_png.py",
+        "images/formula_block_*.png"
+      ]
+    },
+    {
+      "key": "icons",
+      "index": "icons/README.md",
+      "directory": "icons/",
+      "selectionStage": "SVG authoring",
+      "downstream": [
+        "scripts/svg_finalize/embed_icons.py",
+        "scripts/svg_to_pptx/use_expander.py"
+      ]
+    }
+  ]
+}

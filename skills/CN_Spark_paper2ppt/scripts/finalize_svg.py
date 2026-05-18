@@ -24,6 +24,7 @@ Examples:
     python3 scripts/finalize_svg.py examples/ppt169_demo --only embed-icons
 
 Processing options:
+    cleanup-placeholders - Remove unused PowerPoint placeholder prompts/guides
     embed-icons   - Replace <use data-icon="..."/> with actual icon SVG
     align-images  - Align (slice/meet) and Base64-embed all <image> in one pass.
                     Replaces the former crop-images + fix-aspect + embed-images
@@ -46,6 +47,7 @@ from svg_finalize.align_embed_images import (
     count_office_vector_refs_in_svg,
 )
 from svg_finalize.embed_icons import process_svg_file as embed_icons_in_file
+from svg_finalize.clean_placeholder_prompts import cleanup_placeholder_prompts_in_svg
 
 
 def safe_print(text: str) -> None:
@@ -160,10 +162,43 @@ def finalize_project(
     if not quiet:
         print()
 
-    # Step 2: Embed icons
+    step_total = sum(
+        1 for key in (
+            'cleanup_placeholders',
+            'embed_icons',
+            'align_images',
+            'flatten_text',
+            'fix_rounded',
+        )
+        if options.get(key)
+    )
+    step_no = 0
+
+    def announce(label: str) -> None:
+        nonlocal step_no
+        step_no += 1
+        safe_print(f"[{step_no}/{step_total}] {label}")
+
+    # Step 2: Remove unused PowerPoint placeholder prompts and guides
+    if options.get('cleanup_placeholders'):
+        if not quiet:
+            announce("Removing unused template placeholders...")
+        cleanup_count = 0
+        for svg_file in svg_final.glob('*.svg'):
+            cleanup_count += cleanup_placeholder_prompts_in_svg(
+                svg_file,
+                dry_run=False,
+                verbose=False,
+            )
+        if not quiet:
+            if cleanup_count > 0:
+                safe_print(f"      {cleanup_count} placeholder item(s) removed")
+            else:
+                safe_print("      No placeholder prompts")
+    # Step 3: Embed icons
     if options.get('embed_icons'):
         if not quiet:
-            safe_print("[1/4] Embedding icons...")
+            announce("Embedding icons...")
         icons_count = 0
         for svg_file in svg_final.glob('*.svg'):
             count = embed_icons_in_file(svg_file, icons_dir, dry_run=False, verbose=False)
@@ -174,7 +209,7 @@ def finalize_project(
             else:
                 safe_print("      No icons")
 
-    # Step 3: Align (slice/meet) and Base64-embed all <image> in one pass.
+    # Step 4: Align (slice/meet) and Base64-embed all <image> in one pass.
     # Replaces the former crop-images / fix-aspect / embed-images trio: the
     # spatial transform (slice → crop, meet → fit-box) and the asset embed
     # are mutually exclusive branches per image, sequenced together so each
@@ -182,7 +217,7 @@ def finalize_project(
     # from disk once.
     if options.get('align_images'):
         if not quiet:
-            safe_print("[2/4] Aligning + embedding images...")
+            announce("Aligning + embedding images...")
         img_count = 0
         img_errors = 0
         office_vector_count = 0
@@ -216,10 +251,10 @@ def finalize_project(
             else:
                 safe_print("      No images")
 
-    # Step 4: Flatten text
+    # Step 5: Flatten text
     if options.get('flatten_text'):
         if not quiet:
-            safe_print("[3/4] Flattening text...")
+            announce("Flattening text...")
         flatten_count = 0
         for svg_file in svg_final.glob('*.svg'):
             if process_flatten_text(svg_file, verbose=False):
@@ -230,10 +265,10 @@ def finalize_project(
             else:
                 safe_print("      No processing needed")
 
-    # Step 5: Convert rounded rects to Path
+    # Step 6: Convert rounded rects to Path
     if options.get('fix_rounded'):
         if not quiet:
-            safe_print("[4/4] Converting rounded rects to Path...")
+            announce("Converting rounded rects to Path...")
         rounded_count = 0
         for svg_file in svg_final.glob('*.svg'):
             count = process_rounded_rect(svg_file, verbose=False)
@@ -267,6 +302,7 @@ Examples:
   %(prog)s projects/my_project -q        # Quiet mode
 
 Processing options (for --only):
+  cleanup-placeholders  Remove unused PowerPoint placeholder prompts/guides
   embed-icons   Embed icons
   align-images  Align (slice/meet) + Base64-embed all <image> (single pass)
   flatten-text  Flatten text
@@ -281,6 +317,7 @@ Aliases (still accepted):
     parser.add_argument(
         '--only', nargs='+', metavar='OPTION',
         choices=[
+            'cleanup-placeholders',
             'embed-icons',
             'align-images',
             # Backwards-compatible aliases — all three map to align-images now.
@@ -314,6 +351,7 @@ Aliases (still accepted):
     if args.only:
         only = set(args.only)
         options = {
+            'cleanup_placeholders': 'cleanup-placeholders' in only,
             'embed_icons': 'embed-icons' in only,
             'align_images': bool(only & _ALIGN_ALIASES),
             'flatten_text': 'flatten-text' in only,
@@ -322,6 +360,7 @@ Aliases (still accepted):
     else:
         # Execute all by default
         options = {
+            'cleanup_placeholders': True,
             'embed_icons': True,
             'align_images': True,
             'flatten_text': True,
@@ -336,3 +375,4 @@ Aliases (still accepted):
 
 if __name__ == '__main__':
     main()
+

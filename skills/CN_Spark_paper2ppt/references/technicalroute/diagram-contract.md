@@ -1,119 +1,149 @@
-# Diagram Contract · 出图前的"契约"（每张图必填）
+# Diagram Contract
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5.5 的 contract-first 阶段读取；它约束技术路线图的目标、边界、节点、连线和用户确认项。
 
-> 灵感来自 nature-figure 的 figure-contract。**任何生图任务，agent 必须在生成 prompt / 调 image_gen 之前把这份 contract 写出来**（写到 `<project>/contract.md`），由用户在 ⛔ BLOCKING 节点确认后再继续。
->
-> 不写 contract 直接出图是本技能的硬违规。
+Every TechnicalRoute diagram must start with a written contract before template selection, prompt construction, AI generation, or PPT insertion. The contract freezes the argument so the diagram remains an academic claim rather than decoration.
 
----
+In the paper2ppt workflow, user confirmation is required only when a blocking ambiguity remains or when the user explicitly asked to approve diagrams before generation. Otherwise, write the contract, record conservative assumptions, and continue.
 
-## 为什么需要 contract
+## Why The Contract Exists
 
-技术路线 / 框架 / 思路图不是装饰，而是**一个论证**。先把论证拆清楚，再让图像模型画 — 否则会出现：
+Route diagrams commonly fail when:
+- the model adds unsupported nodes;
+- key stages are missing;
+- the panel count is too high for the slide;
+- colors carry no meaning;
+- reference images leak unrelated text into the output;
+- the generated diagram expresses a different claim than the paper.
 
-- 节点凭空多 / 关键节点漏；
-- panel 数过多导致信息密度爆炸；
-- 配色和论证不挂钩（红 = 强调？还是仅装饰？没说清楚就用了）；
-- 用户拿到图后才发现"这不是我想表达的"。
+The contract prevents these failures by fixing purpose, scope, content, references, and acceptance criteria before either Version A or Version B is produced.
 
-contract 把这些问题在出图前一次性解决。
+## Required Contract Path
 
----
-
-## Contract 模板（写到 `<project>/contract.md`）
+Write:
 
 ```text
-# Diagram Contract — <project_name>
-
-## 1. Core claim（一句话）
-<这张图必须捍卫的一句话主张。动词必须有：例如 "本研究通过 A 与 B 的耦合，从 C 维度回答 D 问题"，
-而不是 "本研究方法"。>
-
-## 2. Archetype 与 sub-variant
-archetype: thinking | method | workflow
-sub_variant: <对应的 sub-variant 名，见 archetype-*.md>
-reason: <为什么选这个 — 一句话>
-
-## 3. Panel / Stage 映射
-（按 archetype 填）
-
-对 thinking：
-  - P1: <label> — 支撑 core claim 的什么？(动词+原因)
-  - P2: <label> — ...
-  - P3: <label> — ...
-  - P4: <label> — ...
-  - bottom_anchor: <kind + text>，或 "无"
-
-对 method：
-  - core_idea: <text>
-  - S1: <label> — <做什么>
-  - S2: <label> — <做什么>
-  - ...
-  - assumptions: [list]，或 "无"
-  - symbols: [list]，或 "无"
-
-对 workflow：
-  - Col 1 / Track A / Input 集合: <label + 包含项>
-  - Col 2 / 中间 / Core: <label + 包含项>
-  - Col N / 汇合 / Output: <label + 包含项>
-  - 列间标签: ["weighted", "extracted", ...]
-
-## 4. Discipline-specific 术语保留清单
-（用户希望**逐字保留**的中英文术语；agent 与图像模型都不允许翻译 / 简写 / 美化）
-
-  - <术语 1>
-  - <术语 2>
-  - ...
-
-## 5. 视觉合同
-canvas: 16:9 | 4:3 | square | long
-color_scheme: <从 color-typography.md 中选一个命名色板，或 "discipline_default">
-density: airy | balanced | dense
-icon_density: low | medium | high
-typography: cn_yahei_en_times (default) | cn_songti_en_inter | other
-emphasis_usage: <核心问题 / 主张 / 警示，会用强调色一次的地方，或 "无">
-
-## 6. Reference 模式
-mode: literature | offline_user_uploads | atlas_only
-expected_refs_count: <≥5 (literature) / ≥3 (offline) / 0 (atlas_only)>
-note: <若 atlas_only，写明 fallback 原因 — 例如 "学科冷门，文献检索 0 命中"，会触发 handling-no-references.md>
-
-## 7. Reviewer 风险（出图前回答）
-Q1. 这张图最可能被听众挑战的一个点是什么？
-A1.
-Q2. 如果 panel 数减半，论证还成立吗？哪些可以合并 / 删除？
-A2.
-Q3. 任意一个被引用的"他人方法 / 数据 / 概念"是否在 PPT 页脚有 GB/T 7714 引用？
-A3.
-Q4. 颜色编码（主色 / 强调 / 灰）是否承担信息含义？还是只是装饰？
-A4.
-
-## 8. 验收门槛（生图后逐条核对）
-- [ ] 每一个可见文本都对应 contract §3 中的某条
-- [ ] 没有 contract 之外的节点 / 编号 / 引用
-- [ ] §4 术语清单中的每一项都**逐字出现**
-- [ ] 配色和 §5 一致
-- [ ] §7 中识别的风险点已经在图中被回应
+<route_workdir>/contract.md
 ```
 
----
+Then derive:
 
-## ⛔ BLOCKING GATE
+```text
+<route_workdir>/content.yaml
+<route_workdir>/spec_lock.md
+<route_workdir>/prompt_ai.md
+```
 
-在 SKILL.md Step 4（prompt 合成）之前，**必须**：
+`content.yaml` must not contain a visible item that is absent from the contract. If a new item is needed, update the contract first.
 
-1. 把 contract.md 写完；
-2. 把它给用户看，让用户回答"OK / 修改字段 X"；
-3. 用户确认后才能调 `generate_route_image.py prompt`。
+## Contract Template
 
-跳过 contract 直接生 prompt 是硬违规。
+```markdown
+# Diagram Contract - <route_job_id>
 
----
+## 1. Core Claim
+<One sentence with a strong verb. State what this diagram must defend.>
 
-## Contract 与 content.yaml 的关系
+## 2. Diagram Identity
+parent_project:
+parent_module:
+diagram_type:
+archetype:
+sub_variant:
+audience:
+purpose:
+scope_boundary:
 
-| 文件 | 谁写 | 用途 |
-|---|---|---|
-| `contract.md` | agent 起草 → 用户确认 | 论证 + 验收标准；人读 |
-| `content.yaml` | agent 从 contract + 用户原材料抽 | 结构化字段，喂给 prompt 合成；机器读 |
+## 3. Archetype Rationale
+reason:
+alternative_rejected:
 
-`content.yaml` 字段必须**完全派生自** `contract.md`，不能多 / 不能少。如果 yaml 出现了 contract 没有的字段，要么补到 contract（用户再确认一次），要么从 yaml 删掉。
+## 4. Panel / Stage Mapping
+<For thinking: P1/P2/P3/P4 or cascade/twin sections.>
+<For method: core idea, S1...Sn, formulas, assumptions, symbols.>
+<For workflow: columns/tracks/inputs/core/stages/output and transition labels.>
+
+## 5. Glossary Preserve
+- <term that must appear verbatim>
+
+## 6. Source Evidence
+- <node or edge> -> <paper section / figure / table / formula / user note>
+
+## 7. Forbidden Additions
+- <dataset, method, variable, arrow type, citation, or claim that must not appear>
+
+## 8. Visual Contract
+canvas:
+density:
+palette_source: parent_deck | user_pptx_template | fallback_named_palette
+color_roles:
+  primary:
+  secondary:
+  accent:
+  muted:
+typography:
+shape_radius:
+emphasis_usage:
+
+## 9. Reference Mode
+mode: literature | offline_user_uploads | atlas_only
+expected_refs_count:
+gallery_refs:
+style_refs:
+fallback_note:
+
+## 10. Dual Output Lock
+version_a: editable template SVG through image-templatedraw.md
+version_b: AI reference PNG through image-aigenerate.md
+insertion: consecutive PPT pages
+
+## 11. Reviewer Risk
+Q1. What is the most likely challenge from the audience?
+A1.
+Q2. If panel count were halved, which part of the argument would fail?
+A2.
+Q3. Do any third-party methods, data, or concepts require citation footers?
+A3.
+Q4. Does color encode meaning, or is it decorative?
+A4.
+
+## 12. Acceptance Gate
+- [ ] Every visible text item maps to Section 4.
+- [ ] No node, number, author, citation, or dataset appears outside this contract.
+- [ ] Every glossary term appears verbatim where required.
+- [ ] Palette and typography follow Section 8.
+- [ ] Reference images are used only for structure and style.
+- [ ] Version A and Version B both exist and are inserted consecutively.
+```
+
+## Blocking Ambiguity Rules
+
+Ask the user before continuing only when one of these is true:
+- The main question cannot be determined from the source.
+- The requested diagram type conflicts with the source.
+- The source includes several possible routes and no dominant route is obvious.
+- The diagram would require missing content, such as an unstated dataset or method.
+- The user explicitly requested approval before route generation.
+
+When ambiguity is non-blocking, choose the conservative interpretation and record it in `uncertainties` and `fallback_note`.
+
+## Forbidden Additions
+
+Record concrete forbidden additions, not generic warnings. Examples of useful forbidden items:
+- datasets not used by the paper;
+- methods not described by the paper;
+- causal arrows not supported by evidence;
+- decorative stages created only to fill space;
+- institution, logo, author, or place names copied from references;
+- numbers, citations, captions, or labels from Custom_gallery or literature images.
+
+## Reference Integrity
+
+Custom_gallery and literature references are style and structure anchors only. They never become semantic sources. The contract must explicitly state that all node labels, formulas, dataset names, model names, place names, author names, and numeric values come from the uploaded source or confirmed user material.
+
+## Dual Output Lock
+
+Every accepted contract must require both outputs:
+- Version A: editable template SVG using `image-templatedraw.md` and `generate_route_image.py assemble`.
+- Version B: AI reference PNG using `image-aigenerate.md` and `generate_route_image.py run-ai-variant`.
+
+Version B is not a fallback for Version A. Both are generated and inserted as two consecutive PPT pages so the user can later choose which route diagram style to keep.

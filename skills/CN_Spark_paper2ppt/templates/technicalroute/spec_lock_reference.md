@@ -1,147 +1,240 @@
-# `{project_name}` · Execution Lock (single-figure)
+# TechnicalRoute Spec Lock Reference
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5.5 写路线图局部 spec_lock 时读取；它提供机器可读的模板、槽位、颜色和输出路径锁定格式。
 
-> **⚠️ Skeleton for the main agent — do NOT copy this file verbatim into a project.** When producing `<project_path>/spec_lock.md`, emit ONLY `##` sections with filled-in `-` data lines. Strip all `>` blockquotes (those are author-time guidance, not runtime data). Every output line must be parseable data.
->
-> **Position in the pipeline (TR engine):** This is the **machine-readable** counterpart of `design_spec.md`. The renderer (`generate_route_image.py prompt|run`) and the template-assembler MUST `read_file` this before producing the SVG / PNG. Values not listed here MUST NOT appear in the output. For the human-readable rationale (why we chose this template / palette / panel plan), read `design_spec.md`.
->
-> **Conflict rule**: on divergence with `design_spec.md`, **`spec_lock.md` wins** (it is what the renderer actually consumes).
+This is the machine-readable lock skeleton for one internal TechnicalRoute job. It controls both Version A editable template SVG and Version B AI reference image.
 
----
+Important parser rule: `scripts/technicalroute/generate_route_image.py assemble` reads only Markdown `## section` headers and `- key: value` rows. In the generated route `spec_lock.md`, do not put machine-readable rows inside fenced YAML blocks.
 
-## canvas
-- viewBox: 0 0 1280 720
-- format: ppt169
-- aspect_ratio: 16:9
-- margin_top: 60
-- margin_bottom: 80
-- margin_left: 60
-- margin_right: 60
+## route_job
 
-> Mirror `design_spec.md §II`. Common alternatives: `0 0 1024 768` (PPT 4:3), `0 0 1242 1660` (Xiaohongshu), `0 0 1080 1920` (Story). Mismatching this with `design_spec.md` triggers the conflict rule (this file wins, but emit a warning).
+- id: route_01
+- parent_project: <project_name>
+- parent_module_number: 3
+- parent_module_title: Research Route
+- page_template_version: P08
+- page_ai_reference_version: P09
+- external_skill_call_allowed: false
 
----
+## diagram
 
-## archetype
-- archetype: thinking
-- sub_variant: quad
-- argument_flow: left_to_right
-- panel_count: 4
+- diagram_type: research_route
+- archetype: workflow
+- sub_variant: horizontal-pipeline
+- purpose: Explain the paper research route from question to evidence.
+- output_language: zh_CN
+- preserve_english_terms: true
 
-> Copied verbatim from `contract.md §2` via `design_spec.md §III`. Renderer uses `archetype` to pick the right prompt skeleton from `references/image-prompt-templates.md`.
+Allowed `diagram_type` values:
+- `research_route`
+- `method_framework`
+- `thinking_map`
+- `whole_paper_workflow`
+- `concept_framework`
 
----
+Allowed `archetype` values:
+- `workflow`
+- `method`
+- `thinking`
 
-## colors
-- bg: #FFFFFF
-- primary: #1F3864
-- accent: #C00000
-- muted: #B0B0B0
-- border: #DDDDDD
-- text_body: #222222
-- text_caption: #666666
+## paths
 
-> Fill only the colors actually used. Delete unused rows rather than leave as `#......`. Accent area must stay ≤ 5% of the canvas — enforced in `qa-checklist.md`.
+- route_workdir: technicalroute/route_01
+- contract_path: technicalroute/route_01/contract.md
+- content_path: technicalroute/route_01/content.yaml
+- design_spec_path: technicalroute/route_01/design_spec.md
+- spec_lock_path: technicalroute/route_01/spec_lock.md
+- style_profile_path: technicalroute/route_01/style_refs/style_profile.md
+- prompt_ai_path: technicalroute/route_01/prompt_ai.md
+- route_template_svg_path: technicalroute/route_01/output/route_template_01.svg
+- route_ai_image_path: technicalroute/route_01/output/route_ai_01.png
+- route_template_slide_svg_path: svg_output/08_route_template.svg
+- route_ai_slide_svg_path: svg_output/09_route_ai.svg
+- audit_report_path: technicalroute/route_01/audit_report.md
 
----
+## references
 
-## typography
-- title_family: "Microsoft YaHei", "Source Han Sans SC", sans-serif
-- title_latin_family: "Times New Roman", serif
-- body_family: "Microsoft YaHei", "Source Han Sans SC", sans-serif
-- body_latin_family: "Inter", "Arial", sans-serif
-- formula_family: "STIX Two Math", "Cambria Math", "Times New Roman", serif
-- title_size: 28
-- panel_label_size: 20
-- body_size: 14
-- formula_size: 18
-- caption_size: 12
+- content_schema: references/technicalroute/content-schema.md
+- diagram_contract: references/technicalroute/diagram-contract.md
+- archetype_reference: references/technicalroute/archetype-workflow.md
+- color_typography: references/technicalroute/color-typography.md
+- shape_recipes: references/technicalroute/shape-recipes.md
+- seed_sites: references/technicalroute/seed_sites.json
+- seed_urls: references/technicalroute/seed_urls.md
+- template_draw_prompt: references/technicalroute/image-templatedraw.md
+- ai_generate_prompt: references/technicalroute/image-aigenerate.md
+- qa_checklist: references/technicalroute/qa-checklist.md
 
-> Mixed-script discipline (hard rule): CJK and Latin runs MUST use separate `<tspan font-family>` segments. Renderer never mixes Microsoft YaHei into Latin runs or Times New Roman into CJK runs.
+## reference_mode
 
----
+- mode: atlas_only
+- online_search_plan: technicalroute/route_01/style_refs/search_plan.md
+- offline_hints_folder: <optional_user_reference_folder>
+- selected_seed_site_1: <optional site name from seed_sites.json>
+- gallery_ref_1: templates/technicalroute/Custom_gallery/<discipline>/<file>
+- gallery_ref_2: <optional>
+- style_refs_manifest: technicalroute/route_01/style_refs/manifest.json
+- fallback_note: <why atlas_only or offline was chosen>
+
+Allowed route-level `mode` values:
+- `literature`: online academic / institutional references were used.
+- `offline_user_uploads`: the user uploaded at least three route reference images.
+- `atlas_only`: internal Custom_gallery / template atlas only.
+
+When calling `generate_route_image.py prompt`, use `--reference-mode literature` for both `literature` and `offline_user_uploads`, because the prompt command currently accepts only `literature` and `atlas_only`.
 
 ## source_choice
+
 - template_key: pipeline_with_stages
-- template_path: assets/templates/pipeline_with_stages.svg
-- gallery_refs:
-  - assets/Custom_gallery/transportation/全文思路.png
-  - assets/Custom_gallery/transportation/技术路线-模型数据.png
-- fallback_backend: gemini
-- fallback_atlas_only: false
+- template_svg_path: templates/technicalroute/templates/pipeline_with_stages.svg
+- template_reason: matches the source-grounded workflow stage count and left-to-right logic
+- candidate_1: pipeline_with_stages
+- candidate_1_reason: strongest structural fit
+- rejected_1: cycle_diagram
+- rejected_1_reason: source does not describe iteration
 
-> One of `template_key` / `gallery_refs` / `fallback_backend` must be set for the renderer to know how to produce the figure.
->
-> - `template_key` set → editable-SVG assembly path. Renderer reads the SVG, performs slot substitution per `slot_map` below, writes both `.svg` and a rasterised `.png`.
-> - `template_key: none` → AI generation path. Renderer uses `fallback_backend` + the prompt synthesized from `prompt.md`. `gallery_refs` (if any) are passed as `--reference` images.
-> - `fallback_atlas_only: true` → renderer adds the `[ATLAS-ONLY MODE]` clause to the prompt and skips the literature `style_refs/*.png` (only the abstract atlas SVGs feed in).
+`source_choice.template_key` is the primary key consumed by `assemble`. Legacy `## template_version` with `- template_key: ...` is still accepted by the script for compatibility, but new route locks should use `source_choice`.
 
----
+## content_contract
+
+- main_question: <main question>
+- main_claim: <one-sentence claim>
+- node_count: 0
+- edge_count: 0
+- lane_count: 0
+- no_invention: true
+- source_grounding_required: true
+
+Every node and edge must be traceable to `content.yaml` and `contract.md`.
 
 ## slot_map
-- P0.title: content.yaml.title
-- P1.label: content.yaml.panels[0].label
-- P1.points[0]: content.yaml.panels[0].points[0]
-- P1.points[1]: content.yaml.panels[0].points[1]
-- P2.label: content.yaml.panels[1].label
-- P2.formula: content.yaml.panels[1].formula_latex
-- P3.label: content.yaml.panels[2].label
-- P4.label: content.yaml.panels[3].label
-- caption: content.yaml.caption
 
-> One row per `{{<path>}}` placeholder that appears in the chosen template SVG. Right-hand side is the dotted path inside `content.yaml`. **Every placeholder in the template must have a row here**; unmapped placeholders are a `FAIL` in the audit. **Every row's value must come from `content.yaml` only** — never hardcode display strings here.
->
-> When `template_key: none`, omit this section entirely (AI generation has no slots).
+- title: content.yaml.title
+- subtitle: content.yaml.subtitle
+- columns[0].label: content.yaml.columns[0].label
+- columns[1].label: content.yaml.columns[1].label
+- columns[2].label: content.yaml.columns[2].label
+- nodes[0].label: content.yaml.nodes[0].label
 
----
+Rules:
+- The left side is the template placeholder name without braces.
+- The right side is a dotted `content.yaml` path.
+- One slot maps to one semantic item.
+- One semantic label should not be split into multiple text boxes.
+- If a node must wrap, use one text element with multiple `<tspan>` lines.
+- If node count exceeds available slots, select another template or revise `content.yaml`.
 
 ## color_var_map
-- "var(--primary)": colors.primary
-- "var(--accent)": colors.accent
-- "var(--muted)": colors.muted
-- "var(--surface)": colors.bg
-- "var(--border)": colors.border
 
-> One row per CSS variable used in the template SVG. The renderer literally string-replaces the CSS-var token with the HEX from §colors. Templates MUST use these var() tokens, not raw HEX, so they can re-skin per project. Templates without any var() are accepted but warned against in `qa-checklist.md`.
+- --route-bg: colors.bg
+- --route-surface: colors.surface
+- --route-primary: colors.primary
+- --route-secondary: colors.secondary
+- --route-accent: colors.accent
+- --route-critical: colors.accent_critical
+- --route-text: colors.text
+- --route-border: colors.border
 
----
+The script accepts raw CSS variable names such as `--route-primary` and compatibility keys such as `var(--route-primary)`.
+
+## colors
+
+- bg: #FFFFFF
+- surface: #F6F8FB
+- primary: #1F3864
+- secondary: #4472C4
+- accent: #2F75B5
+- accent_critical: #A23B2A
+- text: #1F1F1F
+- text_secondary: #595959
+- border: #D9E2F3
+- source: inherited_from_project_or_user_template
+
+If the parent project uses a user PPTX template palette, these variables must resolve through that palette first.
+
+## typography
+
+- title_family: Microsoft YaHei, PingFang SC, Arial, sans-serif
+- body_family: Microsoft YaHei, PingFang SC, Arial, sans-serif
+- latin_family: Times New Roman, serif
+- annotation_family: Microsoft YaHei, PingFang SC, Arial, sans-serif
+- node_label: 16
+- lane_label: 18
+- annotation: 12
+
+Use the parent deck font stacks unless route-local design explicitly overrides them.
+
+## shape_radius
+
+- node_rx: 6
+- dense_node_rx: 3
+- group_rx: 6
+- lane_rx: 4
+- image_rx: 4
+
+This controls route diagram corner roundness. Keep values modest for academic PPT.
 
 ## glossary_preserve
-- 站点客流可恢复性
-- 双链路恢复曲线
-- 接驳可达性指数
-- TSI
 
-> Copy verbatim from `contract.md §4`. These strings will appear in the SVG / image with **zero modification** — no translation, no abbreviation, no case folding. The renderer fails the audit if any of these strings is mutated.
+- term_1: <verbatim source term>
+- term_2: <verbatim source term>
 
----
-
-## emphasis_panel
-- panel_id: P3
-- reason: contract.md §3 P3 carries the "what we learnt" punchline
-
-> Optional. Set ONLY when the figure has a single panel that should carry the `accent` color (≤ 5% area). All other panels use `primary` / `muted`. Omit if the figure has no emphasis.
-
----
-
-## output
-- svg_path: projects/{project_name}/output/route_{archetype}_{timestamp}.svg
-- png_path: projects/{project_name}/output/route_{archetype}_{timestamp}.png
-- png_size: 2K
-- aspect_ratio: 16:9
-- prompt_log_path: projects/{project_name}/output/route_{archetype}_{timestamp}_prompt.txt
-- audit_path: projects/{project_name}/audit_report.md
-
-> When `template_key: none`, `svg_path` may be omitted (AI generation produces PNG only). Otherwise both `svg_path` and `png_path` are required.
-
----
+Each term must remain unchanged in prompts and visible labels.
 
 ## forbidden
-- emojis anywhere (including `glossary_preserve` strings — strip emojis from source before listing)
-- watermarks, URLs, social-media logos in the rendered output
-- raw HEX in templates (must go through `color_var_map`)
-- mixing CJK and Latin under one `<tspan>` font-family
-- using `glossary_preserve` strings as ENGLISH abbreviations or translated forms anywhere in the figure
-- 3D / drop shadows / saturated gradients / freestyle curved arrows (except `workflow.circular`)
-- node text / data values / place names / author names copied from any `gallery_refs` image
 
-> The last bullet is the **academic-integrity guardrail**. Gallery images are style anchors only; their content (numbers, place names, model names) must never appear in the produced figure unless it independently appears in `content.yaml` (which itself derives strictly from the user's material).
+- no_external_skill: Do not call an external technicalroute skill.
+- no_gallery_text: Do not copy text, numbers, formulas, dataset names, model names, author names, citations, or place names from Custom_gallery or style references.
+- no_invention: Do not add unsupported datasets, methods, variables, or causal claims.
+- no_stacked_text_fragments: Do not split one semantic phrase into overlapping text boxes.
+
+## ai_reference_version
+
+- enabled: true
+- prompt_path: technicalroute/route_01/prompt_ai.md
+- backend: openai
+- model: gpt-image-2
+- aspect_ratio: 16:9
+- image_size: 2K
+- output_filename: route_ai_01
+- output_path: technicalroute/route_01/output/route_ai_01.png
+- style_source_1: technicalroute/route_01/style_refs/style_profile.md
+- refs_plan: technicalroute/route_01/style_refs/route_ai_refs.json
+- gallery_ref_1: <optional>
+- no_invention: true
+- refs_required_when_declared: true
+- allow_no_ref_fallback: false
+
+Version B must be generated from article content plus exactly two reference source classes recorded in `style_refs/route_ai_refs.json`: discipline-matched Custom_gallery raster anchors and literature/search raster route figures listed in `style_refs/manifest.json` after collection from a `seed_sites.json`-driven search plan. It must not be a screenshot of Version A. `run-ai-variant` must pass `--refs-plan <route_workdir>/style_refs/route_ai_refs.json` and `--out-svg <project_path>/svg_output/<NN>_route_ai.svg` so the generated image is embedded into the deck immediately.
+
+## embedding
+
+- consecutive_pages_required: true
+- template_version_title: 3 Research Route: Editable Template Version
+- ai_reference_version_title: 3 Research Route: AI Reference Version
+- template_version_visual_requirement: technicalroute
+- ai_reference_version_visual_requirement: technicalroute
+- template_slide_svg_path: svg_output/08_route_template.svg
+- ai_slide_svg_path: svg_output/09_route_ai.svg
+- ai_slide_must_embed_png_data_uri: true
+- citation_footer: <inherited>
+- bottom_banner_text: <inherited>
+
+## qa
+
+- run_checklist: references/technicalroute/qa-checklist.md
+- require_editable_template_svg: true
+- require_ai_png: true
+- require_source_grounding: true
+- require_existing_paths: true
+- forbid_external_technicalroute_skill: true
+- forbid_stacked_text_fragments: true
+- max_label_lines: 3
+
+## commands
+
+- contract: python3 scripts/technicalroute/generate_route_image.py contract --out <route_workdir>/contract.md --project <project_name> --archetype <thinking|method|workflow>
+- assemble: python3 scripts/technicalroute/generate_route_image.py assemble --spec-lock <route_workdir>/spec_lock.md --content <route_workdir>/content.yaml --out <route_workdir>/output/route_template_01.svg
+- prompt: python3 scripts/technicalroute/generate_route_image.py prompt --archetype <archetype> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode <literature|atlas_only> --out <route_workdir>/prompt_ai.md
+- prepare_ai_refs: python3 scripts/technicalroute/literature_search.py prepare-ai-refs --topic "<paper title / keywords>" --discipline <discipline> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs
+- run_ai_variant: python3 scripts/technicalroute/generate_route_image.py run-ai-variant --prompt <route_workdir>/prompt_ai.md --backend openai --model gpt-image-2 --aspect_ratio 16:9 --image_size 2K --filename route_ai_01 --out <route_workdir>/output --refs-plan <route_workdir>/style_refs/route_ai_refs.json --out-svg <project_path>/svg_output/09_route_ai.svg --title "3 Research Route: AI Reference Version" --subtitle "Generated from article content plus gallery/style anchors" --caption "AI reference route diagram; semantic content follows the source material" --page-number 9
+- audit: python3 scripts/technicalroute/generate_route_image.py audit --image <route_workdir>/output/route_ai_01.png --content <route_workdir>/content.yaml --contract <route_workdir>/contract.md --out <route_workdir>/audit_report.md

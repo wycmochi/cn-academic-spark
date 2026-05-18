@@ -1,589 +1,304 @@
 ---
 name: cn-academic-spark-ppt-engine
 description: >
-  把一份完整的学术材料（论文、报告、开题书、读书笔记、综述提纲、PDF、Word、Markdown 或粘贴文本）
-  转换为一整套**中文学术 .pptx**。覆盖四类汇报场景：学术论文讲解 / 课程报告 / 开题报告 / 文献综述。
-  采用 **Source → Outline → SVG → DrawingML** 多阶段流水线：先识别大纲、生成可编辑 SVG，再
-  转 PPTX，最终交付的是矢量可编辑的 `.pptx`，不是 Markdown 大纲。同时强制满足中文学术硬约束：
-  GB/T 7714 引文页脚、备注区演讲词、底部横幅、四路线版式分流。
-  当任意一页需要"技术路线图 / 研究框架图 / 思考脉络图 / 全文流程图"时，本技能会在
-  Step 5.5 使用**内置 TechnicalRoute 模块**
-  （contract-first 8 步流水线 + 文献样式检索 + Custom_gallery 风格参考 + 可编辑 SVG 优先），
-  不再调用外部 technicalroute skill，确保整套学术 PPT 由一个 skill 独立完成。
-  当用户上传学术材料且要求做幻灯片 / 答辩 / 汇报 / 组会 / 开题 / 综述讲解时调用本技能。
+  Convert a complete academic source package, such as a paper, report, proposal,
+  review outline, PDF, Word document, Markdown file, or pasted text, into a
+  Chinese academic .pptx deck. Use this skill for thesis defense, group meeting,
+  journal club, course report, proposal defense, and literature review slides.
+  The pipeline is Source to Outline to Design Spec to SVG to DrawingML PPTX,
+  with editable vector output, GB/T 7714 citation footers, speaker notes, bottom
+  banners, academic route selection, and an internal TechnicalRoute module for
+  research-route / framework diagrams. Do not call an external technicalroute
+  skill; this skill contains the full route-diagram pipeline.
 ---
 
-# cn-academic-spark-ppt-engine · 中文学术 PPT 生成器
+# CN Academic Spark PPT Engine
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件是 skill 主入口；当用户提供学术材料并要求生成中文学术 PPT 时触发；它串联 source 解析、模板选择、学术大纲、图片获取、内置 TechnicalRoute、SVG 生成、质检和 PPTX 导出。
 
-> **核心 pipeline**：`Source Document → Outline → Design Spec → [Image Acquisition] → SVG Pages → Quality Check → DrawingML (PPTX)`
+## Core Contract
 
-本技能底层资产（templates / scripts / executor / strategist）参考自 ppt-master 并按中文学术场景做了必要扩展，保证：
+Output a real editable `.pptx`, not a Markdown outline and not flattened slide screenshots. Generate editable SVG pages first, then convert them to native DrawingML using `scripts/svg_to_pptx.py`.
 
-1. 输出是**真正可编辑的 .pptx**：原生 DrawingML 矢量形状，PowerPoint / WPS 双击可改。
-2. 整套 deck 走"先 SVG → 再 PPTX"两段式，避免文字与图形挤在一起、避免位图退化。
-3. 强制满足中文学术硬约束（GB/T 7714 引文、混合字体、备注演讲词、底部横幅、四路线分流）。
+Hard requirements:
+- Run steps serially. Each step's output is the next step's input.
+- Stop at blocking checkpoints when user confirmation is required.
+- Re-read project `spec_lock.md` before generating every SVG page.
+- The main agent writes the final SVG pages sequentially. Do not delegate bulk SVG generation to subagents.
+- Use mixed-font `<tspan>` segmentation for Chinese / Latin / numeric SVG text. See `references/academic/citation-style.md`.
+- Keep `design_spec.md` and `spec_lock.md` keys in English. Field values may be Chinese.
+- Do not load or call any external `technicalroute` skill. Use the internal `scripts/technicalroute/`, `references/technicalroute/`, and `templates/technicalroute/` folders only.
 
-> [!CAUTION]
-> ## 🚨 全局执行纪律
->
-> 1. **串行执行**：Step 1 → Step 7 严格按序，每步输出即下一步输入。
-> 2. **BLOCKING = 硬停**：⛔ 标记的步骤必须等用户明确确认。
-> 3. **不允许跨步打包**：Step 4 的"八项确认"必须一次性给出并等待回应。
-> 4. **每页重读 `spec_lock.md`**：Executor 生成每张 SVG 前都重读，避免长 deck 主题色漂移。
-> 5. **SVG 主代理产出**：SVG 生成必须由当前主代理顺序输出，禁止派给子代理批量生成。
+## Main Scripts
 
-> [!IMPORTANT]
-> ## 🌐 语言规则
->
-> - **响应语言**：跟随用户输入与源材料；除非用户明确切换。
-> - **混合字体写法**：在 SVG 中用 `<tspan font-family="...">` 分段；具体见 [references/academic/citation-style.md](references/academic/citation-style.md)。
-> - **`design_spec.md` 模板结构**保持英文骨架，字段值可填中文。
-
----
-
-## 主流水线脚本
-
-| 脚本 | 作用 |
-|------|------|
-| `scripts/source_to_md/pdf_to_md.py` | PDF → Markdown |
-| `scripts/source_to_md/doc_to_md.py` | DOCX / EPUB / HTML 等 → Markdown |
-| `scripts/source_to_md/excel_to_md.py` | Excel → Markdown |
-| `scripts/source_to_md/ppt_to_md.py` | PPTX → Markdown |
-| `scripts/source_to_md/web_to_md.py` | 网页 → Markdown |
-| `scripts/project_manager.py` | 项目初始化 / 校验 / 资源导入 |
-| `scripts/analyze_images.py` | 图片分析（生成图注 + 位置建议） |
-| `scripts/image_gen.py` | 多后端 AI 生图（默认 Gemini 3 Pro Image） |
-| `scripts/technicalroute/generate_route_image.py` | 内置技术路线 / 研究框架图模块：contract / prompt / assemble / run / embed / audit |
-| `scripts/technicalroute/literature_search.py` | 技术路线图文献样式检索与 style_refs manifest 生成 |
-| `scripts/svg_quality_checker.py` | SVG 合规检查 |
-| `scripts/total_md_split.py` | 演讲词按页拆分 |
-| `scripts/finalize_svg.py` | SVG 后处理（图标内嵌 / 图片裁切 / tspan 拍平） |
-| `scripts/svg_to_pptx.py` | **核心**：SVG → PPTX 转换（原生 DrawingML） |
-| `scripts/update_spec.py` | 主题色 / 字体批量传播 |
-
-完整脚本说明：[scripts/README.md](scripts/README.md)。
-
-## 模板索引
-
-| 索引 | 路径 | 用途 |
-|------|------|------|
-| 版式模板 | `templates/layouts/layouts_index.json` | 含 `academic_defense`（学位答辩）/ `medical_university`（医学院风）/ `government_blue`（开题答辩可用）等 |
-| 可视化模板 | `templates/charts/charts_index.json` | 70+ 图表 / 信息图 / 框架（甘特图 / SWOT / 鱼骨 / 矩阵 / 概念图等） |
-| 技术路线模板 | `templates/technicalroute/templates/templates_index.json` | 内置 TechnicalRoute 可编辑 SVG 骨架，配合 `templates/technicalroute/Custom_gallery/` 风格参考 |
-| 图标库 | `templates/icons/` | tabler / phosphor / simple-icons / chunk 四套 |
-
-学术场景**强推**：
-- `academic_defense` — 论文答辩 / 组会汇报（蓝白学院风、有 logo 位、有底部横幅位）
-- `medical_university` — 医学 / 生命科学类
-- `government_blue` — 开题报告（庄重深蓝、适合甘特图页）
-
-## 学术专属参考（references/academic/）
-
-| 文件 | 内容 | 何时读 |
-|------|------|--------|
-| [references/academic/route-academic-paper.md](references/academic/route-academic-paper.md) | Route A 学术论文路线（question-to-evidence 骨架） | Strategist 判定 Route A 时 |
-| [references/academic/route-course-report.md](references/academic/route-course-report.md) | Route B 课程报告路线（背景-问题-分析-建议） | Strategist 判定 Route B 时 |
-| [references/academic/route-proposal.md](references/academic/route-proposal.md) | Route C 开题报告路线（含甘特图） | Strategist 判定 Route C 时 |
-| [references/academic/route-literature-review.md](references/academic/route-literature-review.md) | **Route D 文献综述路线（含概念框架可视化）** | Strategist 判定 Route D 时 |
-| [references/academic/citation-style.md](references/academic/citation-style.md) | GB/T 7714 引文 + 中英文混合字体 SVG 写法 | **任何路线写引用时必读** |
-| [references/academic/speaker-notes.md](references/academic/speaker-notes.md) | 演讲词撰写规范、衔接、口播 vs 书面 | Step 6 写 `notes/total.md` 时 |
-| [references/academic/layout-library.md](references/academic/layout-library.md) | 中文学术各 `content_type` 的版式映射（含底部横幅） | Strategist 选版式时 |
-| [references/academic/executor-academic.md](references/academic/executor-academic.md) | **学术专属执行器**：底部横幅 / 引文页脚 / 公式页 / 矩阵证据表的 SVG 写法 | **Step 6 执行器必读，配合 executor-base；必要时可参考 executor-general；非学术 consultant 执行器已清理，不使用** |
-
----
-
-## Workflow（7 步）
-
-### Step 1 · 解析输入材料
-
-🚧 **GATE**：用户已提供任意一种材料（PDF / DOCX / EPUB / URL / Markdown / 对话粘贴文本 / 已有论文笔记）。
-
-> 仅有**主题词**而无材料时 → 先跑 [`workflows/topic-research.md`](workflows/topic-research.md)（带回研究文档 + 图片），再回到 Step 1。学术场景下 topic-research 必须只用**权威可引用源**（Wikipedia / 期刊官方 / 政府公开数据），避免引入未经发表的二手内容。
-
-按下表转 Markdown：
-
-| 用户输入 | 命令 |
+| Script | Purpose |
 |---|---|
-| PDF（论文 / 报告） | `python3 scripts/source_to_md/pdf_to_md.py <file>` |
+| `scripts/source_to_md/pdf_to_md.py` | Convert PDF to Markdown and extract academic figures. |
+| `scripts/source_to_md/doc_to_md.py` | Convert DOCX / EPUB / HTML to Markdown. |
+| `scripts/source_to_md/excel_to_md.py` | Convert spreadsheets to Markdown tables. |
+| `scripts/source_to_md/ppt_to_md.py` | Convert PPTX to Markdown. |
+| `scripts/source_to_md/web_to_md.py` | Convert web pages to Markdown. |
+| `scripts/project_manager.py` | Initialize, validate, and import project assets. |
+| `scripts/template_import/cli.py` | Convert user PPTX templates into manifest / SVG references for template registration. |
+| `scripts/template_import/layout_guard.py` | Audit user PPTX template slots, protected regions, page-number slots, unused placeholders, and overlap risks. |
+| `scripts/analyze_images.py` | Analyze source figures and recommend captions / placement. |
+| `scripts/image_gen.py` | Generate AI images when required by the asset plan. |
+| `scripts/latex_formula_to_png.py` | Render extracted LaTeX formulas to transparent PNG assets for PPT insertion. |
+| `scripts/technicalroute/generate_route_image.py` | Internal route-diagram commands: `contract`, `prompt`, `assemble`, `run-ai-variant`, `embed`, `audit`. |
+| `scripts/technicalroute/literature_search.py` | Build literature / offline / atlas style references for route diagrams. |
+| `scripts/svg_quality_checker.py` | Validate SVG compatibility. |
+| `scripts/total_md_split.py` | Split speaker notes by slide. |
+| `scripts/notes_to_docx.py` | Export speaker notes as a standalone DOCX, one section per slide. |
+| `scripts/finalize_svg.py` | Remove unused template placeholders, embed icons, align / embed images, flatten text, and normalize SVG. |
+| `scripts/svg_to_pptx.py` | Convert SVG pages to editable DrawingML PPTX. |
+| `scripts/pptx_openability_check.py` | Validate exported PPTX package relationships, notes master parts, content types, and current-user read/open permission. |
+| `scripts/skill_integrity_check.py` | Developer maintenance audit for route/workflow/index/formula/TechnicalRoute/PPTX export integrity. |
+| `scripts/update_spec.py` | Propagate theme color and typography changes. |
+
+## Template Indexes
+
+Always inspect `templates/resource_index.json` first, then the resource-specific index before choosing assets:
+- `templates/resource_index.json`: compact map of resource indexes, selection stages, and downstream consumers.
+- `templates/layouts/layouts_index.json`: deck layout templates.
+- `templates/charts/charts_index.json`: reusable chart and framework SVGs.
+- `templates/formula/formula_templates_index.json`: formula explanation block templates; use for one PNG containing formula title, formula, and variable interpretation.
+- `templates/technicalroute/templates/templates_index.json`: editable TechnicalRoute SVG skeletons.
+- `templates/technicalroute/Custom_gallery/`: style anchors for AI-generated route diagrams.
+- `templates/icons/`: icon libraries.
+
+Academic defaults: `academic_defense` for defense / group meeting / journal club, `medical_university` for medicine and life science, and `government_blue` for proposal defense.
+
+## References To Load On Demand
+
+Academic references:
+- `references/academic/paper-type-guidance.md`: classify paper type, choose narrative, and write numbered slide titles.
+- `references/academic/route-academic-paper.md`: Route A, single academic paper.
+- `references/academic/route-course-report.md`: Route B, course report or case / policy report.
+- `references/academic/route-proposal.md`: Route C, proposal / research plan.
+- `references/academic/route-literature-review.md`: Route D, literature review.
+- `references/academic/citation-style.md`: GB/T 7714 citation footer and mixed-font SVG rules.
+- `references/academic/speaker-notes.md`: spoken notes rules.
+- `references/academic/layout-library.md`: academic `content_type` layout mapping.
+- `references/academic/formula-rendering.md`: mandatory formula extraction, LaTeX rendering, PNG embedding, and formula QA.
+- `references/academic/executor-academic.md`: academic executor additions; read in Step 6 with `references/executor-base.md`.
+
+TechnicalRoute references:
+- `references/technicalroute/content-schema.md`
+- `references/technicalroute/diagram-contract.md`
+- `references/technicalroute/archetype-thinking.md`
+- `references/technicalroute/archetype-method.md`
+- `references/technicalroute/archetype-workflow.md`
+- `references/technicalroute/color-typography.md`
+- `references/technicalroute/shape-recipes.md`
+- `references/technicalroute/seed_sites.json`
+- `references/technicalroute/seed_urls.md`
+- `references/technicalroute/image-templatedraw.md`
+- `references/technicalroute/image-aigenerate.md`
+- `references/technicalroute/handling-no-references.md`
+- `references/technicalroute/qa-checklist.md`
+
+## Conditional Workflows
+
+Load these only when the trigger matches:
+
+| Workflow | Trigger |
+|---|---|
+| `conditional-workflows/create-template.md` | User uploads or defines a reusable PPT / SVG / screenshot template for `templates/layouts`. |
+| `conditional-workflows/topic-research.md` | User provides only a topic or broad requirement with no citeable source material. |
+| `conditional-workflows/resume-execute.md` | User resumes an existing project folder in a fresh session. |
+| `conditional-workflows/verify-charts.md` | SVG pages contain calculator-supported data charts before final export. |
+| `conditional-workflows/visual-edit.md` | User wants localized visual changes to generated slides. |
+| `conditional-workflows/customize-animations.md` | User asks for object-level animation, reveal order, timing, or transition changes. |
+| `conditional-workflows/generate-audio.md` | User asks for narration audio, recorded PPTX, or video-ready voice-over export. |
+## Workflow
+
+### Step 1 - Parse Source Material
+
+Gate: the user has provided a PDF, DOCX, EPUB, URL, Markdown file, pasted text, or existing notes. If the user only provides a topic and no source material, run `conditional-workflows/topic-research.md` first with citeable academic or authoritative sources, then return here.
+
+Commands:
+| Input | Command |
+|---|---|
+| PDF | `python3 scripts/source_to_md/pdf_to_md.py <file>` |
 | DOCX / Word | `python3 scripts/source_to_md/doc_to_md.py <file>` |
-| Excel 数据 | `python3 scripts/source_to_md/excel_to_md.py <file>` |
-| 网页 / 期刊摘要 | `python3 scripts/source_to_md/web_to_md.py <URL>` |
-| Markdown | 直接读 |
+| Excel | `python3 scripts/source_to_md/excel_to_md.py <file>` |
+| Web page / journal abstract | `python3 scripts/source_to_md/web_to_md.py <URL>` |
+| Markdown | Read directly. |
 
-> ⚠️ **PDF 图片切割（学术友好默认）**：`pdf_to_md.py` 从 1.1.0 起默认 `--image-extract render`——按图片 bbox 自适应扩边（含同区域矢量箭头 / 坐标轴 / 标签 + 紧邻的 `Figure N: …` / `图 N` caption），用 `page.get_pixmap(clip=...)` 2× 渲染成 PNG。旧的"只导出 embedded 栅格层"会丢矢量图层，导致裁切残缺。
->
-> - 默认即可：`python3 scripts/source_to_md/pdf_to_md.py paper.pdf`
-> - 复刻旧行为：`python3 scripts/source_to_md/pdf_to_md.py paper.pdf --image-extract embed`
-> - 不要图：`--images none`
+Academic PDF figure extraction defaults to rendered clipping, because embedded-only extraction can lose vector layers, arrows, axes, and captions. Use `--image-extract embed` only when legacy behavior is required, or `--images none` when figures are not needed.
 
-**✅ Checkpoint** — 源材料 Markdown 就绪，进入 Step 2。
-
----
-
-### Step 2 · 项目初始化
+### Step 2 - Initialize Project
 
 ```bash
 python3 scripts/project_manager.py init <project_name> --format ppt169
 python3 scripts/project_manager.py import-sources <project_path> <source_files...> --move
 ```
 
-`<project_name>` 建议 `<场景>_<论文短名>`，例如 `defense_mobility_exposure`、`review_2sfca_dynamic`、`proposal_displacement_2026`。
+Checkpoint: `projects/<name>/` exists with `sources/`, `templates/`, `images/`, `svg_output/`, and `notes/`.
 
-`--move` 让原 PDF / Markdown 进入 `sources/` 而不是复制，节省空间。
+### Step 3 - Select Template
 
-**✅ Checkpoint** — `projects/<name>/` 已建好（含 `sources/` `templates/` `images/` `svg_output/` `notes/`），进入 Step 3。
+Read `templates/layouts/layouts_index.json`. Do not default to free design unless the user explicitly asks for it or every candidate scores below threshold.
 
----
+Score candidates by scenario match, style / audience match, palette fit, and school / institution identity. Write the Top 3 candidates into `design_spec.md` section I with original `summary`, matched keywords, rationale, and copy command. Ask the user to choose candidate 1 / 2 / 3 or free design at Step 4.2.
 
-### Step 3 · 模板选择（⛔ MUST 读 `layouts_index.json`）
+After template choice, copy the template SVGs, `design_spec.md`, and images into the project. Read the copied template `design_spec.md` and merge its Color, Typography, and Page Roster into project `design_spec.md` and `spec_lock.md`.
 
-> ⚠️ **不再默认走"自由设计"**。早期版本里这一步会跳过模板，结果是 `templates/layouts/` 下 18 套版式从未被用到。从 1.1.0 起，**Step 3 必须读 `templates/layouts/layouts_index.json`** 并产出候选清单。只有当用户明确说"不要模板 / 我要从零设计"时才退回自由模式。
+If the selected template came from a user-provided PPTX, its detected aesthetics and parameters have the highest priority: master/layout placeholder geometry, title position, title box size, font family, font size, bold settings, colors, logo position, footer rhythm, page-number position, and page density. Use the template in master-placeholder fill mode: replace placeholder prompt text inside the corresponding master/layout/slide-local slots and inherit that slot's geometry and text style. Add source figures, formula PNGs, charts, and route images into the matching picture/content placeholders. Do not overlay new text on top of template prompt text. Do not create extra free-floating shapes, text boxes, or image frames when a suitable template slot exists. If a slot is unusable, choose another imported layout; only fall back to the built-in template library after recording the fallback in `spec_lock.md`. Treat school name, college name, logos, page numbers, footer marks, and authored master graphics as protected regions. Run overlap/placeholder cleanup before export and block export if any prompt such as `Click to edit...`, `单击此处...`, or `演讲者/课程名称` remains visible.
 
-#### 3.1 必读
+Before generating pages from a user-provided PPTX template, read `manifest.json` / `templateBinding` and copy the manifest-derived `editableContentRegion` into `design_spec.md` and `spec_lock.md`. Center body content inside `editableContentRegion.primary`, keep titles inside the imported title slot / `titleRegion`, and keep citations, footer marks, and page numbers inside the imported footer slots. If the editable region is missing, zero-sized, or overlaps logo / school-name / footer protected regions, run `scripts/template_import/layout_guard.py` and block SVG generation until the template contract is fixed. A user-template deck is invalid if any slide has more than one visible page number.
 
+Template import or creation uses `conditional-workflows/create-template.md`.
+
+### Step 4 - Strategist Stage
+
+Read:
+```text
+references/strategist.md
+references/academic/executor-academic.md
 ```
-Read templates/layouts/layouts_index.json
-```
 
-`layouts_index.json` 每个条目有 `summary`（场景适用面）与 `keywords`（关键词集）两个字段，是**模板选择规则**而不是文档说明。
-
-#### 3.2 自动匹配（Strategist 必做，结果在 Step 4.2 八项确认里给用户看）
-
-按以下信号给每个候选层级打分：
-
-| 信号 | 权重 | 取值来源 |
+Classify the deck route first and read only the matching route reference:
+| Input type | Route | Reference |
 |---|---|---|
-| 学术场景关键词命中 `summary` | × 3 | 用户文字 + 源材料标题 |
-| `keywords` 与用户的"风格目标 / 受众"重叠 | × 2 | 八项确认 §3 §4 |
-| 配色与用户期望配色相近 | × 1 | 八项确认 §5 |
-| 用户已指定学校 / 机构 logo 风格 | × 4 | 用户文字 |
+| Single academic journal / conference paper | Route A | `references/academic/route-academic-paper.md` |
+| Course report, policy report, or case analysis | Route B | `references/academic/route-course-report.md` |
+| Proposal, research plan, or opening defense | Route C | `references/academic/route-proposal.md` |
+| Literature review / review / journal club synthesis | Route D | `references/academic/route-literature-review.md` |
 
-至少产出 **Top 3 候选**写进 `design_spec.md §I 模板候选` 表，**每条带 `summary` 原文 + 命中关键词 + 推荐理由 + 复制命令**。
-
-学术场景常见映射（仅作首轮兜底，不替代 `layouts_index.json` 真匹配）：
-
-| 用户场景 | 首选模板（若 layouts_index.json 命中） |
-|---|---|
-| 论文答辩 / 组会 | `academic_defense` |
-| 开题答辩 | `government_blue` |
-| 医学 / 生命科学 | `medical_university` |
-| 文献综述 / journal club | `academic_defense`（建议；改色见对应 `design_spec.md`） |
-| 工科 / 工程类 | `重庆大学` / `中国电建_现代` |
-| 心理学 | `psychology_attachment` |
-| 政企 / 商务 | `china_telecom_template` / `中汽研_商务` / `招商银行` |
-
-#### 3.3 用户确认
-
-在 Step 4.2 八项确认的 §1（"画布"）后追加 **§1.5 模板选择**，把 Top 3 候选给用户看，让用户回 `①` / `②` / `③` 或 `自由设计`。
-
-#### 3.4 复制模板（用户选好以后执行）
-
-```bash
-TEMPLATE_DIR=templates/layouts/<chosen>   # e.g. academic_defense
-cp $TEMPLATE_DIR/*.svg <project_path>/templates/
-cp $TEMPLATE_DIR/design_spec.md <project_path>/templates/
-cp $TEMPLATE_DIR/*.png <project_path>/images/ 2>/dev/null || true
-```
-
-复制完成后**主代理必须 `read_file <project_path>/templates/design_spec.md`**：这份文件是该模板自带的设计书（含主题色、字体、版心、Page Roster），Strategist 在 Step 4 写 `design_spec.md` 与 `spec_lock.md` 时必须把它的 §II Color / §III Typography / §V Page Roster **整段并入**，不要重写一份与之矛盾的。
-
-详细规则与 mirror / fidelity / standard 三种复制模式见 [workflows/create-template.md](workflows/create-template.md)。
-
-#### 3.5 退回自由设计的条件
-
-只在以下情况退回自由模式：
-
-1. 用户在 §1.5 明确选 `自由设计`；
-2. Top 3 候选打分都 **< 5**（即没有任何条目同时命中场景关键词与风格关键词）→ 仍然要把候选写进 `design_spec.md §I 模板候选` 表并标注"未达匹配阈值，回退自由设计"。
-
-**✅ Checkpoint** — `design_spec.md §I 模板候选` 已写入并被用户回应；若选了模板，模板目录 SVG / `design_spec.md` 已复制并被主代理读取。进入 Step 4。
-
----
-
-### Step 4 · Strategist 阶段（八项确认 + 路线分流 + 大纲）
-
-🚧 **GATE**：Step 3 完成。
-
-**必读**：
-```
-Read references/strategist.md          # ppt-master 通用 Strategist
-Read references/academic/executor-academic.md   # 学术执行器（提前看，决定 §IV §V）
-```
-
-#### 4.1 路线分流（学术专属）
-
-按下表判定，**只读对应那一份 academic route 文件**：
-
-| 输入类型 | 路线 | 必读 |
-|---|---|---|
-| 学术论文（期刊 / 会议、单篇） | **Route A** | [references/academic/route-academic-paper.md](references/academic/route-academic-paper.md) |
-| 课程报告（含时政 / 政策 / 案例） | **Route B** | [references/academic/route-course-report.md](references/academic/route-course-report.md) |
-| 开题报告（含甘特图、研究计划） | **Route C** | [references/academic/route-proposal.md](references/academic/route-proposal.md) |
-| 文献综述 / Review | **Route D** | [references/academic/route-literature-review.md](references/academic/route-literature-review.md) |
-
-#### 4.1.5 论文类型叙事与标题规则（高优先级）
-
-按 `D:\Code_mochi\AI_Try\nature-skills\skills\nature-paper2ppt\SKILL.md#Paper-Type Guidance` 的逻辑先判断论文类型，再组织章节与页标题：
-
-| 论文类型 | 默认叙事弧 |
-|---|---|
-| discovery / mechanism | question-to-evidence |
-| methods / AI / tool / algorithm | problem-to-solution |
-| resource / dataset / atlas / omics / benchmark | workflow-to-validation |
-| clinical / population / intervention | design-to-inference |
-| materials / chemistry / physics / engineering | property-to-mechanism 或 design-to-performance |
-| review / perspective | evidence-map |
-
-标题必须是**结论式 / 证据式标题**，不能只写"方法""结果""案例"。内容页标题格式固定为：
+After Route A / B / C / D is selected, read:
 
 ```text
-<模块编号> <模块大标题>：<本页小标题或证据结论>
+references/academic/paper-type-guidance.md
 ```
 
-示例：`4 模型结果：变量重要性排序`、`4 模型结果：网络结构ALE图分析`。同一大模块内页码编号不变，小标题变化；章节页 / 封面 / 致谢页可不套此格式。
+Use it to classify the paper type, choose the narrative framework, and then organize modules and slide titles. This reference is the local copy of the Paper-Type Guidance logic; do not read external skill paths during execution. Body slide titles must use:
 
-#### 4.2 八项确认 + 模板候选（⛔ BLOCKING）
-
-把以下配置作为**一次性**打包给用户：
-
-1. 画布：`ppt169`（学术汇报默认）
-   - **§1.5 模板候选**（从 Step 3 自动匹配带过来）：Top 3 候选，每条 = `<layout_name>` + `summary` 摘要 + 命中关键词 + 推荐理由。让用户回 `①` / `②` / `③` / `自由设计`。**默认不要替用户选**——除非 Top 1 打分明显高出第二名 ≥ 5 分，否则一律让用户挑。
-2. 页数：依汇报时长（默认 1.5 分钟/页，综述 2 分钟/页）
-3. 受众：答辩委员 / 组会同行 / 课程教师 / 综述听众
-4. 风格目标：严谨 / 紧凑 / 留白学院风
-5. 配色：深蓝经典（默认 `#1F3864`） / 墨绿学术 / 深灰简约 / 跟随学校色
-6. 图标用法：tabler-outline（默认，学院风） / phosphor-duotone（信息密度高时）
-7. 字体：中文微软雅黑 + 英数 Times New Roman（默认）；或 Source Han Sans + Inter
-8. 图片：用户提供 / AI 生成 / Web 搜索 / 仅占位
-
-> ⚠️ 默认配色与字体即满足"学术硬约束"。用户无特殊要求时直接采用默认。
-> ⚠️ 用户在 §1.5 选了某个模板后，其 `design_spec.md` 自带的 **§II Color / §III Typography / §V Page Roster** 会**覆盖** §5（配色） / §7（字体）的默认值，且会被 Strategist 整段并入 project 级 `design_spec.md`——不要让用户再为已经在模板里写死的字段二次拍板。
-
-#### 4.3 输出物
-
-- `<project_path>/design_spec.md`（人读，含 §IX 每页内容简报）
-- `<project_path>/spec_lock.md`（机器读，Executor 每页重读 — 见 ppt-master 主文档）
-
-`design_spec.md §IX` 每页都要带：`page_rhythm` / `page_layouts` / `page_charts` / `bottom_banner_text` / `citations[]` 字段。其中 **`bottom_banner_text` 与 `citations[]` 是学术专属字段**，详见 [executor-academic.md](references/academic/executor-academic.md) §2。
-
-**✅ Checkpoint** — Strategist 阶段完成，用户已确认大纲。
-
----
-
-### Step 5 · 图片获取（条件触发）
-
-🚧 **GATE**：Step 4 完成。
-
-> **触发**：`design_spec.md §VIII 资源清单`中至少一行 `Acquire Via: ai` 或 `Acquire Via: web`。否则跳到 Step 6。
-
-```
-Read references/image-base.md           # 通用框架
-Read references/image-generator.md      # 仅当有 ai 行
-Read references/image-searcher.md       # 仅当有 web 行
+```text
+<module_number> <module_title>: <slide_subtitle_or_evidence_conclusion>
 ```
 
-**学术补充**：
-- 论文里**已存在的图**（实验结果图、流程图截图） → 用 `analyze_images.py` 分析后**直接嵌入 SVG**（保留原图，标"图来源：[n]"）。
-- 需要的**自绘图**（技术路线、研究框架、概念图、思考脉络、全文流程） → 统一切换到 **Step 5.5：内置 TechnicalRoute 流程**（见下）；不要调用外部 technicalroute skill。
+Examples: `4 Model Results: Variable Importance Ranking`; `4 Model Results: Network ALE Structure Analysis`. Cover, agenda, section divider, acknowledgements, and reference pages may omit this format.
 
-**✅ Checkpoint** — 每一行资源都达到 `Generated` / `Sourced` / `Needs-Manual` 终态；所有"自绘示意图"行已转给 Step 5.5。
+Blocking confirmation: ask once for canvas, template choice, page count, audience, style goal, palette, icon style, typography, and image policy.
 
----
+### Step 5 - Image Acquisition
 
-### Step 5.5 · 内置 TechnicalRoute 流程（paper2ppt 内联模块）
-
-🚧 **GATE**：Step 5 中至少有一行被标记为 `figure_type ∈ {technical_route, research_framework, thinking_map, whole_paper_workflow, concept_framework}`，或 `design_spec.md §IX` 任意一页 `page_charts` 含 `embed_technicalroute: true`。
-> 本步骤使用 **paper2ppt 内置模块**：`scripts/technicalroute/`、`references/technicalroute/`、`templates/technicalroute/`。不要读取、调用或依赖外部 technicalroute skill；paper2ppt 必须作为一个独立 skill 完成整套 PPT 与其中的技术路线 / 研究框架图。
-
-#### 5.5.1 运行内置 TechnicalRoute pipeline
-
-按以下内置 8 步执行（路径均相对本 skill 根目录）：
-1. `python3 scripts/technicalroute/generate_route_image.py contract --out <route_workdir>/contract.md --project <project_name> --archetype <thinking|method|workflow>` 写 Diagram Contract，并让用户确认关键字段；
-2. 写 `<route_workdir>/content.yaml`，字段必须完全来自当前论文 / 用户材料 / `design_spec.md §IX`；
-3. 需要文献样式参考时运行 `scripts/technicalroute/literature_search.py emit-plan ...`，无足够参考时走 atlas-only fallback；
-4. 先读 `templates/technicalroute/Custom_gallery/<discipline>/...` 选 1-3 张结构 / 风格 anchor（若无 manifest 则跳过，不编造），再读 `templates/technicalroute/templates/templates_index.json` 选择可编辑 SVG 模板；
-5. 写 route 级 `design_spec.md` + `spec_lock.md`，记录 gallery_refs、template_key、slot_map、color_var_map、colors；
-6. `python3 scripts/technicalroute/generate_route_image.py prompt ...` 合成 prompt；
-7. Tier 2 优先：`generate_route_image.py assemble ...` 输出可编辑 SVG；模板缺失或 slot_map 不全时退到 Tier 3：`generate_route_image.py run ...` 生成 PNG；
-8. `generate_route_image.py audit ...` 做 hard checks，并由主代理多模态核验 gallery 抄袭红线。
-
-#### 5.5.2 复用 PPT engine 的 design_spec
-
-`contract.md §5（视觉合同）` 中 `color_scheme / typography` 字段**必须**与本 PPT engine 的 `<project_path>/design_spec.md §III + §IV`（配色 / 字体）保持一致——避免技术路线图配色与整套 deck 漂移。
-
-#### 5.5.3 输入清单（PPT engine → 内置 TechnicalRoute）
-把以下信息写入 route workdir 的 `contract.md` / `content.yaml`：
-
-```yaml
-caller: cn-academic-spark-ppt-engine
-target_svg: <project_path>/svg_output/<NN>_<page_name>.svg
-target_bbox: "<x>,<y>,<w>,<h>"           # 该图在 SVG 页面里的预留位置
-target_caption: "图 N · <caption>"
-archetype: thinking|method|workflow      # 由 design_spec.md §IX 决定
-sub_variant: <可选，让 内置 TechnicalRoute 推>
-content_inline: { ... }                  # 同 content.yaml 的 dict
-glossary_preserve: ["<术语1>", ...]
-contract_inline: { ... }                 # 至少 §1 §3 §4 §5 §6
-color_scheme_from_pptx: "<deck 主色 HEX>"
-typography_from_pptx: "中文-微软雅黑 / 拉丁-Times New Roman"
+Gate: `design_spec.md` contains any `Acquire Via: ai` or `Acquire Via: web`, or source figures / complex tables are available. Read as needed:
+```text
+references/image-base.md
+references/image-generator.md
+references/image-searcher.md
+references/image-layout-spec.md
 ```
 
-#### 5.5.4 输出回填（内置 TechnicalRoute → PPT engine）
+Academic image priorities:
+- Reuse source figures, experimental results, methodological diagrams, and complex table screenshots when available.
+- Run `scripts/analyze_images.py` to create captions and placement recommendations.
+- Label embedded source figures with citation markers.
+- For self-drawn research route, framework, thinking map, or full-paper workflow diagrams, switch to Step 5.5.
 
-内置 TechnicalRoute 模块必须产出：
+High-priority visual coverage rule: except TechnicalRoute pages, summary pages, and planning / implication pages, every slide must contain at least one meaningful image, source figure, complex table screenshot, chart, or mathematical formula.
 
-```yaml
-image_path: <project_path>/.../route_xxx.png
-audit_passed: true
-manifest_json: <project_path>/.../style_refs/manifest.json
-contract_path: <project_path>/.../contract.md
-editable_svg_path: <project_path>/.../route_xxx.svg   # 可编辑版本（若 内置 TechnicalRoute 命中模板）
-fallback_reason: <若仅有 png 没有 svg 的原因>
-```
+Formula rule: when the source contains equations, read `references/academic/formula-rendering.md`. Analyze the user text, extract main academic steps, keep the important formulas under those steps whenever possible, transcribe each formula as LaTeX, write the formula title and variable meanings, render the title + complete formula + interpretation as one PNG with `scripts/latex_formula_to_png.py --block-json`, and insert that PNG via `<image data-formula-png="true" data-formula-block-png="true">`. This is mandatory for both user-provided PPTX templates and built-in template-library decks. Do not render formulas or their interpretation as separate SVG text boxes. Put at most five formula blocks on one slide and separate adjacent formula blocks with gray 1.5pt dashed lines. Use low-resolution formula screenshots only when LaTeX transcription fails and the limitation is recorded.
 
-PPT engine 收到后：
+### Step 5.5 - Internal TechnicalRoute Dual Output
 
-1. **优先嵌入 `editable_svg_path`**（用 `<svg>` 内联或 `<image>` 引用矢量），保证图层可编辑；
-2. 若仅有 `image_path: *.png` → 用 `<image href="...">` 嵌入到 Step 6 对应 SVG 的 `target_bbox`，**并在 `notes/<NN>_*.md` 注明该页含位图技术路线**（提醒后期手动可编辑化）；
-3. 把 `manifest.json` 中的所有 reference 文献合并入该页 `citations[]`（GB/T 7714 条目）。
+Gate: any resource or page requires `technical_route`, `research_framework`, `thinking_map`, `whole_paper_workflow`, `concept_framework`, or `embed_technicalroute: true`.
 
-#### 5.5.5 三档优先级（任务 3 + 任务 8 的硬规则）
-
-内置 TechnicalRoute 内部按以下三档分叉，PPT engine 不用干预——只看返回值是 `editable_svg_path` 还是 `image_path`：
-
-| Tier | 路径 | 输出 | 触发 |
+For every required route diagram, generate two consecutive PPT pages:
+| Version | Method | Output field | PPT insertion |
 |---|---|---|---|
-| **1** | Always: `assets/Custom_gallery/<discipline>/` 取结构 / 风格 anchor | — | 学科文件夹存在 manifest 且 keywords 命中 |
-| **2** | `templates/technicalroute/templates/templates_index.json` 找能装下 anchor 那种结构的可编辑模板 → `assemble` 子命令注入 content.yaml | **可编辑 SVG**（首选嵌入：用 `<image href>` 矢量引用或 inline `<svg>`，让 deck 整体仍是矢量可编辑） | 内置 TechnicalRoute 找到 ≥ 2 分的模板 + 与 anchor 结构匹配 |
-| **3** | `image_gen.py`（nano banana pro / image2）出 PNG，把 Custom_gallery anchor 作 `--refs` 喂进去 | **PNG**（用 `<image href>` 嵌入；在 `notes/<NN>_*.md` 注明该页含位图） | 内置 TechnicalRoute 找不到合适模板 |
+| A editable template version | Select the best SVG skeleton from `templates/technicalroute/templates/templates_index.json` and inject `content.yaml` via `assemble`. | `route_template_svg_path` | One standalone page titled `<module_number> Research Route: Editable Template Version`. |
+| B AI reference version | Generate a PNG from article content plus `Custom_gallery` anchors and optional literature `style_refs`. | `route_ai_image_path` | The next page titled `<module_number> Research Route: AI Reference Version`. |
 
-**学术抄袭红线（每张图必跑）**：Custom_gallery 仅作**结构 / 配色风格**参考。图中所有节点文字、数据、地名、模型名、作者名 **必须**来自当前论文 / 用户给定材料，**不允许**直接搬运 Custom_gallery 案例图里的文字内容。这条约束由 内置 TechnicalRoute 的：
+Execution order:
+1. Read `references/technicalroute/diagram-contract.md`, then create `<route_workdir>/contract.md` with `generate_route_image.py contract`. Ask the user only for blocking ambiguity or explicit pre-approval requests; otherwise record conservative assumptions and continue.
+2. Classify `archetype` and `sub_variant`, then read exactly one matching archetype file: `archetype-thinking.md`, `archetype-method.md`, or `archetype-workflow.md`.
+3. Read `references/technicalroute/content-schema.md` and write `<route_workdir>/content.yaml` from the source and confirmed spec only. No Custom_gallery or literature-reference text may enter `content.yaml`.
+4. Read `references/technicalroute/color-typography.md` and `references/technicalroute/shape-recipes.md`; write route `spec_lock.md` with inherited deck colors, user PPTX template palette priority, shape radius, `template_key`, `slot_map`, `color_var_map`, `gallery_refs`, and forbidden additions.
+5. Read `references/technicalroute/seed_urls.md` for the branch rules, and treat `references/technicalroute/seed_sites.json` as the only source of online academic-search sites. Run `literature_search.py prepare-ai-refs --topic <paper title/keywords> --discipline <discipline> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs` before Version B generation. This command writes `search_plan.json` from `seed_sites.json`, reads recorded literature raster refs from `style_refs/manifest.json`, selects discipline-matched raster anchors from `templates/technicalroute/Custom_gallery/gallery_index.json`, and writes `<route_workdir>/style_refs/route_ai_refs.json`. Do not hard-code sites or use SVG/PPTX/editable route pages as AI references.
+6. Inspect `templates/technicalroute/Custom_gallery/` and record 0-3 suitable `gallery_refs`; do not invent files and do not copy reference text.
+7. Read `references/technicalroute/image-templatedraw.md`; select a template from `templates/technicalroute/templates/templates_index.json`, complete the slot map, and generate Version A with `generate_route_image.py assemble`.
+8. Read `references/technicalroute/image-aigenerate.md`; build `prompt_ai.md` from the article outline / `content.yaml`, then generate Version B with `generate_route_image.py run-ai-variant --refs-plan <route_workdir>/style_refs/route_ai_refs.json`. Pass `--out-svg <project_path>/svg_output/<NN+1>_route_ai.svg` in the same command so the generated PNG is immediately embedded into a PPT page. `--refs-plan` is the single allowed reference bridge: it may contain seed-site literature raster refs and Custom_gallery raster anchors only. SVG, PPTX, and screenshots of Version A are forbidden.
+   Default generation follows `.env.example`: `--backend openai --model gpt-image-2 --aspect_ratio 16:9 --image_size 2K`. Provider-specific keys are still read by `scripts/image_gen.py`; override backend/model only when the environment explicitly requires it.
+9. Verify `route_ai_image_path` and `route_ai_slide_svg_path` exist. `create-ai-slide` remains available for manual recovery, but normal execution should use `run-ai-variant --out-svg ...` so Version B cannot be forgotten. The slide must embed the PNG bytes as `data:image/png;base64,...`; external or relative image href links are invalid. Insert Version A and Version B into consecutive `svg_output/` pages and run `references/technicalroute/qa-checklist.md`.
 
-- `contract.md §4 glossary_preserve` —— 字节级保留来自用户材料的术语，
-- `spec_lock.md §forbidden` —— 明令禁止节点文字来自 gallery_refs，
-- `Step 8 audit` —— 多模态对比 output 与 gallery_refs，相似 → FAIL 重渲，
-
-三重保护。本 PPT engine 在 5.5.1 切换前必须在 contract 中**显式声明该图的原始来源**（用户论文 / 用户笔记的具体段落）。
-
-**✅ Checkpoint** — 所有 `embed_technicalroute: true` 的页面都已拿到 `editable_svg_path` 或 `image_path`，并已挂回 `design_spec.md §VIII` 资源清单（行状态 → `Generated`）。回到 Step 6 继续 SVG 生成。
-
----
-
-### Step 6 · Executor 阶段（SVG 生成 + 演讲词）
-
-🚧 **GATE**：Step 4（及 Step 5 触发后）完成。
-
-**必读**：
+TechnicalRoute output record:
+```yaml
+contract_path: <route_workdir>/contract.md
+content_yaml_path: <route_workdir>/content.yaml
+route_spec_lock_path: <route_workdir>/spec_lock.md
+route_template_svg_path: <route_workdir>/output/route_template_<id>.svg
+route_ai_image_path: <route_workdir>/output/route_ai_<id>.png
+audit_report_path: <route_workdir>/audit_report.md
+route_template_slide_svg_path: <project_path>/svg_output/<NN>_route_template.svg
+route_ai_slide_svg_path: <project_path>/svg_output/<NN+1>_route_ai.svg
+reference_mode: literature | offline_user_uploads | atlas_only
+gallery_refs: []
+style_refs_manifest: <route_workdir>/style_refs/manifest.json
 ```
-Read references/executor-base.md          # 通用执行规则（每页重读 spec_lock 等）
-Read references/shared-standards.md       # SVG / PPT 兼容性硬约束
-Read references/academic/executor-academic.md   # ⭐ 学术专属执行器（替代 executor-general / consultant）
+
+Academic integrity lock: Custom_gallery, literature references, and offline user reference images are only style / structure anchors. All visible labels, formulas, data names, method names, place names, author names, citations, and numeric values must come from the uploaded paper, user material, or confirmed `design_spec.md`.
+
+### Step 6 - Generate SVG Pages And Notes
+
+Read:
+```text
+references/executor-base.md
+references/academic/executor-academic.md
+references/academic/formula-rendering.md
+references/shared-standards.md
 ```
 
-> ⚠️ 学术场景**只读 executor-academic.md**，不读 executor-general 或任何非学术 consultant 流程。学术执行器在通用约束之上叠加：底部横幅、引文页脚、模块化公式页、矩阵证据表、混合字体 tspan 写法。
+Use `executor-general.md` only for general non-academic mechanics not covered by academic references. Do not use consultant-specific executor flows.
 
-#### 6.1 设计参数确认
+For each page, re-read `spec_lock.md`, use the selected template, fill the selected layout slots, include `bottom_banner_text` and `citation_footer` when required, place generated page numbers according to `spec_lock.md` page-number source, apply the visual coverage rule, remove unused placeholder prompts, check forbidden overlaps, and write spoken notes to `notes/total.md` following `references/academic/speaker-notes.md`.
 
-按 `executor-base.md §2` 输出画布、字号、配色、字体计划。
+User PPTX template execution is slot replacement, not overlay drawing. For every title, subtitle, body, picture, formula, route image, and page number, use the imported slot box, inherited font size/color/bold setting, and protected-region map whenever available. Delete or replace unused prompt text and unused picture/body placeholders before finalization. A generated page is invalid if title text overlaps school identity, if one semantic phrase is split into stacked text boxes, or if unused template prompts remain visible.
 
-#### 6.2 批量预读
+Formula execution is blocking here: before writing any page that explains a displayed formula, create the formula block JSON under `notes/`, run `scripts/latex_formula_to_png.py --block-json`, verify the PNG exists under `images/formulas/`, and insert the formula template shell with `<image data-formula-png="true" data-formula-block-png="true">`. Do not write the formula role, equation, `式中`, or variable explanations as separate final SVG text boxes.
 
-按 `executor-base.md §1.0` 一次性读完所有 `page_layouts` 与 `page_charts` 引用的模板 SVG。
+Keep summary and closing separate: create one standalone summary/conclusion page, and create a separate final thank-you / Q&A page. Never combine `总结` / `Summary` with `谢谢大家` / `Thank you` on one slide.
 
-#### 6.3 顺序生成 SVG
+For every template source, formula execution must insert the rendered PNG into the user-template picture/content slot or built-in content region as `<image data-formula-png="true" data-formula-block-png="true" href="images/formulas/formula_block_*.png">` or an embedded PNG data URI. Formula PNG boxes, text boxes, and separator lines must not overlap or stack.
 
-> ⚠️ **强制纪律**：必须**逐页串行**生成（不要 5 页一批）。每页生成前 `read_file <project_path>/spec_lock.md`。SVG 必须由当前主代理输出，不允许派子代理。
+Formula block rendering rule: the formula title, `definition_label`, and variable explanation text use the same font size and are not bold unless a selected template explicitly defines a different non-bold size. Do not make formula titles larger or heavier than the explanation text.
 
-每页输出文件 `<project_path>/svg_output/<NN>_<page_name>.svg`。
+Template-first style rule: citation arrows, numbered markers, callouts, connector strokes, dashes, shadows, and badge styles must inherit from the selected user PPTX template or built-in template library first. Copy the template marker shape, stroke width, color, dash pattern, number-badge fill, and label typography instead of inventing generic arrows or numeric circles.
 
-**学术专属硬约束**（见 [executor-academic.md](references/academic/executor-academic.md)）：
-
-1. 每张证据型 / 论点页底端必须有 **`bottom_banner`**（深蓝底白字一句话主旨，22mm 高，置于底部）；
-2. 凡引用文献的页面，必须在 `bottom_banner` 上方 8pt 浅灰 `#888888` 列出 **GB/T 7714 完整条目**；
-3. 引文条目里**中文-微软雅黑、数字 / 拉丁字符-Times New Roman**，分 `<tspan>` 写入；
-4. 公式页默认 **"模块化步骤公式页"**，每个公式独占一个 panel；超过 3 个公式时切换"标题分段公式页"；
-5. 自绘流程图 / 框架图禁止位图截图，必须用 SVG `<rect>` `<line>` `<path>` `<marker>` 写成可编辑形状。
-
-#### 6.4 质量检查门
+### Step 7 - Validate, Finalize, Export
 
 ```bash
-python3 scripts/svg_quality_checker.py <project_path>
-```
-
-任何 `error` 必须在本步修复并重出（**禁止**先跑 finalize_svg 再检查）。
-
-#### 6.5 演讲词
-
-写入 `<project_path>/notes/total.md`：每页 100–180 字，正式但自然，不照读 PPT。规范见 [references/academic/speaker-notes.md](references/academic/speaker-notes.md)。
-
-**✅ Checkpoint** — 所有 SVG 生成完毕、checker 0 errors、`notes/total.md` 完成。
-
-> **含数据图表的 deck**：在 Step 7 前先跑 [`workflows/verify-charts.md`](workflows/verify-charts.md) 校正坐标。AI 在映射数据→像素时常引入 10–50px 误差，verify-charts 把这一类错误清零。
-
----
-
-### Step 7 · 后处理与导出
-
-🚧 **GATE**：Step 6 完成；`svg_output/` 已就位、`notes/total.md` 已写。
-
-> ⚠️ 三个子步必须**逐一**执行，不要合在一行。
-
-**7.1 拆分演讲词**：
-```bash
+python3 scripts/svg_quality_checker.py <project_path>/svg_output
 python3 scripts/total_md_split.py <project_path>
-```
-
-**7.2 SVG 后处理**（图标嵌入 / 图片裁切 / tspan 拍平 / 圆角矩形转 path）：
-```bash
+python3 scripts/notes_to_docx.py <project_path>
 python3 scripts/finalize_svg.py <project_path>
+python3 scripts/svg_quality_checker.py <project_path>/svg_final
+python3 scripts/svg_to_pptx.py <project_path> --only native -s output -t none
+python3 scripts/pptx_openability_check.py <exported_pptx> --fix-permissions
 ```
 
-**7.3 导出 PPTX**（嵌入演讲词、默认带入场动画）：
-```bash
-python3 scripts/svg_to_pptx.py <project_path>
-# 输出：
-#   exports/<project_name>_<timestamp>.pptx           ← 主交付物（原生 DrawingML，高保真）
-#   backup/<timestamp>/<project_name>_svg.pptx        ← SVG 预览版（旧路径）
-#   backup/<timestamp>/svg_output/                    ← SVG 源备份
-```
+Keep the default `finalize_svg.py` steps enabled for user PPTX template decks; `cleanup-placeholders` is the export-time fallback that removes unused PowerPoint prompt text and untouched placeholder guide boxes. The second `svg_quality_checker.py` pass on `svg_final/` is mandatory because it catches template prompt residue after cleanup, missing TechnicalRoute Version B pages, non-embedded AI route images, formula text-box fallbacks, and combined summary/thank-you slides.
 
-**可选**：
-- `-t fade|push|wipe|...` 切页转场
-- `-a fade|mixed|none` 入场动画
-- `--animation-trigger after-previous|on-click|with-previous` 触发方式
-- 含数据图表 → 先跑 [`workflows/verify-charts.md`](workflows/verify-charts.md)
-- 想录制旁白 → 跑 [`workflows/generate-audio.md`](workflows/generate-audio.md)
-- 想可视化微调 → 跑 [`workflows/visual-edit.md`](workflows/visual-edit.md)
+Native DrawingML export must read `svg_output/`, not `svg_final/`. `svg_final/` is only for the SVG-reference fallback because post-processing may convert rounded rectangles and simple lines into SVG paths, which become many `<a:custGeom>` objects and can cause PowerPoint repair / missing-content failures. Keep slide transitions disabled by default with `-t none`; add transitions only when the user explicitly asks for them.
 
-#### 7.4 ⭐ 写最终汇总：`ppt_outline_cn.md`（必做，唯一）
+Speaker notes are exported as a standalone DOCX. Do not embed notes into the PPTX because notes-heavy packages can trigger PowerPoint repair prompts and COM/RPC open failures. The PPTX exporter strips notesSlide / notesMaster package parts even if a legacy flag is passed.
 
-🚧 **GATE**：7.3 已经写出 `exports/<project_name>_<timestamp>.pptx`。
+The PPTX openability check is mandatory before handing the file to the user. It must pass zip readability, internal relationship targets, notes slide -> notes master packaging, `[Content_Types].xml` notes overrides, `presentation.xml` notes master linkage, current-user file read/open permission, custom-geometry budget, and slide-transition budget. If it reports a broken package, excess `<a:custGeom>`, transition risk, or access-denied risk, fix the SVG-to-DrawingML export path and rerun export; do not bypass the converter by generating a different standard PowerPoint package.
 
-**只生成这一份汇总文件**。早期版本里 agent 在 Strategist 阶段会另出一份"中文大纲" + 在导出后又另出一份"质检报告"，两份语义大量重叠——**从 1.1.0 起取消单独的中文大纲文件，质检报告本身就是大纲**。
+If a user says the generated PPTX cannot open, asks to repair a PPTX, or reports content missing after opening, stop normal generation and run a recovery cycle:
+1. Inspect the failed PPTX with `scripts/pptx_openability_check.py <failed.pptx> --fix-permissions`.
+2. Record the likely cause: missing rel target / notes master, ACL/read permission, native export from `svg_final`, excessive `<a:custGeom>`, slide transitions, bad media relationship, or invalid content type.
+3. Regenerate a new timestamped copy from the same project using `scripts/svg_to_pptx.py <project_path> --only native -s output -t none`.
+4. Re-run `pptx_openability_check.py` and only return the regenerated copy if the check passes.
+5. Never solve this by switching to python-pptx or another direct PPT generator that bypasses the SVG -> DrawingML converter.
 
-写入路径：`<project_path>/ppt_outline_cn.md`
+If charts are used, run `conditional-workflows/verify-charts.md` before final export.
 
-格式（**必须**包含以下七节，缺一不可，字段标题逐字一致）：
+Final checklist: numbered module titles, visual coverage on non-exempt slides, consistent citations, consecutive TechnicalRoute A/B pages with embedded Version B AI image, formula blocks rendered as PNG, no unused user-template placeholders, separate summary and thank-you pages, spoken notes, and editable PPTX output.
 
-```markdown
-# QA Report
+Write `<project_path>/ppt_outline_cn.md` as the only final QA summary after export. It must report page count, notes coverage, image / formula object count, TechnicalRoute page locations and editability, citation handling, known limitations, and a per-page checklist. Do not create a second outline or duplicate QA report under another filename.
 
-页数：<N>
-备注覆盖页数：<N>          ← 即 notes/ 下有内容的页数；应当 = 总页数
-插图对象数：<N>            ← `<image>`、`finalize_svg` 嵌入的位图、内置 TechnicalRoute 返回的 PNG 之和
-技术路线图：<位置与可编辑性说明>  ← 例如 "第05页，使用 python-pptx 原生形状绘制，可在 PowerPoint/WPS 中编辑。" 没有就写"无"
-引文方式：<一句话说明>      ← 例如 "关键页脚注论文来源，末页集中列出参考文献。"
-已知限制：<一句话说明>      ← 例如 "论文原始图表以裁切图片形式嵌入；路线图和框架图为可编辑矢量形状。"
+Maintenance audit: after changing skill code, workflows, template indexes, or export logic, run `python3 scripts/skill_integrity_check.py`. This is a developer check, not a mandatory per-user generation step.
 
-## 页面清单
-
-第01页：<page name>
-第02页：<page name>
-…
-第NN页：<page name>
-```
-
-**硬约束**：
-
-1. 不要再另存任何其他名字的"中文大纲" / "outline_cn" / "outline.md"——只允许 `ppt_outline_cn.md` 这一份。
-2. "插图对象数"必须**实数**（grep 一遍最终 svg / pptx 数清楚），不要估算。
-3. "技术路线图"行如果 deck 里有自绘示意图 → 必须写明在第几页 + 是 SVG 可编辑还是 PNG 位图（来自 内置 TechnicalRoute 的 `editable_svg_path` 或 `image_path`）。
-4. "页面清单"逐页一行，编号与 `svg_output/` 文件名前缀一致。
-
-**✅ Checkpoint** — `ppt_outline_cn.md` 已写入 project 根，且与 `exports/*.pptx` 实际页数 / 内容核对一致。Step 7 完成。
-
----
-
-## 独立内置模块说明
-
-paper2ppt 已内置技术路线 / 研究框架图能力：脚本在 `scripts/technicalroute/`，参考说明在 `references/technicalroute/`，模板与 Custom_gallery 在 `templates/technicalroute/`。整套学术 PPT 生成不得再依赖外部 technicalroute skill；仅当用户明确只要一张单图且不做 PPT 时，才可以另行使用单图 skill。
-
----
-
-## 学术硬约束
-
-1. **可编辑 .pptx**：所有正文、表格、流程图都是原生 DrawingML 矢量；禁止把流程图退化为整张截图。
-2. **引文**：正文出现引用 → 必加 `[n]` 角标；该页底端 8pt 灰色完整 GB/T 7714 条目；混合字体分 tspan。
-3. **底部横幅**：每张证据型页都要有一句话主旨（深蓝底白字、22mm 高）。
-4. **演讲词**：每页 `notes/<NN>_*.md` 不允许空白。
-5. **不编造**：不出现源材料中没有的数据 / 机构 / 文献 / 图细节。
-6. **图片 / 公式高优先级**：除技术路线图页、总结页、规划启示页、封面、目录、章节页、致谢页外，其余每一页至少包含一张论文内图片 / 复杂表格截图 / 可引用图片，或一个数学公式 / 模型公式。若原文视觉资产不足，优先裁切论文复杂表格或方法公式；仍不足时在 `ppt_outline_cn.md` 的“已知限制”中列出对应页。
-
----
-
-## 输出物
-
-```
-projects/<project_name>/
-├── sources/                              ← 原始材料
-├── images/                               ← 用户图 + AI 生图 + 论文原图
-├── templates/                            ← 选择的版式模板（如有）
-├── design_spec.md                        ← 人读设计书
-├── spec_lock.md                          ← 机器读执行锁
-├── ppt_outline_cn.md                     ← ⭐ Step 7.4 唯一汇总（QA Report 格式：页数 / 备注覆盖 / 插图对象数 / 技术路线图 / 引文 / 限制 / 页面清单）
-├── svg_output/                           ← Executor 输出的 SVG
-│   ├── 01_cover.svg
-│   ├── 02_toc.svg
-│   ├── 03_introduction.svg
-│   └── ...
-├── svg_final/                            ← finalize_svg 后处理结果
-├── notes/
-│   ├── total.md                          ← 演讲词总文件
-│   ├── 01_*.md / 02_*.md / ...           ← 按页拆分
-├── exports/
-│   └── <project_name>_<timestamp>.pptx   ← ⭐ 主交付物
-└── backup/
-    └── <timestamp>/...                   ← SVG 备份 + 旧版预览 pptx
-```
-
----
-
-## Fallback Rules
-
-- **部分内容缺失**：仍尽量产出可用骨架；缺数据用占位符并在 `notes/` 注明；
-- **python-pptx / lxml 不可用**：跳过 svg_to_pptx，导出 SVG 集合 + 一份说明；
-- **没有 LibreOffice**：跳过 SVG 预览，直接走 finalize_svg → svg_to_pptx；
-- **图片获取失败**：按 `image-base.md §5` 规则——重试一次 → 标 `Needs-Manual` → 不阻塞主流程。
-
----
-
-## References Index
-
-通用（继承自 ppt-master）：
-
-| 文件 | 何时读 |
-|---|---|
-| [references/strategist.md](references/strategist.md) | Step 4 |
-| [references/executor-base.md](references/executor-base.md) | Step 6 |
-| [references/shared-standards.md](references/shared-standards.md) | Step 6 |
-| [references/image-base.md](references/image-base.md) | Step 5 |
-| [references/image-generator.md](references/image-generator.md) | Step 5 有 ai 行时 |
-| [references/image-searcher.md](references/image-searcher.md) | Step 5 有 web 行时 |
-| [references/template-designer.md](references/template-designer.md) | 仅在 [workflows/create-template.md](workflows/create-template.md) |
-| [references/canvas-formats.md](references/canvas-formats.md) | 画布尺寸查 |
-| [references/animations.md](references/animations.md) | Step 7 动画 |
-| [references/svg-image-embedding.md](references/svg-image-embedding.md) | SVG 内嵌位图时 |
-| [references/image-layout-spec.md](references/image-layout-spec.md) | 图片版式规范 |
-
-学术专属：
-
-| 文件 | 何时读 |
-|---|---|
-| [references/academic/executor-academic.md](references/academic/executor-academic.md) | **Step 6 必读** |
-| [references/academic/citation-style.md](references/academic/citation-style.md) | 任何路线写引用时 |
-| [references/academic/speaker-notes.md](references/academic/speaker-notes.md) | Step 6 写演讲词 |
-| [references/academic/layout-library.md](references/academic/layout-library.md) | Step 4 选版式 |
-| [references/academic/route-academic-paper.md](references/academic/route-academic-paper.md) | Route A |
-| [references/academic/route-course-report.md](references/academic/route-course-report.md) | Route B |
-| [references/academic/route-proposal.md](references/academic/route-proposal.md) | Route C |
-| [references/academic/route-literature-review.md](references/academic/route-literature-review.md) | Route D |
-
-## Notes
-
-- 本地预览：`python3 -m http.server -d projects/<name>/svg_final 8000`
-- 故障排除：[scripts/docs/troubleshooting.md](scripts/docs/troubleshooting.md)
-- 公式页规则（模块化 / 标题分段）已内嵌到 [executor-academic.md](references/academic/executor-academic.md)，不用查别的文件。
-
-
-
-
+Readable body font rule: except citation/reference footers and page numbers, final PPT text must be at least 12px. Body slides (not cover, divider, ending, or reference pages) should be dense by default and fill the selected editable content region with source-grounded text, charts, formulas, tables, or route content.

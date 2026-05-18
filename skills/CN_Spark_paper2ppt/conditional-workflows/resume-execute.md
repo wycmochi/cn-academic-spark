@@ -1,68 +1,134 @@
 ---
-description: Phase B entry — resume PPT execution in a fresh chat after Phase A (SKILL.md Step 1-5) completed in a previous session. Reads project state from disk and runs Step 6 + Step 7 with no Phase-A context carry-over.
+description: Resume SVG generation, validation, and PPTX export from an existing project folder in a fresh session.
 ---
 
-# Resume Execute Workflow
+# Resume Execution Workflow
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在中断后继续已有项目时读取；它通过磁盘上的 design_spec.md、spec_lock.md、sources、images、templates 和 technicalroute 输出判断恢复点，并继续执行 SKILL.md Step 6 与 Step 7。
 
-> Standalone Phase-B entry. Run when Phase A (SKILL.md Step 1–5) completed in a previous session and the user wants to continue with SVG generation + export. Loads project state from disk and runs Step 6 + Step 7 in a clean session.
+Standalone continuation workflow. Run when Phase A planning already produced a project folder and the user wants to continue SVG generation, validation, and PPTX export in a fresh session.
 
-This workflow is **independent**: it owns Phase B starting from a fresh chat — no upstream conversation context required. By isolating SVG generation in its own session, the model gains 20–40K context headroom by not carrying Phase A's eight-confirmation dialogue, image search/fetch results, or Strategist references.
+This workflow does not recreate the plan. It resumes from disk state and follows SKILL.md Step 6 and Step 7.
 
-## When to Run
+## When To Run
 
-The user opens a new chat and gives a phrase that names a project path and signals continuation. Recognize any of:
+Recognize requests such as:
 
-| Pattern | Example |
-|---|---|
-| "继续生成 projects/<project_name>" | "继续生成 projects/ppt169_joe_hisaishi" |
-| "resume execution projects/<project_name>" | "resume execution projects/ppt169_joe_hisaishi" |
-| Project path + any "继续 / 恢复 / 继续做 / 接着做" semantic | "把 projects/ppt169_joe_hisaishi 继续做完" |
+- `continue generating <project_path>`;
+- `resume execution for <project_path>`;
+- `finish this project`;
+- `continue from the existing project folder`;
+- a project path plus continuation wording.
 
-**Prerequisite**: Phase A must have completed in the named project. Verified by file presence in Step 1; do NOT auto-trigger Phase A on missing state.
+Prerequisite: Phase A must already be present in the named project. Do not silently restart Phase A when required state is missing.
 
----
+## Step 1 - Sanity Check Project State
 
-## Step 1: Sanity check
+Verify these before generating any SVG:
 
-Verify the project's Phase-A artifacts before doing anything else:
-
-| File / Directory | Required when | Reason |
+| Artifact | Required when | Purpose |
 |---|---|---|
-| `<project_path>/spec_lock.md` | Always | Strategist's execution contract; Executor reads it per page |
-| `<project_path>/design_spec.md` | Always | Section IX page outline; Executor cross-references it |
-| `<project_path>/images/` | `spec_lock images` references any image | Images must exist for embedding |
-| `<project_path>/templates/` | `spec_lock page_layouts` / `page_charts` references any | Layout / chart SVGs needed for batch read |
+| `<project_path>/design_spec.md` | Always | Page outline, academic route, content plan. |
+| `<project_path>/spec_lock.md` | Always | Machine-readable execution contract. |
+| `<project_path>/sources/` | Always when source files were imported | Concrete facts and evidence. |
+| `<project_path>/images/` | `spec_lock.md` references images, formulas, figures, or table screenshots | Asset embedding. |
+| `<project_path>/templates/` | `page_layouts` or selected template exists | Template inheritance. |
+| `<project_path>/technicalroute/` | TechnicalRoute pages were planned | Route content, route locks, outputs. |
+| `<project_path>/notes/` | Existing notes should be preserved | Avoid overwriting user-edited speaker notes. |
 
-If any required artifact is missing → report which one(s) and stop. Do NOT auto-fall-back into Phase A; the user must either complete Phase A in the original session or explicitly restart.
+If `design_spec.md` or `spec_lock.md` is missing, stop and report the missing file. Do not infer the plan from memory.
 
----
+## Step 2 - Determine The First Incomplete Step
 
-## Step 2: Load SKILL.md, proceed from Step 6
+Use disk evidence:
 
+| State | Resume point |
+|---|---|
+| TechnicalRoute planned but route output missing | SKILL.md Step 5.5, then Step 6. |
+| `svg_output/` missing or incomplete | SKILL.md Step 6. |
+| `svg_output/` exists but quality check failed | Repair Step 6 output, then Step 7. |
+| `notes/total.md` missing | Step 6 notes generation. |
+| Calculator-supported chart pages exist and chart verification missing | `verify-charts.md`, then Step 7. |
+| Final PPTX missing | Step 7 export. |
+| Final PPTX exists and user asks for tweaks | `visual-edit.md` or direct SVG edit. |
+
+Do not overwrite user-edited SVG, notes, or spec files without confirmation. If files are inconsistent, report the inconsistency and choose the least destructive continuation path.
+
+## Step 3 - Reload Required References
+
+Read:
+
+```text
+SKILL.md
+references/executor-base.md
+references/academic/executor-academic.md
+references/shared-standards.md
+references/academic/citation-style.md
+references/academic/layout-library.md
+references/academic/speaker-notes.md
 ```
-Read skills/ppt-master/SKILL.md
+
+Read TechnicalRoute references only if planned pages require them:
+
+```text
+references/technicalroute/content-schema.md
+references/technicalroute/diagram-contract.md
+references/technicalroute/image-templatedraw.md
+references/technicalroute/image-aigenerate.md
+references/technicalroute/qa-checklist.md
 ```
 
-Then jump to `### Step 6: Executor Phase` and run the documented pipeline:
+## Step 4 - Source Material Rule
 
-- Read references (executor-base + shared-standards + chosen style file + image-layout-spec + svg-image-embedding)
-- Design Parameter Confirmation
-- Pre-generation Batch Read (every layout / chart SVG referenced in `spec_lock`)
-- Per-page `spec_lock` re-read + sequential page generation
-- Quality Check Gate
-- Speaker notes generation
-- Step 7: Post-processing & Export (`total_md_split` → `finalize_svg` → `svg_to_pptx`)
+A fresh session has no reliable source details in context. Read relevant files under `<project_path>/sources/` while writing each page. `design_spec.md` gives page intent; sources provide concrete claims, figure names, formulas, citations, data values, and terminology.
 
-The fresh session pays the cost of re-reading references (~14K tokens) but earns back substantially more headroom by dropping Phase A's accumulated context. Net win in both window pressure and reasoning budget per page.
+Never fill evidence pages from outline memory alone.
 
-**Source materials**: Phase B is a fresh session; `<project_path>/sources/<file>.md` is NOT in context. The Executor SHOULD read the relevant `sources/` files when crafting per-page content — they hold the concrete facts, quotes, names, and details that turn skeleton outlines into substantive slides. `design_spec.md §IX` only carries the per-page intent; the source materials carry the texture. The Phase A → Phase B split is designed to free context budget precisely for this kind of high-quality enrichment.
+## Step 5 - Resume TechnicalRoute Safely
 
-> Note: this workflow does NOT duplicate Step 6 / Step 7 content. SKILL.md is the authoritative procedure; resume-execute only adds the resumption entry (When to Run + Step 1 sanity check above) and the source-materials guidance above.
+If `design_spec.md` or `spec_lock.md` declares TechnicalRoute pages:
 
----
+- verify each route job has `content.yaml`;
+- verify route `spec_lock.md`;
+- verify Version A editable SVG output;
+- verify Version B AI image output;
+- verify the two planned PPT pages are consecutive;
+- rerun route audit if any output is missing.
 
-## Step 3: Hand-back
+Do not call an external technicalroute skill. Use internal `scripts/technicalroute/` only.
 
-When Step 7 completes and `exports/<project_name>_<timestamp>.pptx` is produced, the workflow ends. Report the export path to the user.
+## Step 6 - Continue Step 6 And Step 7
 
-If the deck contains data charts, the [`verify-charts`](verify-charts.md) workflow runs between Step 6 and Step 7 as documented in SKILL.md — resume mode handles it the same way the continuous mode does.
+Generate pages sequentially. Before each SVG page:
+
+- re-read project `spec_lock.md`;
+- confirm `page_rhythm`;
+- confirm `page_layouts` / `page_charts`;
+- enforce academic title rules;
+- enforce visual coverage rule;
+- preserve citation footer, bottom banner, page number, and protected template regions;
+- in user PPTX template mode, fill existing slots and avoid extra free-floating shapes/text boxes.
+
+Post-processing and export:
+
+```bash
+python3 scripts/svg_quality_checker.py <project_path>/svg_output
+python3 scripts/total_md_split.py <project_path>
+python3 scripts/finalize_svg.py <project_path>
+python3 scripts/svg_to_pptx.py <project_path>
+```
+
+If the local script signatures differ, follow SKILL.md Step 7 and `scripts/docs/`.
+
+## Step 7 - Chart Verification
+
+If `design_spec.md` section VII declares calculator-supported charts, run `verify-charts.md` before final export. Do not guess chart pages from SVG alone when the design spec has no visualization section.
+
+## Completion Report
+
+Report:
+
+- resume point used;
+- repaired or generated files;
+- skipped steps and why;
+- final PPTX path;
+- any remaining risks, such as missing source figures, unresolved citations, or accepted template guard warnings.

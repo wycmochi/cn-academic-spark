@@ -1,0 +1,115 @@
+{
+  "version": "2026-05-17",
+  "contract": "User-facing workflows expose one CLI entry, either at scripts/<name>.py or scripts/<package>/cli.py. Internal helpers stay inside packages.",
+  "entrypoints": [
+    {
+      "key": "pdf_to_md",
+      "path": "source_to_md/pdf_to_md.py",
+      "stage": "source_to_markdown"
+    },
+    {
+      "key": "doc_to_md",
+      "path": "source_to_md/doc_to_md.py",
+      "stage": "source_to_markdown"
+    },
+    {
+      "key": "excel_to_md",
+      "path": "source_to_md/excel_to_md.py",
+      "stage": "source_to_markdown"
+    },
+    {
+      "key": "ppt_to_md",
+      "path": "source_to_md/ppt_to_md.py",
+      "stage": "source_to_markdown"
+    },
+    {
+      "key": "web_to_md",
+      "path": "source_to_md/web_to_md.py",
+      "stage": "source_to_markdown"
+    },
+    {
+      "key": "project_manager",
+      "path": "project_manager.py",
+      "stage": "project_setup"
+    },
+    {
+      "key": "template_import",
+      "path": "template_import/cli.py",
+      "stage": "template_import"
+    },
+    {
+      "key": "template_layout_guard",
+      "path": "template_import/layout_guard.py",
+      "stage": "template_import"
+    },
+    {
+      "key": "template_register",
+      "path": "template_import/register.py",
+      "stage": "template_import"
+    },
+    {
+      "key": "pptx_to_svg",
+      "path": "pptx_to_svg/cli.py",
+      "stage": "template_import"
+    },
+    {
+      "key": "finalize_svg",
+      "path": "finalize_svg.py",
+      "stage": "svg_finalization"
+    },
+    {
+      "key": "svg_quality_checker",
+      "path": "svg_quality_checker.py",
+      "stage": "quality_gate"
+    },
+    {
+      "key": "svg_to_pptx",
+      "path": "svg_to_pptx.py",
+      "stage": "pptx_export"
+    },
+    {
+      "key": "technicalroute",
+      "path": "technicalroute/generate_route_image.py",
+      "stage": "technicalroute"
+    },
+    {
+      "key": "skill_integrity_check",
+      "path": "skill_integrity_check.py",
+      "stage": "maintenance"
+    }
+  ],
+  "packages": [
+    {
+      "path": "pptx_to_svg/",
+      "purpose": "PPTX OOXML to SVG reverse converter"
+    },
+    {
+      "path": "svg_to_pptx/",
+      "purpose": "SVG to editable DrawingML PPTX converter"
+    },
+    {
+      "path": "svg_finalize/",
+      "purpose": "SVG post-processing and icon/image embedding"
+    },
+    {
+      "path": "template_import/",
+      "purpose": "PPTX template import, guard, and registration"
+    },
+    {
+      "path": "technicalroute/",
+      "purpose": "TechnicalRoute content, template, AI image, embed, and audit pipeline"
+    },
+    {
+      "path": "image_backends/",
+      "purpose": "Provider-specific image generation backends"
+    },
+    {
+      "path": "tts_backends/",
+      "purpose": "Provider-specific narration backends"
+    },
+    {
+      "path": "source_to_md/",
+      "purpose": "Source document to Markdown converters"
+    }
+  ]
+}

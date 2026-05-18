@@ -54,11 +54,11 @@ python3 scripts/svg_finalize/embed_icons.py svg_output/*.svg
 Use `ls | grep` — zero token cost:
 
 ```bash
-ls skills/ppt-master/templates/icons/chunk-filled/ | grep home
-ls skills/ppt-master/templates/icons/tabler-filled/ | grep home
-ls skills/ppt-master/templates/icons/tabler-outline/ | grep chart
-ls skills/ppt-master/templates/icons/phosphor-duotone/ | grep house
-ls skills/ppt-master/templates/icons/simple-icons/ | grep github
+ls skills/CN_Spark_paper2ppt/templates/icons/chunk-filled/ | grep home
+ls skills/CN_Spark_paper2ppt/templates/icons/tabler-filled/ | grep home
+ls skills/CN_Spark_paper2ppt/templates/icons/tabler-outline/ | grep chart
+ls skills/CN_Spark_paper2ppt/templates/icons/phosphor-duotone/ | grep house
+ls skills/CN_Spark_paper2ppt/templates/icons/simple-icons/ | grep github
 ```
 
 ---

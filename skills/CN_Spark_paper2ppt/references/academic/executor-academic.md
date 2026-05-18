@@ -1,269 +1,161 @@
-# Executor Academic · 中文学术执行器
+# Executor Academic
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 6 被执行器读取；它补充中文学术 PPT 的引文页脚、底部横幅、公式页、研究框架页、颜色策略和自检规则。
 
-> 通用规则在 [executor-base.md](../executor-base.md)，SVG/PPT 技术约束在 [shared-standards.md](../shared-standards.md)。本文件**仅**列出"中文学术汇报"相对通用执行器的增量。
->
-> ⚠️ 学术场景**只读本文件**作为风格执行器，不读 `executor-general.md` 或任何非学术 consultant 流程。
+General execution rules are in `../executor-base.md`; SVG and PPT compatibility constraints are in `../shared-standards.md`. This file only defines academic additions. In academic mode, use this file as the style executor and do not load non-academic consultant executor flows.
 
----
+## 1. Role
 
-## 1. 角色定义
+You are the SVG executor for Chinese academic presentations: argument pages, evidence pages, result pages, formula pages, research framework pages, TechnicalRoute embed pages, literature review matrices, and reference pages.
 
-中文学术汇报场景的 SVG 执行器：写论点页、证据页、流程图页、研究框架页、文献综述概念框架页、参考文献页。
+Style target: restrained, rigorous, information-dense, readable aloud, and free of decorative clutter. Every content page must communicate one clear academic claim.
 
-适用：
-- 学位答辩 / 组会汇报 / journal club
-- 课程报告 / 开题报告
-- 文献综述讲解
-- 学术海报式总结页
+## 2. Whole-Deck Color Strategy
 
-风格目标：**克制、严谨、信息密度较大、页面内容饱满、可朗读**。每页都能用一句话讲清楚，不堆砌装饰。
+Color serves information, not decoration. Apply the strategy across the entire deck, except citation footers, which remain muted gray and must not be made visually dominant.
 
----
+| Purpose | Academic rule |
+|---|---|
+| Focus | Highlight the target variable, key model, or main finding in the theme color; keep context, baselines, and secondary series gray. |
+| Reduce cognitive load | For one data family, use the same hue with opacity or lightness variations instead of unrelated colors. |
+| Semantics | Green means improvement / positive direction; red means risk, contradiction, negative direction, or statistically important warning; gray means baseline / reference / uncertainty. |
+| Branding | Use the institution or template primary color for title accents, bottom banners, route nodes, and small structural lines. Do not add decorative gradients unless the selected template already requires them. |
 
-## 2. 学术专属版面元素（每页都要确认四件事）
+Commandments:
+- Use no more than three primary colors in the deck, plus neutral grays.
+- Use the accent color sparingly: at most 2-3 emphasis points per slide, and consistently across the deck.
+- Data series should use same-hue depth variations, not rainbow palettes.
+- Background should be white or very light gray unless the selected template explicitly defines otherwise.
+- Key text must be bold and brick red: use `font-weight="700"` and `fill="#A23B2A"`. Apply this to major takeaways, high-priority warnings, or important evidence phrases only. Do not apply it to citation footer text.
 
-每一张证据型 / 论点页都按下面四件事检查。封面、目录、章节页、致谢页例外。
+Default palette when `spec_lock.md` does not override it:
 
-### 2.1 引文页脚 `citation_footer`
+| Token | Color | Use |
+|---|---|---|
+| `primary` | `#1F3864` | Titles, bottom banner, primary nodes. |
+| `secondary` | `#4472C4` | Secondary nodes, links, supporting emphasis. |
+| `surface` | `#F0F4FA` | Cards, table zebra rows, light panels. |
+| `accent_critical` | `#A23B2A` | Brick-red bold key text, risks, contradictions, high-priority findings. |
+| `positive` | `#2E7D32` | Positive or improved results only. |
+| `muted` | `#888888` | Citations, footnotes, auxiliary labels. |
+| `text_main` | `#222222` | Main text. |
 
-每张引用了文献的页都必须有。
+## 3. Academic Page Elements
 
-**SVG 写法**：
+Every evidence or argument page must check these elements. Cover, agenda, section divider, acknowledgement, and pure reference pages may be exceptions.
+
+### 3.1 `citation_footer`
+
+Every page that uses cited claims or source figures must include a citation footer.
 
 ```svg
 <g id="citation_footer">
   <text x="60" y="650" font-size="11" fill="#888888">
-    <tspan font-family="Microsoft YaHei,Source Han Sans SC,sans-serif">[1] 张三, 李四. 城市流动性与环境暴露的时空耦合分析</tspan><tspan font-family="Times New Roman,serif">[J]. </tspan><tspan font-family="Microsoft YaHei,sans-serif">地理学报</tspan><tspan font-family="Times New Roman,serif">, 2025, 80(3): 512-528.</tspan>
-  </text>
-  <text x="60" y="660" font-size="11" fill="#888888">
-    <tspan font-family="Times New Roman,serif">[2] Smith J, Doe A. Mobility-based exposure assessment[J]. </tspan><tspan font-family="Times New Roman,serif" font-style="italic">Nature</tspan><tspan font-family="Times New Roman,serif">, 2024, 612(7940): 215-223.</tspan>
+    <tspan font-family="Microsoft YaHei,Source Han Sans SC,sans-serif">[1] Author. Chinese or translated title</tspan><tspan font-family="Times New Roman,serif">[J]. Journal, 2025, 80(3): 512-528.</tspan>
   </text>
 </g>
 ```
 
-**硬约束**：
-- 引文字号 8–11px，颜色 `#888888`（浅灰，AA 对比度，不抢眼）；
-- 紧贴 `bottom_banner` **上方**，行间距 1.0–1.2；
-- 单页 ≤ 3 条；超过则前 3 条 + "等，详见参考文献页 P{n}"，完整列表挪到独立页；
-- **混合字体**：中文 `<tspan font-family="Microsoft YaHei,..."`，数字 / 拉丁字符 `<tspan font-family="Times New Roman,...">`，必须**分 tspan**写入；
-- 期刊名按学术惯例可加 `font-style="italic"`（仅英文期刊名，中文不斜）；
-- 不要给引文条目加方框、底色、阴影。
+Rules:
+- Font size 8-11 px; fill `#888888`.
+- Place directly above `bottom_banner`, with 1.0-1.2 line spacing. Keep it anchored to the lower footer zone; it should visually sit near the bottom edge, never float in the middle of the slide.
+- At most three entries per slide. If more are needed, show the first three plus a pointer to the reference page.
+- Split Chinese, Latin text, numbers, and symbols into separate `<tspan>` runs with proper fonts.
+- Italicize English journal names when appropriate; do not italicize Chinese journal names.
+- Do not add boxes, colored backgrounds, shadows, or brick-red emphasis to citation entries.
 
-引文写法的完整规范见 [citation-style.md](citation-style.md)。
+### 3.2 Mixed CJK / Latin `<tspan>` Segmentation
 
-### 2.2 中英文混排的 tspan 分段规则
+Any title, body text, table cell, or citation containing Chinese plus numbers, Latin words, or symbols must be segmented into font-specific `<tspan>` runs.
 
-**任意正文 / 标题 / 表格**只要同时含中文和"数字 / 英文 / 符号"，都必须分 tspan：
+### 3.3 Page Number, Logo, Bottom Banner
 
-```svg
-<text x="60" y="120" font-size="32" fill="#1F3864">
-  <tspan font-family="Microsoft YaHei,sans-serif">研究背景：</tspan><tspan font-family="Times New Roman,serif">PM</tspan><tspan font-family="Times New Roman,serif" baseline-shift="sub" font-size="22">2.5</tspan><tspan font-family="Microsoft YaHei,sans-serif">的人群暴露估计</tspan>
-</text>
-```
+- Page number: in user PPTX template mode, follow the slide/layout/master page-number placeholder recorded in `spec_lock.md`; otherwise use the academic default bottom-right position, between citation footer and bottom banner, 9 px gray.
+- If the user PPTX template defines a page-number slot, do not move the generated page number to another location.
+- Exactly one visible page number is allowed per slide. A duplicated number such as two `06` labels is a blocking error.
+- Logo: use the template-provided logo / protected region when available; otherwise use top right around 40 x 40 px with `<image href="logos/school_logo.png">`.
+- Bottom banner: use the page's `bottom_banner_text`; keep it short and claim-like.
+- None of these may overlap each other.
 
-切分规则（正则等价）：连续的中文汉字属于一段，连续的非中文（数字、字母、符号、空格）属于另一段。每段独立 `<tspan>` 设 `font-family`。
+## 4. Academic Layout Skeletons
 
-> 这一条是**学术汇报场景的硬约束**。`finalize_svg.py --flatten-tspan` 不会破坏此结构（它只拍平没有 font-family 切换的 tspan）。
+Use `design_spec.md` section IX `content_type` to choose the skeleton.
 
-### 2.3 页码 + Logo
-
-- 页码：右下角，紧贴 `citation_footer` 与 `bottom_banner` 之间，9pt 灰；
-- Logo：右上角占位 40×40px 方块，`<image href="logos/school_logo.png">`；
-- 这两项都**不要**遮挡 `bottom_banner` / `citation_footer`。
-
----
-
-## 3. 学术专属版式骨架
-
-按 `design_spec.md §IX brief` 的 `content_type` 字段决定版式。所有版式都遵循 `executor-base.md §2.1` 的"每页重读 spec_lock"。
-
-### 3.1 `text_flow` · 论点流页（Route A 引言、Route B 背景）
-
-| 区域 | 位置（1280×720） |
+| `content_type` | Execution rule |
 |---|---|
-| 标题（结论式标题） | x=60 y=80 w=1160 h=80，font-size=32，bold |
-| 论点主体（≤ 3 段，每段一句一论点） | x=60 y=180 w=720 h=440 |
-| 右侧配图（icon / 数据卡 / 简图） | x=820 y=180 w=400 h=440 |
-| 引文页脚 | y=620–660 |
-| 底部横幅 | y=668–720 |
+| `text_flow` | Argument flow page: title, concise body, supporting visual. |
+| `bullet_analysis` | Four to six analytical bullets, or 2-3 grouped evidence blocks when the source material is richer. |
+| `pipeline` | Use Step 5.5 for complex research routes; hand-draw only simple 3-5 step flows. |
+| `matrix_framework` | Three columns: dimensions, modules, outputs. |
+| `results_chart` | Left chart / right insights; verify chart data before export. |
+| `formula_step` | Stacked derivation panels with rendered formulas. |
+| `formula_paragraph` | Formula list plus explanatory prose for four or more formulas. |
+| `gantt` | Proposal timeline using `templates/charts/gantt_chart.svg`. |
+| `conceptual_framework` | Matrix, thinking map, or timeline for review synthesis. |
+| `evidence_matrix` | Native SVG literature comparison table. |
+| `references_page` | Numbered reference list; required for Route C and D. |
 
-### 3.2 `bullet_analysis` · 要点分析页（Route A 文献综述、Route B 政策分析）
+Use smaller rounded corners by default: `rx="6"` for 1280 x 720 academic slides. For dense tables or tiny tags, use `rx="3"` or no rounding. If a selected template defines a different radius in `spec_lock.md`, follow the template. If a user PPTX template is selected, fill the template's existing placeholders and do not add extra shape frames or text boxes unless the page explicitly falls back to the built-in template library.
 
-| 区域 | 内容 |
-|---|---|
-| 标题 | 同 3.1 |
-| 主体 | 3–5 条要点，每条左侧 16px 图标，主标题 18px，副解释 13px |
-| 不要 | 超过 6 条；不要并列 bullet + 表格混排 |
+Formula rendering is image-based and mandatory for complete formula explanations in both user-PPTX-template mode and built-in-template mode. Read `formula-rendering.md` before any `formula_step` or `formula_paragraph` page. Transcribe all important formulas used by the paper's main academic steps as LaTeX, write each formula role and variable definitions into a formula block JSON, render the role + formula + interpretation with `scripts/latex_formula_to_png.py --block-json`, and embed each result with `<image data-formula-png="true" data-formula-block-png="true">`. Do not rebuild the formula, role label, `式中`, or variable explanations as stacked SVG text boxes. Put at most five formula block PNGs on one slide, use gray 1.5pt dashed separators between adjacent formula blocks, and ensure formula PNGs, explanatory text, and separators never overlap. If a complete displayed equation appears as SVG text, the page is invalid even when the visual layout looks acceptable.
 
-### 3.3 `pipeline` · 技术路线 / 流程页（Route A P6、Route C P9）
+### 4.1 User PPTX Template Slot-Fill Mode
 
-**重要**：复杂技术路线**不要**在本技能内手画 SVG `<rect>` + `<line>`，走 SKILL.md Step 5.5 的内置 TechnicalRoute 流程后嵌入。简单 3–5 步线性流程才本地画。
+When `spec_lock.md` marks `template.source: user_pptx` or `user_pptx_template: true`, the imported template is authoritative.
 
-简单流程 SVG：
+Rules:
+- Replace text inside the existing title, subtitle, body, footer, and page-number slots; do not place new text boxes over those slots.
+- Before drawing each page, read the imported manifest's `editableContentRegion`. Use its `primary` rectangle or one of its `availableRegions` as the true writable area. Do not treat the full 1280 x 720 canvas as writable when the template reserves logo, school name, or footer space.
+- Inherit each filled slot's x/y/width/height, font family, font size, weight, color, alignment, and line spacing unless the user explicitly asks to change it.
+- Use imported picture/content placeholders for source figures, formula PNGs, charts, and TechnicalRoute images. Do not add extra picture frames when a suitable placeholder exists.
+- Delete unused prompt text and unused picture/body placeholders before final export. Visible prompts such as `Click to edit...`, `单击此处...`, or `演讲者/课程名称` are blocking errors.
+- Protect school name, college name, logo, page number, footer marks, and authored master graphics. Title, subtitle, images, formulas, and route diagrams may not overlap these protected regions.
+- Do not split one semantic phrase into multiple stacked text boxes. Use one bounded text element with `<tspan>` line breaks.
+- Keep slide content vertically centered inside the actual writable region, not near the top of the page. Use the content region's midpoint as the visual center and reserve the footer region for citation, bottom banner, and page number.
+- Body slides, except cover and ending/Q&A, should fill the writable region rather than leaving one small text island. Target at least 80% width and 75% height usage with source-grounded editable text, tables, charts, formula PNGs, route images, or grouped evidence blocks. If a single column leaves blank space, switch to two or three columns before shrinking text.
+- On the first and final slides, use one dominant visual layer. Do not stack a paper figure over a cover/thanks image, and do not place an empty white shape over a large image unless it is a deliberate text overlay marked as `overlay` or `scrim`.
+- If no imported layout can hold the content, record `layout_source: fallback_template_library` and then use a built-in template page. Do not silently mix free-floating generated objects into a user-PPTX page.
 
-```svg
-<g id="pipeline">
-  <!-- 节点 -->
-  <rect x="60"  y="240" width="180" height="80" rx="8" fill="#1F3864"/>
-  <text x="150" y="285" fill="#FFF" text-anchor="middle" font-size="16">数据采集</text>
-  <rect x="290" y="240" width="180" height="80" rx="8" fill="#4472C4"/>
-  <!-- 箭头 -->
-  <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-    <path d="M0,0 L10,5 L0,10 z" fill="#555555"/></marker></defs>
-  <line x1="240" y1="280" x2="290" y2="280" stroke="#555555" stroke-width="2" marker-end="url(#arr)"/>
-</g>
-```
+## 5. Strategist Handoff Fields
 
-### 3.4 `matrix_framework` · 研究框架页（Route A P7、Route C P10）
-
-三段式：**左维度 + 中模块 + 右产出**。
-
-| 列 | 位置 |
-|---|---|
-| 左 | x=60 w=320 |
-| 中 | x=420 w=440 |
-| 右 | x=900 w=320 |
-
-每列顶端 60px 高的列标题条（深蓝底白字），下方 3–5 张浅灰卡片（`fill="#F0F4FA"`），跨列关系用细灰直线（`stroke="#888"` `stroke-width="1"`，**不加箭头**）。
-
-### 3.5 `results_chart` · 结果图表页
-
-调 `templates/charts/<chart_name>.svg`（bar / line / radar / scatter 等），按 [executor-base.md §1.0](../executor-base.md) 批量预读后改字段。学术结果页**默认左图右文**（图占 60% 宽，右侧 3–5 条洞察）。
-
-数据图坐标必须在 Step 7 前跑 [verify-charts](../../workflows/verify-charts.md) 校正。
-
-### 3.6 `formula_step` · 模块化步骤公式页 · **学术默认公式版式**
-
-适合：模型推导每一步独立、需要讲清"为什么这样写"。**默认走这种**。
-
-```
-┌─────────────────────────────────────┐
-│  标题：Two-Step Floating Catchment   │
-├─────────────────────────────────────┤
-│ Step 1 设施端：计算供需比             │
-│  ┌──────────┐  含义：…                │
-│  │  公式 1   │  ─────────             │
-│  └──────────┘                         │
-├─────────────────────────────────────┤
-│ Step 2 居民端：计算可达性             │
-│  ┌──────────┐  含义：…                │
-│  │  公式 2   │                        │
-│  └──────────┘                         │
-└─────────────────────────────────────┘
-```
-
-- 每个 panel 含：序号徽章 + 步骤名（深色背景白字） + 公式图（PNG / SVG `<image>`） + 含义注释（13px 灰）；
-- 公式 PNG 用 matplotlib `\LaTeX` 渲染为透明背景嵌入；
-- panel 间距 = 画布高 × 0.04，垂直堆叠。
-
-### 3.7 `formula_paragraph` · 标题分段公式页 · **公式 ≥ 4 时切换**
-
-当一页要塞 4 个以上公式或公式有大段中文推导时：
-
-- 上半页：所有公式列表（小图 + 编号 [`(1)` `(2)` `(3)` `(4)`]）；
-- 下半页：分段中文说明（"式(1)由 Frank (2025) 给出..."），每段贴一个公式编号。
-
-### 3.8 `gantt` · 甘特图（Route C 专属）
-
-调 `templates/charts/gantt_chart.svg` 模板。学术开题甘特图硬约束：
-- 时间窗口 = 用户 Step 4.2 确认的开题周期（默认 18–24 月）；
-- 任务分组：文献调研 / 数据采集 / 方法开发 / 验证 / 写作 / 答辩；
-- 每个任务条颜色 = 阶段色（不要每条都用不同色）；
-- 关键节点（开题、中期、答辩）用菱形标记。
-
-### 3.9 `conceptual_framework` · 综述概念框架（Route D 专属）
-
-三选一形态：
-- **形态 A · 矩阵表**：行 = 主题、列 = 维度 / 时段，单元格 = 代表文献 + 关键观点。直接用 `templates/charts/consulting_table.svg`。
-- **形态 B · 思维导图**：走 SKILL.md Step 5.5 的内置 TechnicalRoute “思考路线类”。
-- **形态 C · 演化时间轴**：走 SKILL.md Step 5.5 的内置 TechnicalRoute “全文思路类”。
-
-由 Strategist 在 Step 4 判定走哪一形态，并在 `design_spec.md §IX` 该页备注 `framework_variant: matrix|mindmap|timeline`。
-
-### 3.10 `evidence_matrix` · 文献证据矩阵（Route D 必备）
-
-原生 SVG 表格，列出每篇代表文献的：作者 / 年份 / 数据 / 方法 / 主结论。直接用 `templates/charts/comparison_table.svg`，**不要**用图片替代。表头深蓝底白字、表身浅灰斑马底（`#F0F4FA` / `#FFFFFF` 交替）、数字 / 年份走 Times New Roman、作者 / 主结论走中文混排（分 tspan）。
-
-### 3.11 `references_page` · 独立参考文献页
-
-Route C / D 必备，Route A / B 可选。
-
-- 字号 10pt（比正文页脚的 8pt 大）；
-- 一页 ≤ 18 条，超过则跨页（P{n} / P{n+1}）；
-- 编号格式 `[n]`，与全文角标完全一致，不允许跳号 / 重号。
-
----
-
-## 4. 学术色板与字号
-
-如 `spec_lock.md` 未声明，按下表：
-
-| 角色 | 颜色 | 用途 |
-|---|---|---|
-| `primary` | `#1F3864` | 标题、底部横幅、节点 |
-| `secondary` | `#4472C4` | 副节点、强调链接 |
-| `surface` | `#F0F4FA` | 卡片底色、表格斑马 |
-| `accent` | `#C00000` | 关键风险 / 警告 / 显著结果（克制使用） |
-| `muted` | `#888888` | 引文、说明、灰色辅助 |
-| `text_main` | `#222222` | 正文 |
-
-字号（基于 `typography.body = 16px`）：
-
-| 角色 | 字号 | 比例 |
-|---|---|---|
-| 页面标题 | 32 | 2.0× body |
-| 章节小标题 | 22 | 1.4× body |
-| 正文 | 16 | body |
-| 卡片副解释 | 13 | 0.8× body |
-| 引文页脚 | 11 | 0.7× body |
-| 角标 `[n]` / 页码 | 9 | 0.55× body |
-
----
-
-## 5. 学术不允许做的事
-
-1. ❌ 把流程图、研究框架退化为整张位图截图；
-2. ❌ 引用了文献但没在页脚列条目；
-3. ❌ 中英文混合走单一 font-family；
-4. ❌ 引文条目里中文期刊名也用 Times New Roman；
-5. ❌ 在普通幻灯片上塞超过 6 条 bullet；
-6. ❌ 用渐变 / 阴影 / 3D 立体 / emoji 装饰节点；
-7. ❌ 备注区留空白（每页 100–180 字）；
-8. ❌ 标题用章节标签（"方法"），必须用**结论式标题**（"基于 HMM 的轨迹识别将精度从 78% 提升至 91%"）。
-
----
-
-## 6. 与 strategist.md 的对接
-
-Strategist 在 `design_spec.md §IX` 每页 brief 中**必须**额外填写下列学术字段（普通 ppt-master 字段之外）：
+In `design_spec.md` section IX, every page brief should include academic fields:
 
 ```yaml
 P05:
   page_rhythm: dense
   content_type: matrix_framework
-  page_layouts: 03_content                   # 模板继承
-  page_charts: comparison_table              # 主图
-  bottom_banner_text: "维度二是流动性研究区别于静态暴露评估的关键尺度"
-  citations: ["[1]", "[3]"]                  # 该页角标列表
-  framework_variant: null                    # 仅 Route D conceptual_framework 用
+  page_layouts: 03_content
+  page_charts: comparison_table
+  bottom_banner_text: "The second dimension explains why dynamic exposure differs from static exposure assessment."
+  citations: ["[1]", "[3]"]
+  framework_variant: null
 ```
 
-Strategist 没填这三个新字段时，Executor **必须**回查 `design_spec.md §IX prose`，从段落中提炼后**临时填入**生成（并在产出标注 "auto-filled bottom_banner"），不要静默跳过。
+If `bottom_banner_text` or `citations` are missing, infer them from the page prose and source material, then mark them as auto-filled in the output notes.
 
----
+## 6. Forbidden In Academic Decks
 
-## 7. 自检（每页 SVG 完成后）
+- Flattening complex route diagrams into unreadable screenshots when editable SVG is available.
+- Citing a claim without a footer marker or reference-page entry.
+- Mixing Chinese and Latin text under one font family.
+- Using Times New Roman for Chinese journal names.
+- Putting more than six ungrouped bullets on a normal content slide; if content is richer, group it into columns, cards, a table, or a second slide.
+- Using decorative shadows, 3D effects, emoji, or ornamental gradients.
+- Leaving speaker notes blank.
+- Using vague section-label titles such as "Methods" for body pages. Use claim-based titles.
 
-- [ ] 标题是结论式（说出主张），不是章节标签；
-- [ ] `bottom_banner` 在最底层、≤ 30 字；
-- [ ] 每个 `[n]` 都能在 `citation_footer` 或独立参考文献页找到；
-- [ ] 中英文混排都分了 tspan；
-- [ ] 数字 / 拉丁字符走 Times New Roman；
-- [ ] 配色不超过 4 种主色 + muted 灰；
-- [ ] 不要装饰素材（emoji / 立体 / 渐变）；
-- [ ] 复杂流程图走 SKILL.md Step 5.5 的内置 TechnicalRoute，不本地手画。
+## 7. Per-Page Checklist
 
-跑过 `scripts/svg_quality_checker.py` 后再进入 Step 7。
+Summary and thank-you / Q&A must be separate slides. Do not combine conclusion bullets with 谢谢大家 or Thank you on the same page.
 
 
-
+- [ ] Title is claim-based and follows the numbered module title rule when applicable.
+- [ ] `bottom_banner` exists on evidence / argument pages and does not collide with citations.
+- [ ] Every citation marker resolves to `citation_footer` or the reference page.
+- [ ] Mixed CJK / Latin / numeric text is segmented by `<tspan>`.
+- [ ] Color follows the whole-deck strategy; key text is bold brick red only where justified.
+- [ ] Complex TechnicalRoute pages come from Step 5.5 rather than local hand drawing.
+- [ ] Non-exempt slides include a meaningful image, chart, formula, or complex table screenshot.
+- [ ] Formula pages embed formula title, equation, and variable explanations as one PNG with `data-formula-block-png="true"`; no duplicate SVG text boxes reconstruct the same content; at most five formula blocks per slide; adjacent formula blocks use gray 1.5pt dashed separators; formula/text/separator boxes do not overlap.
+- [ ] User-template pages use `editableContentRegion` and do not overlap logo, school name, footer, or page-number protected regions.
+- [ ] Each slide has exactly one page number, citation/footer text is anchored at the bottom, and first/final pages have no unintended large image/shape stack.
+- [ ] `scripts/svg_quality_checker.py` passes on both `svg_output/` and `svg_final/` before PPTX export.

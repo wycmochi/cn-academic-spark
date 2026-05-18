@@ -1,4 +1,5 @@
 # Canvas Format Specification
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在项目初始化和画布确认时读取；它定义 PPT 画布尺寸、比例和导出格式。
 
 > See shared-standards.md for SVG basic rules.
 

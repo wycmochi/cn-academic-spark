@@ -1,200 +1,283 @@
-# Content Schema · `content.yaml` 通用契约
+# TechnicalRoute Content Schema
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5.5 写 content.yaml 时读取；它定义技术路线图两种产物共用的结构化内容字段。
 
-> 三种 archetype 共享一份 schema 顶层，再按 archetype 分支扩展。本文件是**完整字段表 + 类型 + 必填 / 可选标记**。`scripts/content_schema.py` 用本文件作为校验源。
+`content.yaml` is the single semantic source for both TechnicalRoute outputs:
+- Version A editable template SVG, assembled through `image-templatedraw.md`.
+- Version B AI reference PNG, generated through `image-aigenerate.md`.
 
----
+The file must be grounded in the source paper, user material, extracted figures / tables / formulas, and confirmed `design_spec.md`. It must not contain invented nodes, claims, datasets, methods, metrics, or citations.
 
-## 顶层必填字段（所有 archetype 共享）
-
-```yaml
-archetype: thinking | method | workflow         # 必填
-sub_variant: <根据 archetype 列出的 sub-variant>  # 选填，缺省由启发式判定
-title: <主标题>                                   # 必填
-subtitle: <副标题>                                # 选填
-color_scheme: <见 color-typography.md 命名色板>    # 选填，缺省 "discipline_default"
-density: airy | balanced | dense                 # 选填，缺省值随 archetype（thinking=balanced，method=airy，workflow=dense）
-canvas: "16:9" | "4:3" | "square" | "long"        # 选填，缺省 "16:9"
-glossary_preserve:                                # 选填 — 必须逐字保留的术语清单
-  - <术语 1>
-  - <术语 2>
-```
-
-`glossary_preserve` 是**最重要**的 stability 字段：列在里面的每个字符串都会被原样塞进 image prompt 的 "CHINESE CONTENT" 块和 negative 中的 "do not translate" 段。
-
----
-
-## Archetype = `thinking` 扩展字段
+## Top-Level Required Fields
 
 ```yaml
-sections:                       # 必填，长度 2–6
-  - id: P<n>                    # 必填
-    label: <段标题>              # 必填
-    icon_hint: <抽象图标语义>     # 选填
-    points: [<bullet>...]       # 选填，每条 ≤ 25 字
-    table_2x2:                   # 选填，与 points 互斥
-      - [<cell11>, <cell12>]
-      - [<cell21>, <cell22>]
-    contrast:                    # 选填，仅 twin sub-variant 用
-      old: [<...>]
-      new: [<...>]
-bottom_anchor:                  # 选填
-  kind: question | claim | call_to_action
-  text: <≤ 40 字>
-top_bridge:                     # 选填，仅 twin sub-variant
-  text: <≤ 30 字>
-```
-
-## Archetype = `method` 扩展字段
-
-```yaml
-core_idea:                       # core-steps 必填
-  text: <≤ 50 字>
-  visual_hint: <抽象 hint>
-
-steps:                           # core-steps / vertical-stack 用
-  - id: S<n>
-    label: <step 标题>
-    formula_latex: <LaTeX 原文>
-    formula_inline: <纯文本备份>
-    interpretation: <≤ 60 字>
-    color_role: primary | secondary | accent
-
-formulas:                        # formula-grid 用
-  - id: F<n>
-    label: <"(1)" / "(a)" 等>
-    formula_latex: <LaTeX>
-    note: <≤ 60 字>
-
-mechanism:                       # mechanism-block 用
-  inputs: [<input>...]
-  process: <段落 ≤ 200 字>
-  process_visual_hint: layered | tree | iterative_loop | black_box | neural_net
-  outputs: [<output>...]
-
-symbols:                         # 选填
-  - sym: <符号>
-    desc: <含义>
-
-assumptions:                     # 选填，0–3 条
-  - label: <≤ 15 字>
-    note: <≤ 40 字>
-    icon_hint: balance | lock | filter | clock | ...
-```
-
-## Archetype = `workflow` 扩展字段
-
-```yaml
-# horizontal-pipeline 用
-columns:
-  - id: C<n>
-    label: <列标题>
-    items:                       # 数据 / 输入项
-      - name: <英 / 中名>
-        source: <来源 / 出版方>
-        logo_hint: <可选>
-    blocks:                      # 处理 / 模型块
-      - name: <块名>
-        kind: tool | algorithm | dataset | concept
-        visual_hint: scatter_map | cylinder_stack | tree | shap_bars | heatmap | network | scatter_with_fit_line
-        sub_label: <选填>
-    arrow_label: <列间标签 italic>
-
-# twin-track 用
-tracks:
-  - id: T<A|B>
-    label: <轨标题>
-    blocks: [<...>]
-confluence:
-  label: <汇合节点名>
-  visual_hint: diamond | circle | merge_box
-output:
-  label: <最终输出>
-
-# funnel 用
-inputs: [<input>...]
-core:
-  label: <核心机制名>
-  visual_hint: black_box | neural_net | decision_tree
-
-# circular 用
-stages:
-  - id: S<n>
-    label: <阶段名>
-    icon_hint: <选填>
-```
-
----
-
-## 通用约束
-
-| 字段 | 长度 / 类型上限 | 越界时行为 |
-|---|---|---|
-| `title` | ≤ 30 字 | 截断 + warning |
-| `subtitle` | ≤ 60 字 | 截断 + warning |
-| `label` (panel / step / col) | ≤ 12 字 | 截断 + warning |
-| `points[]` 单条 | ≤ 25 字 | 截断 + warning |
-| `interpretation` | ≤ 60 字 | 截断 + warning |
-| `bottom_anchor.text` | ≤ 40 字 | 截断 + warning |
-| `glossary_preserve` | ≤ 20 条 | 超过则只保留前 20，warning |
-| `points[]` 长度 | 0–4 | > 4 报错 |
-| `sections` 长度 | 2–6 | 越界报错 |
-| `steps` 长度 | 1–8 | 越界报错 |
-| `assumptions` 长度 | 0–3 | > 3 报错 |
-| `columns` 长度 (horizontal-pipeline) | 2–5 | 越界报错 |
-
----
-
-## 校验
-
-```bash
-python3 scripts/content_schema.py validate <project>/content.yaml
-```
-
-输出：
-
-- `OK` — 通过；
-- `OK with N warnings` — 列出 warning 项（如截断），允许继续；
-- `FAIL` — 报错并阻塞 prompt 合成。
-
----
-
-## 最小可工作示例（三种 archetype 各一份骨架，**不含具体学科 / 内容**）
-
-```yaml
-# thinking — quad
-archetype: thinking
-sub_variant: quad
-title: "<标题>"
-sections:
-  - { id: P1, label: "<P1>", points: ["<...>", "<...>"] }
-  - { id: P2, label: "<P2>", points: ["<...>"] }
-  - { id: P3, label: "<P3>", points: ["<...>"] }
-  - { id: P4, label: "<P4>", table_2x2: [["<a>","<b>"],["<c>","<d>"]] }
-bottom_anchor: { kind: question, text: "<核心问题>" }
-glossary_preserve: ["<术语1>", "<术语2>"]
-```
-
-```yaml
-# method — core-steps
-archetype: method
-sub_variant: core-steps
-title: "<标题>"
-core_idea: { text: "<核心思想 ≤ 50 字>" }
-steps:
-  - { id: S1, label: "<Step 1>", formula_latex: "...", interpretation: "..." }
-  - { id: S2, label: "<Step 2>", formula_latex: "...", interpretation: "..." }
-symbols: [{ sym: "x", desc: "<含义>" }]
-assumptions: [{ label: "<前提>", note: "<注释>" }]
-```
-
-```yaml
-# workflow — horizontal-pipeline
+project_name: ""
+caller: cn-academic-spark-ppt-engine
+language: zh_CN
+diagram_type: research_route
 archetype: workflow
 sub_variant: horizontal-pipeline
-title: "<标题>"
-columns:
-  - { id: C1, label: "Data",    items: [{name:"...", source:"..."}],    arrow_label: "<...>" }
-  - { id: C2, label: "Process", blocks: [{name:"...", kind:"tool"}],    arrow_label: "<...>" }
-  - { id: C3, label: "Methods", blocks: [{name:"...", kind:"algorithm", visual_hint:"tree"}] }
-density: dense
+title: ""
+subtitle: ""
+main_question: ""
+main_claim: ""
+scope_boundary: ""
+canvas: "16:9"
+density: balanced
+source_basis:
+  - section: ""
+    figure: ""
+    table: ""
+    formula: ""
+    note: ""
+glossary_preserve:
+  - ""
+nodes: []
+edges: []
+lanes: []
+citations: []
+uncertainties: []
 ```
+
+Allowed `diagram_type` values:
+- `research_route`
+- `method_framework`
+- `thinking_map`
+- `whole_paper_workflow`
+- `concept_framework`
+
+Allowed `archetype` values:
+- `workflow`
+- `method`
+- `thinking`
+
+Allowed `density` values:
+- `airy`
+- `balanced`
+- `dense`
+
+`sub_variant` must follow the selected archetype:
+- thinking: `quad`, `cascade`, `twin`
+- method: `core-steps`, `vertical-stack`, `formula-grid`, `mechanism-block`
+- workflow: `horizontal-pipeline`, `twin-track`, `funnel`, `circular`
+
+## Paper2ppt Integration Fields
+
+Use these fields when the route is created for a specific slide slot:
+
+```yaml
+parent_project: ""
+parent_module_number: ""
+parent_module_title: ""
+target_pages:
+  version_a:
+    title: ""
+    svg_path: ""
+    target_bbox: "x,y,w,h"
+  version_b:
+    title: ""
+    svg_path: ""
+    target_bbox: "x,y,w,h"
+bottom_banner_text: ""
+citation_footer: ""
+```
+
+Rules:
+- `target_pages.version_a` and `target_pages.version_b` represent consecutive PPT pages.
+- Do not use one page for both versions.
+- Page titles follow the main SKILL title rule unless the page is a section divider or appendix.
+- `citation_footer` is inherited from the parent academic deck when the diagram uses paper evidence or cited third-party concepts.
+
+## Node Schema
+
+```yaml
+nodes:
+  - id: n1
+    label: ""
+    role: input
+    evidence_ref: ""
+    detail: ""
+    importance: normal
+```
+
+Allowed `role` values:
+- `input`
+- `problem`
+- `hypothesis`
+- `data`
+- `method`
+- `experiment`
+- `model`
+- `analysis`
+- `validation`
+- `result`
+- `output`
+- `limitation`
+- `implication`
+
+Rules:
+- Every node label expresses one semantic unit.
+- Every node must have a traceable `evidence_ref`.
+- Keep labels short enough for route diagrams; put nuance in `detail`.
+- Preserve English technical terms when translating them would reduce precision.
+- Use `importance: high` only for the central claim, key method, key risk, or major output.
+
+## Edge Schema
+
+```yaml
+edges:
+  - from: n1
+    to: n2
+    relation: leads_to
+    label: ""
+    evidence_ref: ""
+```
+
+Allowed `relation` values:
+- `leads_to`
+- `feeds`
+- `tests`
+- `validates`
+- `compares_with`
+- `explains`
+- `iterates`
+- `constrains`
+- `produces`
+
+Rules:
+- Edge direction must match the source logic.
+- Do not add symmetric arrows unless feedback or iteration is explicit.
+- Use edge labels only when they clarify a non-obvious relation.
+- Do not use causal language unless the source supports causality.
+
+## Lane Schema
+
+```yaml
+lanes:
+  - id: lane_1
+    label: ""
+    node_ids: [n1, n2]
+    role: data | method | result | theory | validation | timeline
+```
+
+Use lanes for data / method / output bands, time stages, theoretical levels, experiment / model / validation chains, or proposal phases. Do not use lanes as decoration.
+
+## Archetype-Specific Extensions
+
+### Thinking
+
+```yaml
+sections:
+  - id: P1
+    label: ""
+    icon_hint: ""
+    points: []
+    table_2x2:
+      - ["", ""]
+      - ["", ""]
+    contrast:
+      old: []
+      new: []
+bottom_anchor:
+  kind: question | claim | call_to_action
+  text: ""
+top_bridge:
+  text: ""
+```
+
+### Method
+
+```yaml
+core_idea:
+  text: ""
+  visual_hint: ""
+steps:
+  - id: S1
+    label: ""
+    formula_latex: ""
+    formula_inline: ""
+    interpretation: ""
+    color_role: primary | secondary | accent
+formulas:
+  - id: F1
+    label: ""
+    formula_latex: ""
+    note: ""
+mechanism:
+  inputs: []
+  process: ""
+  process_visual_hint: layered | tree | iterative_loop | black_box | neural_net | rule_engine
+  outputs: []
+symbols:
+  - sym: ""
+    desc: ""
+assumptions:
+  - label: ""
+    note: ""
+    icon_hint: balance | lock | filter | clock | boundary | sample
+```
+
+### Workflow
+
+```yaml
+columns:
+  - id: C1
+    label: ""
+    items:
+      - name: ""
+        source: ""
+        logo_hint: ""
+    blocks:
+      - name: ""
+        kind: tool | algorithm | dataset | concept | validation | output
+        visual_hint: cylinder_stack | tree | network | heatmap | bar | line | shap | map | document_stack
+        sub_label: ""
+    arrow_label: ""
+tracks:
+  - id: TA
+    label: ""
+    blocks: []
+confluence:
+  label: ""
+  visual_hint: diamond | circle | merge_box
+output:
+  label: ""
+inputs: []
+core:
+  label: ""
+  visual_hint: black_box | neural_net | decision_tree | rule_set | synthesis
+stages:
+  - id: S1
+    label: ""
+    icon_hint: ""
+```
+
+## Length And Density Limits
+
+| Field | Normal limit | Action when exceeded |
+|---|---:|---|
+| `title` | 30 Chinese characters or 12 English words | shorten and preserve meaning |
+| `subtitle` | 60 Chinese characters or 24 English words | move details to notes |
+| node / panel / step label | 12 Chinese characters or 6 English words | shorten label, keep detail elsewhere |
+| one bullet | 25 Chinese characters or 12 English words | split or move to notes |
+| `bottom_anchor.text` | 40 Chinese characters or 16 English words | shorten |
+| `glossary_preserve` | 20 terms | keep the most critical terms |
+| thinking `sections` | 2-6 | choose another sub-variant or merge |
+| method `steps` | 1-8 | simplify or use a normal slide instead |
+| workflow `columns` | 2-5 | merge adjacent phases |
+
+## Source-Grounding Rules
+
+- Every visible label in Version A and Version B must be traceable to `content.yaml`.
+- Every `content.yaml` item must be traceable to source material, user confirmation, or `design_spec.md`.
+- If a relation is inferred, planned, uncertain, or only proposed, record that in `uncertainties`.
+- For review decks, distinguish literature synthesis from one-paper evidence.
+- For proposal decks, distinguish planned work from completed work.
+
+## Validation Checklist
+
+Before generating either output:
+- `diagram-contract.md` has been written.
+- The chosen archetype reference has been read.
+- `content.yaml` contains no gallery-derived text.
+- `glossary_preserve` includes terms likely to be mistranslated or abbreviated.
+- The content fits at least one editable template or the reason for atlas-only AI generation is recorded.

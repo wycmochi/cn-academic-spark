@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PPT Master - Batch Project Validation Tool
+Batch Project Validation Tool
 
 Checks the structural integrity and compliance of multiple projects at once.
 

@@ -110,6 +110,10 @@ def _resolve_image_path(href: str, svg_dir: Path) -> Path | None:
         candidate = Path(decoded)
     else:
         candidate = (svg_dir / decoded).resolve()
+        if not candidate.exists():
+            project_relative = (svg_dir.parent / decoded).resolve()
+            if project_relative.exists():
+                return project_relative
     return candidate if candidate.exists() else None
 
 

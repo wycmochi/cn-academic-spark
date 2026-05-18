@@ -5,10 +5,12 @@ literature_search.py · 学术文献样式检索
 按 seed_sites.json 的优先级顺序拼装搜索 URL，配合 IDE 提供的 WebSearch / WebFetch
 工具抓取候选论文及其 figure 缩略，落地到 ``<out>/style_refs/``。
 
-主代理（Claude / GPT-4V）应在 SKILL.md Step 2 中：
-  1. 调用本脚本 --emit-plan 生成检索计划与每个站点的搜索 URL；
+主代理应在 SKILL.md Step 5.5 的 reference collection 阶段：
+  1. 先读 references/technicalroute/seed_urls.md（分支规则）和 references/technicalroute/seed_sites.json（唯一站点配置）；
+  2. 调用本脚本 emit-plan 生成检索计划与每个站点的搜索 URL；
   2. 用 WebSearch / WebFetch 按计划逐站执行；
-  3. 用 --record 把抓到的 figure URL + DOI 注入到 manifest.json。
+  3. 用 record 把抓到的 figure URL + DOI 注入到 manifest.json；
+  4. 若用户已上传 ≥3 张结构相似参考图，直接用 offline --hints <folder>。
 
 本脚本不直接发起网络请求（避免把 cookie / 限频 / 验证码逻辑揉进来）；它做：
   - 读取 seed_sites.json
@@ -46,6 +48,10 @@ from typing import Iterable
 
 HERE = Path(__file__).resolve().parent
 SEED_SITES = HERE.parent.parent / "references" / "technicalroute" / "seed_sites.json"
+CUSTOM_GALLERY = HERE.parent.parent / "templates" / "technicalroute" / "Custom_gallery"
+GALLERY_INDEX = CUSTOM_GALLERY / "gallery_index.json"
+RASTER_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+FORBIDDEN_AI_REF_SUFFIXES = {".svg", ".pptx", ".ppt", ".odp", ".key"}
 
 
 def load_seed_sites() -> dict:
@@ -326,6 +332,206 @@ def cmd_filter(args: argparse.Namespace) -> int:
     return 0 if decision == "keep" else 1
 
 
+def load_gallery_index() -> dict:
+    if GALLERY_INDEX.is_file():
+        return json.loads(GALLERY_INDEX.read_text(encoding="utf-8"))
+    return {"disciplines": {}}
+
+
+def _contains_any(text: str, needles: list[str]) -> bool:
+    low = text.lower()
+    return any(str(needle).lower() in low for needle in needles if needle)
+
+
+def _valid_raster_ref(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() in RASTER_SUFFIXES
+
+
+def _reject_forbidden_ref(path: Path) -> str | None:
+    suffix = path.suffix.lower()
+    if suffix in FORBIDDEN_AI_REF_SUFFIXES:
+        return f"forbidden AI reference type: {suffix}"
+    if suffix not in RASTER_SUFFIXES:
+        return f"unsupported AI reference type: {suffix}"
+    return None
+
+
+def _manifest_local_refs(out_dir: Path) -> list[dict]:
+    manifest = load_manifest(out_dir)
+    if manifest is None:
+        return []
+    refs: list[dict] = []
+    for record in manifest.refs:
+        local = str(record.get("local_file") or record.get("downloaded") or "").strip()
+        if not local:
+            continue
+        candidate = Path(local)
+        if not candidate.is_absolute():
+            candidate = out_dir / candidate
+        candidate = candidate.resolve()
+        reject = _reject_forbidden_ref(candidate)
+        if reject or not candidate.is_file():
+            continue
+        item = dict(record)
+        item["path"] = str(candidate)
+        item["source"] = "literature_manifest"
+        refs.append(item)
+    return refs
+
+
+def _discipline_candidates(index: dict, discipline: str, topic: str) -> list[tuple[str, dict]]:
+    disciplines = index.get("disciplines") or {}
+    if not disciplines:
+        return []
+    wanted = f"{discipline} {topic}".strip()
+    scored: list[tuple[int, str, dict]] = []
+    for key, cfg in disciplines.items():
+        aliases = [key] + list(cfg.get("aliases") or []) + [cfg.get("label_zh", "")]
+        score = 2 if discipline and _contains_any(key + " " + cfg.get("label_zh", ""), [discipline]) else 0
+        if _contains_any(wanted, aliases):
+            score += 4
+        scored.append((score, key, cfg))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [(key, cfg) for score, key, cfg in scored if score > 0] or [(scored[0][1], scored[0][2])] if scored else []
+
+
+def _score_gallery_ref(item: dict, topic: str, archetype: str, sub_variant: str) -> int:
+    score = 0
+    if item.get("archetype") == archetype:
+        score += 5
+    if sub_variant and item.get("sub_variant") == sub_variant:
+        score += 4
+    hay = " ".join([item.get("label", ""), item.get("sub_variant", ""), " ".join(item.get("keywords") or [])])
+    for token in re.split(r"[\s,;，；、]+", topic):
+        if token and token.lower() in hay.lower():
+            score += 1
+    if _contains_any(topic, list(item.get("keywords") or [])):
+        score += 3
+    return score
+
+
+def _select_gallery_refs(
+    *,
+    topic: str,
+    discipline: str,
+    archetype: str,
+    sub_variant: str,
+    max_refs: int,
+) -> list[dict]:
+    index = load_gallery_index()
+    selected: list[tuple[int, dict]] = []
+    for discipline_key, cfg in _discipline_candidates(index, discipline, topic):
+        for item in cfg.get("refs") or []:
+            rel = Path(str(item.get("file") or ""))
+            full = (CUSTOM_GALLERY / rel).resolve()
+            reject = _reject_forbidden_ref(full)
+            if reject or not full.is_file():
+                continue
+            enriched = dict(item)
+            enriched["discipline"] = discipline_key
+            enriched["path"] = str(full)
+            enriched["source"] = "custom_gallery"
+            selected.append((_score_gallery_ref(enriched, topic, archetype, sub_variant), enriched))
+    selected.sort(key=lambda pair: pair[0], reverse=True)
+    return [item for _score, item in selected[:max_refs]]
+
+
+def cmd_prepare_ai_refs(args: argparse.Namespace) -> int:
+    """Create the complete, auditable reference plan consumed by run-ai-variant.
+
+    The path is intentionally strict:
+    1. Build a search plan only from seed_sites.json and the paper topic/keywords.
+    2. Read existing style_refs/manifest.json records produced by literature search.
+    3. Select discipline-matched Custom_gallery raster anchors as fallback/companion refs.
+    4. Write route_ai_refs.json; SVG/PPTX/editable route pages are never admitted.
+    """
+    out = Path(args.out).expanduser().resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    topic = " ".join([args.topic or "", args.keywords or ""]).strip()
+    if not topic:
+        print("Error: --topic or --keywords is required to prepare AI route references", file=sys.stderr)
+        return 2
+
+    sites_cfg = load_seed_sites()
+    search_plan = {
+        "topic": topic,
+        "discipline": args.discipline,
+        "archetype": args.archetype,
+        "sub_variant": args.sub_variant,
+        "seed_sites_path": str(SEED_SITES.resolve()),
+        "min_refs": sites_cfg.get("min_refs", 5),
+        "max_refs": args.max_literature_refs,
+        "filter_hints": sites_cfg.get("image_filter_hints", {}),
+        "plan": build_search_urls(topic, args.archetype, sites_cfg["sites"]),
+        "instructions": [
+            "Run WebSearch/WebFetch according to this plan.",
+            "Keep only paper figures that are mechanism diagrams, model-principle diagrams, research frameworks, or technical-route/workflow diagrams.",
+            "Download accepted raster figures into this style_refs directory and record them with literature_search.py record.",
+            "Do not record SVG, PPTX, screenshots of Version A, or any editable PPT route page as AI references."
+        ],
+    }
+    search_plan_path = out / "search_plan.json"
+    search_plan_path.write_text(json.dumps(search_plan, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    if not (out / "manifest.json").exists():
+        save_manifest(out, Manifest(topic=topic, archetype=args.archetype, max_refs=args.max_literature_refs))
+
+    literature_refs = _manifest_local_refs(out)[: args.max_literature_refs]
+    gallery_refs = _select_gallery_refs(
+        topic=topic,
+        discipline=args.discipline,
+        archetype=args.archetype,
+        sub_variant=args.sub_variant,
+        max_refs=args.max_gallery_refs,
+    )
+    if not gallery_refs:
+        print(
+            f"Error: no raster Custom_gallery reference found for discipline={args.discipline!r}, "
+            f"archetype={args.archetype!r}. Update {GALLERY_INDEX}.",
+            file=sys.stderr,
+        )
+        return 2
+
+    refs = [item["path"] for item in gallery_refs] + [item["path"] for item in literature_refs]
+    gallery_only = len(literature_refs) == 0
+    refs_plan = {
+        "version": 1,
+        "topic": topic,
+        "discipline": args.discipline,
+        "archetype": args.archetype,
+        "sub_variant": args.sub_variant,
+        "mode": "gallery_only_fallback" if gallery_only else "literature_plus_gallery",
+        "gallery_only": gallery_only,
+        "seed_sites_path": str(SEED_SITES.resolve()),
+        "gallery_index_path": str(GALLERY_INDEX.resolve()),
+        "search_plan_path": str(search_plan_path),
+        "style_refs_manifest": str((out / "manifest.json").resolve()),
+        "refs_manifest": "" if gallery_only else str((out / "manifest.json").resolve()),
+        "gallery_refs": gallery_refs,
+        "literature_refs": literature_refs,
+        "refs": refs,
+        "forbidden_reference_types": sorted(FORBIDDEN_AI_REF_SUFFIXES),
+        "source_policy": {
+            "semantic_source": "paper content/content.yaml only",
+            "style_sources": ["seed_sites literature raster figures", "Custom_gallery raster anchors"],
+            "forbidden": [
+                "Version A editable SVG",
+                "any SVG file",
+                "any PPTX/PPT file",
+                "screenshots of the editable technical route page",
+            ],
+        },
+    }
+    refs_plan_path = out / "route_ai_refs.json"
+    refs_plan_path.write_text(json.dumps(refs_plan, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"OK: route_ai_refs_plan = {refs_plan_path}")
+    print(f"OK: reference_mode = {refs_plan['mode']}")
+    print(f"OK: gallery_refs = {len(gallery_refs)}; literature_refs = {len(literature_refs)}")
+    if gallery_only:
+        print("Warning: no usable literature raster refs recorded yet; using discipline Custom_gallery fallback.", file=sys.stderr)
+    return 0
+
+
 def cmd_assess(args: argparse.Namespace) -> int:
     """评估 style_refs 目录的整体质量，输出 score + recommended_mode（literature / offline / atlas_only）。
 
@@ -430,6 +636,20 @@ def main(argv: Iterable[str] | None = None) -> int:
     p_flt.add_argument("--topic", default="")
     p_flt.add_argument("--caption", default="")
     p_flt.set_defaults(func=cmd_filter)
+
+    p_prep = sub.add_parser(
+        "prepare-ai-refs",
+        help="Build route_ai_refs.json from seed_sites search plan plus discipline Custom_gallery raster fallback.",
+    )
+    p_prep.add_argument("--topic", default="", help="Paper topic, title, or abstract keywords.")
+    p_prep.add_argument("--keywords", default="", help="Extra paper keywords for seed-site search.")
+    p_prep.add_argument("--discipline", default="transportation", help="Discipline key or alias in Custom_gallery/gallery_index.json.")
+    p_prep.add_argument("--archetype", choices=["thinking", "method", "workflow"], default="workflow")
+    p_prep.add_argument("--sub-variant", default="", help="Optional route subtype, for example recoverability.")
+    p_prep.add_argument("--out", required=True, help="Project style_refs directory.")
+    p_prep.add_argument("--max-literature-refs", type=int, default=6)
+    p_prep.add_argument("--max-gallery-refs", type=int, default=4)
+    p_prep.set_defaults(func=cmd_prepare_ai_refs)
 
     p_ass = sub.add_parser("assess", help="评估 style_refs 整体质量并给出 recommended_mode（literature/offline/atlas_only）")
     p_ass.add_argument("--out", required=True, help="style_refs 目录")

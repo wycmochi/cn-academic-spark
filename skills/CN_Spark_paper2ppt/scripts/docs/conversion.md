@@ -1,4 +1,5 @@
 # Conversion Tools
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在需要了解 source_to_md 转换脚本时读取；它说明输入格式、命令和输出约定。
 
 > Architecture rationale (why native-Python first with pandoc fallback, why curl_cffi for TLS impersonation): see [docs/technical-design.md "Source Content Conversion"](../../../../docs/technical-design.md#source-content-conversion).
 

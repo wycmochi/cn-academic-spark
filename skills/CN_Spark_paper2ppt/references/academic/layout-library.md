@@ -1,222 +1,228 @@
-# Layout Library · 版式说明与适配规则
+# Academic Layout Library
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 4 和 Step 6 被读取；它把学术页面的 content_type 映射到具体版式、图文比例和底部横幅要求。
 
-> ⚠️ **主路径 = SVG 模板**。每种 `content_type` 的实际版式由 `templates/layouts/<chosen_template>/*.svg` 与 `templates/charts/<chart_name>.svg` 提供，Executor 按 [executor-academic.md](executor-academic.md) §3 的骨架填字段。
->
-> 本文件描述每种 `content_type` 对应的**版式逻辑与默认参数**（在 SVG 与 python-pptx 两条路径中都通用）。脚本 `scripts/layout_library.py` 已不在新 pipeline 中使用，仅作历史参考保留；新 deck 不要再 import。
+This file maps `content_type` in `design_spec.md` section IX to academic slide layout logic. The actual rendering path is SVG to DrawingML. Use selected layout SVGs, chart templates, and `spec_lock.md` fields first; this file defines the academic intent and constraints behind each layout.
 
-下文规定版式逻辑与默认参数，落地到 SVG 由 [executor-academic.md](executor-academic.md) §3 完成。
+## Global Academic Layout Constants
 
-## 全局视觉常量（默认值）
+Default visual character:
+- restrained academic style;
+- white or very light background;
+- readable dark text;
+- one main evidence object per content page whenever possible;
+- citation footer above bottom banner;
+- small corner radius, normally `rx=6` on a 1280 x 720 canvas.
 
-颜色 / 字体 / 版心都在 `scripts/layout_library.py` 顶部三个 dict：`THEME` / `FONTS` / `LAYOUT`。要换主题色 / 字号 / 版心，**只改这三个 dict**，不要改各版式函数内部。
+Default zones:
+- header / title zone;
+- content evidence zone;
+- citation footer zone;
+- bottom banner zone;
+- page number / logo zone.
 
-默认值：
+Do not let body content collide with the citation footer, bottom banner, page number, or logo.
 
-- 幻灯片 33.87 × 19.05 cm（脚本中以 `slide_w=29.7 / slide_h=21.0` 占位，按 16:9 调整即可）；
-- 主色深蓝 `#1F3864`，副色 `#4472C4`，浅底灰 `#F0F4FA`；
-- 字体：标题区 `微软雅黑 20pt 加粗 白`、横幅文字 `微软雅黑 11pt 白`、正文 `微软雅黑 14pt`、图注 `微软雅黑 9pt 灰`、引文 `8pt #888888`（中英混排）；
-- 版心：左右 1.5cm，顶部 2.0cm，header 高 1.6cm，底部 banner 高 1.1cm。
+## Common Elements
 
-要换备选主题（墨绿 / 深灰 / 校色），改 `THEME` 即可，所有版式联动跟随。
+Most evidence and argument pages include:
+1. Page title following the numbered module title rule.
+2. Main evidence object: source figure, chart, formula PNG, complex table screenshot, or route diagram.
+3. Short interpretation text.
+4. Citation footer when cited material appears.
+5. Bottom banner with one claim-like sentence.
 
-## 通用元素
+Exceptions:
+- cover;
+- agenda;
+- section divider;
+- acknowledgements;
+- references page;
+- full-page Gantt when the timeline needs the whole canvas;
+- TechnicalRoute pages already occupied by route visuals.
 
-每页除封面、甘特图全图页、参考文献页外都包括：
+## Content Type Map
 
-1. **顶部 header**：左上幻灯片编号（28pt 白），右侧主标题（20pt 白）；深蓝底色覆盖整个 header 高度。`add_header(...)`。
-2. **底部 banner**：深蓝底，11pt 白字，写本页一句话主旨。`add_bottom_banner(...)`。
-3. **引文页脚**（如本页有引用）：紧贴 banner 上方，8pt 灰，详见 [citation-style.md](citation-style.md)。
-4. **右上 logo 占位符**：3.0 × 1.0 cm，用户后续替换。
+| `content_type` | Use for | Preferred layout |
+|---|---|---|
+| `cover` | Title page | Template cover, no citation footer unless required by source paper metadata |
+| `toc` | Agenda | 4-6 module anchors, minimal visuals |
+| `text_flow` | Background, problem framing, discussion | Text-led layout with one supporting visual or deliberate whitespace |
+| `bullet_analysis` | Four to six analytical points, or 2-3 grouped evidence blocks | Compact multi-column bullets with figure, table, card, or small chart support |
+| `pipeline` | Simple process | Full-width process; complex routes use Step 5.5 TechnicalRoute pair |
+| `matrix_framework` | Variables, dimensions, method modules | Three-column or input-process-output framework |
+| `results_chart` | Experimental, empirical, or model results | Hero figure / chart plus narrow interpretation rail |
+| `table_compare` | Comparison across methods, policies, cases, or studies | Native SVG table; screenshot only for source tables that must preserve formatting |
+| `formula_step` | Stepwise derivation or model explanation | Modular formula panels with rendered formula PNGs |
+| `formula_paragraph` | Many formulas plus explanation | Sectioned formula groups with concise prose |
+| `gantt` | Proposal schedule | Use `templates/charts/gantt_chart.svg` or equivalent editable chart; full-page layout allowed |
+| `policy_stat_cards` | Route B data cards | 2-4 cards with big numbers, labels, and sources |
+| `conceptual_framework` | Route D synthesis | Matrix, thinking map, or evolution timeline |
+| `theme_detail` | Route D theme page | Method lineage, representative evidence, or table comparison |
+| `evidence_matrix` | Literature comparison | Native SVG table; markers in cells, references resolved elsewhere |
+| `references_page` | Bibliography | Dense numbered list, often two columns |
+| `conclusion` | Summary, outlook, implication | Open layout with 3-4 claims and more whitespace |
 
-## 各 content_type 版式
+## Layout Selection Rules
 
-### `cover` · 封面
+Choose layout by evidence role, not by habit:
 
-全屏深蓝底 + 居中标题 32pt 白色加粗；副标题/作者/单位/日期分行居中。无 header、无 banner、无 logo（logo 可放右下小尺寸）。
-
-### `toc` · 目录
-
-左侧章节列表（4–6 条），每条 18pt 加粗 + 一行 12pt 副标题。当前章节加深蓝竖线高亮（用于过渡页时）。无图。
-
-### `text_flow` · 背景 / 引言型
-
-2–4 条要点（14pt），左侧短段落 + 右侧一张可选小型示意图。如果完全无图就用左 60% 文字 + 右 40% 留白做"喘息"，**不**强行塞图。
-
-### `bullet_analysis` · 要点分析
-
-3–5 条短 bullet（≤ 12 字 / 条）+ 右侧支持图或表。bullet 数字 / 项目符号用主题副色。
-
-### `pipeline` · 技术路线 / 流程
-
-**全宽水平流程图**。4–6 个圆角矩形节点 + 单向箭头连接线。
-- 节点宽度按页宽均匀分布；
-- 节点内深蓝底 + 14pt 白字主标题 + 10pt 白字副标题；
-- 箭头深灰 (`#555555`)，2pt；
-- 不要做成 1:1 左右栏。
-
-如有阶段性分支（菱形判断、并行分支），用 `add_shape(MSO_SHAPE.DIAMOND)` 做判断节点 + 两条 elbow connector 分出去。
-
-### `matrix_framework` · 研究框架 / 三维结构
-
-三段式：左维度 / 中模块 / 右产出。或左输入 / 中处理 / 右输出。
-
-- 三列等宽或 3:5:3 不等宽；
-- 每列顶端一个深蓝条做"标题"，下方放 3–5 个浅灰底卡片；
-- 跨列关系用细灰直线表示（不用粗箭头，避免与 pipeline 混淆）。
-
-### `results_chart` · 关键证据
-
-**hero figure 主导版式**。一张主图占页面 65–80%，右侧或下方一条**窄解读条**：
-
-- 解读条字数 ≤ 60 字；
-- 一句话结论 + 2–3 条要点；
-- 配色克制；
-- 图右下 / 标题处加 "图来源：[n]"；
-- 页脚加该 [n] 的完整条目。
-
-**绝对不要 1:1 左右栏装一张密集图**。
-
-### `table_compare` · 对比表
-
-python-pptx 原生 `add_table` 实现，行=维度，列=主体/方案。
-- 表头深蓝底白字加粗 12pt；
-- 数据行斑马底 (`#FFFFFF` / `#F0F4FA`)；
-- 单元格水平居中、垂直居中；
-- 数字列使用 Times New Roman；
-- 表下加 9pt 灰图注 + 来源；
-- 不允许把表格替换成截图。
-
-### `gantt` · 甘特图（Route C 必有）
-
-整页一张 matplotlib 渲染的 PNG，**不加底部横幅**避免遮挡。生成参数与配色见 [route-proposal.md](route-proposal.md) 的"甘特图"一节。这是路线 C 中**唯一允许位图**的页（matplotlib 输出无法在 ppt 中逐节点编辑，作为代价由用户改数据后重生成）。
-
-### `policy_stat_cards` · 数据卡阵列（Route B 常用）
-
-2–4 张深底卡片横向排列，每张包含：
-- 大号黄色数字 28pt 加粗（Times New Roman）；
-- 13pt 白色标签；
-- 8pt 灰来源（"来源：国家统计局 2024 公报"）。
-
-### `conclusion` · 结论 / 展望
-
-左成果右展望两栏，开放排版无多余框线；3–4 条对照 bullet。可在底部加一行加粗主张作为收尾。
-
-### `conceptual_framework` · 概念框架（Route D 必有）
-
-三选一形式（详细规则与挑选逻辑见 [route-literature-review.md](route-literature-review.md) 的"核心页"一节）：
-
-#### 形式 A · 主题矩阵表
-
-全宽 `add_table`，行=主题（≤ 6 行），列=核心方法/主要结论/代表文献/备注。文献列只放 `[n]`。表头深蓝白字 12pt 加粗，数据 10pt，文献列字号 9pt。表下加"详见参考文献页 P{n}"。
-
-#### 形式 B · 主题思维导图
-
-全矢量 Shape 实现，居中放射布局：
-- 中心节点 = 综述主题（圆角矩形深蓝白字 16pt）；
-- 一级分支 3–5 个，从中心向外按角度均匀分布（72° / 90° / 120° 间隔）；
-- 二级分支挂在一级分支末端，最多 3 层；
-- 节点之间用 `add_connector(MSO_CONNECTOR.STRAIGHT)` 或 `MSO_CONNECTOR.ELBOW`，无箭头（思维导图不带方向）；
-- 每个叶子节点旁紧贴 8pt 文本框 `[n]` 对应文献编号；
-- 颜色梯度：中心深蓝 → 一级中蓝 → 二级浅蓝；
-- 节点最多 15 个，超过则做分页或换矩阵表。
-
-#### 形式 C · 演化流程图
-
-横轴时间（左老右新），顶部水平箭头线 + 年份刻度。每个时间段下方挂 1–3 个节点，跨时段关系用斜箭头表达"催生 / 替代 / 挑战"。颜色：早期灰 → 中期蓝 → 近期红。
-
-实现入口：
-- `make_conceptual_framework_slide(..., framework_type="mind_map", framework_data=...)`
-- `make_conceptual_framework_slide(..., framework_type="network", framework_data=...)`
-- `make_conceptual_framework_slide(..., framework_type="timeline", framework_data=...)`
-
-内部直接调用的可复用函数：
-- `make_mind_map_slide`
-- `make_network_slide`
-- `make_timeline_slide`
-
-### `theme_detail` · 主题详述（Route D）
-
-两种小变体：
-- **方法谱系页**：用 `matrix_framework` 三列结构（方法分类 / 代表算法 / 优缺点）；
-- **结论证据页**：用 `results_chart`（hero 图 + 解读条）或 `table_compare`（数据集×指标）。
-
-### `evidence_matrix` · 文献证据矩阵（Route D）
-
-类似 `table_compare`，但行=代表论文，列=数据集/方法/指标/年份。每行末加 `[n]`，页脚或下一页给完整 GB/T 7714 条目。
-
-### `references_full` · 完整参考文献页（Route C / D 必有）
-
-全宽两栏 10pt 列表，按引用顺序编号。中文字符微软雅黑、数字与拉丁字符 Times New Roman 逐 run 写入。可跨多页，每页保留 header 但**不加 banner**。
-
-## 版式适配规则（关键）
-
-不要把每页都套成 1:1 左右栏。让版式跟随**内容密度**与**该页的论证角色**：
-
-- **图主导页**：hero figure 占 65–80%，文字成"窄解读条"；
-- **文主导页**：文字栏占 60–70%，图作小型示意；
-- **流程主导页**：全宽，不要分栏；
-- **对比页**：原生表格全宽；
-- **总结页**：开放排版，留白多于装饰。
-
-具体决策树：
-
-```
-该页有 1 张密集图？        → results_chart（hero + 窄解读）
-该页有 ≥ 2 张图要对比？    → 上下分栏或全宽宫格
-该页是流程 / 路线？        → pipeline 全宽
-该页是三维结构 / 框架？    → matrix_framework 三列
-该页是数据对照表？         → table_compare 原生表
-该页是综述主题概念框架？   → conceptual_framework 三选一
-该页只是要点 + 没图？      → bullet_analysis 文左留白右
-该页只是过渡 / 标语？      → 居中放大主张
+```text
+One dense source figure?          -> results_chart
+Two or more figures to compare?   -> grid or top-bottom comparison
+Research route or workflow?       -> pipeline or TechnicalRoute Step 5.5
+Three dimensions / variables?     -> matrix_framework
+Numeric comparison?               -> table_compare or chart template
+Review synthesis?                 -> conceptual_framework or evidence_matrix
+Formula drives the method?        -> formula_step or formula_paragraph
+Proposal schedule?                -> gantt
+Only summary / implication?       -> conclusion
 ```
 
-## 公式版式规则
+Do not turn every page into a 1:1 left-right split. Let the layout follow the slide's argumentative role.
 
-学术 PPT 里的公式页默认也纳入版式库，目标是服务**学术内容理解与表达**，而不是只做符号排版。
+## Evidence Page Rule
 
-### `formula_modular` · 模块化步骤公式页
+For `results_chart`:
+- the main figure or chart should occupy 65-80% of the content area;
+- interpretation rail should be narrow and concise;
+- one conclusion sentence plus 2-3 supporting notes is enough;
+- cite the figure source;
+- do not shrink a dense paper figure into a small side panel.
 
-默认优先形式，适合公式较多但每步解释较短的页面：
-- 页面由 3–4 个纵向模块组成；
-- 每个模块顺序固定为：步骤标题 → 核心公式 → 结果式 → 一句说明；
-- 适用于技术路线、模型流程、指标构造、估计步骤；
-- 实现入口：`scripts/route_helpers.py:make_formula_slide(..., formula_mode="modular", ...)`。
+If the original figure is too dense:
+- crop the relevant subpanel;
+- preserve labels and scale bars;
+- cite the original full figure;
+- do not blur or over-compress.
 
-### `formula_sectioned` · 标题分段公式页
+## Table Rules
 
-适合公式之间存在明显流程切换、条件切换或需要较多说明的页面：
-- 每段顶部用深色标题条分隔；
-- 标题下先放解释，再放对应公式组；
-- 适用于“变量定义 / 目标函数 / 求解策略”“早期方法 / 中期方法 / 近期方法”这类结构；
-- 实现入口：`make_formula_slide(..., formula_mode="sectioned", ...)`。
+For editable tables:
+- use native SVG table geometry;
+- use a strong header row;
+- use zebra rows when it improves scanning;
+- align numeric columns consistently;
+- keep row height stable;
+- cite data source below or in footer.
 
-### 选择原则
+For complex source table screenshots:
+- use `crop: meet`;
+- keep row / column labels visible;
+- add source caption and citation marker;
+- use screenshot only when redrawing would risk data errors.
 
-- 默认优先 `formula_modular`；
-- 只有在中间说明文字较多、公式属于不同流程模块时，才切换到 `formula_sectioned`；
-- 复杂公式继续用 `formula_to_png`，但页面组织必须由 `make_formula_slide` 统一管理，不允许零散摆放。
+## Pipeline And TechnicalRoute Rules
 
-## 版式与引文的协作
+Simple process pages:
+- 3-5 steps can be hand-drawn as editable SVG;
+- one direction unless feedback is source-grounded;
+- concise labels;
+- no decorative branching.
 
-任何版式只要本页含引用，都要预留**页脚引文带**（高约 1.5–2.0 cm，紧贴 banner 上方；如无 banner 则贴页面底 0.5cm）。版式函数在 `scripts/layout_library.py` 中已经把页脚带的 y 坐标算好，调用 `add_citation_footer(slide, citations_for_this_slide)` 即可，不要自己另算位置。多 run 中英混排实现见 [citation-style.md](citation-style.md)。
+Complex research routes:
+- use SKILL.md Step 5.5;
+- generate Version A editable template SVG and Version B AI reference image;
+- insert as consecutive pages;
+- mark both as TechnicalRoute pages.
 
-## 实现入口（编码时再打开）
+## Formula Layout Rules
 
-需要写代码时直接 import：
+Formula explanation blocks are rendered as transparent PNGs using:
 
-```python
-from CN_Spark_paper2ppt.scripts.layout_library import (
-    THEME, FONTS, LAYOUT,
-    add_header, add_bottom_banner, add_citation_footer,
-    make_cover_slide,
-    make_pipeline_slide, make_matrix_framework_slide,
-    make_conceptual_framework_slide,    # Route D
-)
-from CN_Spark_paper2ppt.scripts.route_helpers import (
-    make_gantt_slide, formula_to_png, make_formula_slide,
-    insert_policy_image, insert_policy_stat_card,
-)
+```bash
+python3 scripts/latex_formula_to_png.py --block-json <project_path>/notes/formula_01.json --out <project_path>/images/formulas/formula_block_01.png --font-size 30 --dpi 260 --color "#111111"
 ```
 
-`scripts/` 目录里的函数签名稳定；要扩展版式时新增同名风格的函数即可，不要修改既有函数签名以免影响其他路线。
+Read `formula-rendering.md` for the mandatory rendering and QA contract. Before drawing formula pages, inspect `templates/formula/formula_templates_index.json`; use `formula_explanation_block` for the common pattern shown by the user's examples. The final visual object is one PNG containing formula role, formula, `???`, and variable definitions.
+
+`formula_step`:
+- 1-5 formula block PNG modules per slide;
+- each module is inserted as one image with `data-formula-block-png="true"`;
+- adjacent modules are separated by `stroke="#A6A6A6"`, `stroke-width="1.5"`, `stroke-dasharray="8 6"` dashed lines tagged `data-formula-separator="true"`;
+- formula PNGs, explanation text, and separator lines must never overlap or stack;
+- use for algorithms, model steps, metric construction, and estimation procedures.
+
+`formula_paragraph`:
+- 2-3 sectioned formula block PNGs if formulas belong to distinct conceptual sections;
+- split across multiple slides when there are more than five formula blocks or when readability would drop.
+
+Do not scatter formula title, formula, and interpretation into separate SVG text boxes. Separate formula blocks with gray 1.5pt dashed lines. Formula order must match the method route or research design.
+
+## Route D Conceptual Framework Options
+
+`conceptual_framework` should use one of three forms:
+
+| Form | Use when | Constraints |
+|---|---|---|
+| Theme matrix | Many papers per theme, dense reference comparison | Full-width table; reference cells use markers only |
+| Thinking map | 3-6 themes with clear hierarchy | Center topic, 3-5 first-level branches, node count normally <=15 |
+| Evolution timeline | Methods or ideas evolve over time | Horizontal time axis, dated stages, relations between generations |
+
+When in doubt, use the theme matrix. It is the most academic and easiest to audit.
+
+## Route B Policy / Case Layouts
+
+`policy_stat_cards`:
+- 2-4 cards per row;
+- big numeric value;
+- short label;
+- source note;
+- avoid unsupported decorative photos.
+
+Policy quotation:
+- light panel;
+- vertical accent bar;
+- source marker;
+- no oversized quote decoration.
+
+Case page:
+- image or timeline first;
+- narrative second;
+- cite image and data source.
+
+## Route C Gantt Rules
+
+Use `gantt` for proposal schedules.
+
+Preferred:
+- editable chart template `templates/charts/gantt_chart.svg`;
+- tasks with start and duration;
+- milestones as diamond markers;
+- restrained blue palette with one warning / writing-period accent if needed.
+
+Full-page Gantt may omit bottom banner to avoid covering the timeline, but it still needs a title and source / assumption note when relevant.
+
+## Reference Page Layout
+
+Use `references_page` for Route C and Route D.
+
+Rules:
+- two columns allowed;
+- 10 px or equivalent readable size;
+- continue numbering across multiple pages;
+- no bottom banner if it crowds the list;
+- mixed-font runs remain required;
+- keep page titles concise.
+
+## Visual Coverage Rule
+
+Except TechnicalRoute pages, summary pages, and planning / implication pages, every slide must contain at least one meaningful visual:
+- source figure;
+- complex table screenshot;
+- chart;
+- formula PNG;
+- route diagram;
+- dataset / map / model visual.
+
+Decorative icons do not satisfy this requirement.
+
+## Self-Check
+
+- [ ] `content_type` is declared for every body page.
+- [ ] Layout matches the page's evidence role.
+- [ ] Non-exempt pages include a meaningful visual.
+- [ ] Citation footer space is reserved when needed.
+- [ ] Bottom banner does not overlap content.
+- [ ] Dense source figures are cropped or enlarged enough to read.
+- [ ] Formula pages use rendered formula block PNGs containing both formulas and explanations; max five per slide with gray 1.5pt dashed separators.
+- [ ] Complex routes use TechnicalRoute dual pages.

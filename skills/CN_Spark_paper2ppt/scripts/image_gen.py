@@ -44,6 +44,8 @@ Usage:
 import os
 import sys
 import argparse
+import inspect
+from pathlib import Path
 
 from config import load_prefixed_env_file, resolve_env_path
 
@@ -327,6 +329,42 @@ def _resolve_backend() -> tuple[object, str]:
     sys.exit(1)
 
 
+
+def _validate_reference_images(reference_groups: list[list[str]] | None) -> list[str]:
+    """Flatten and validate reference image CLI arguments."""
+    if not reference_groups:
+        return []
+
+    allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+    refs: list[str] = []
+    for group in reference_groups:
+        for raw in group:
+            path = Path(raw).expanduser()
+            if not path.is_file():
+                raise FileNotFoundError(f"Reference image not found: {raw}")
+            if path.suffix.lower() not in allowed_exts:
+                allowed = ", ".join(sorted(allowed_exts))
+                raise ValueError(
+                    f"Reference image has unsupported extension: {path}. Allowed: {allowed}"
+                )
+            refs.append(str(path.resolve()))
+    return refs
+
+
+def _backend_accepts_references(backend: object) -> bool:
+    """Return whether backend.generate can receive reference_images."""
+    try:
+        sig = inspect.signature(backend.generate)
+    except (TypeError, ValueError):
+        return False
+    if "reference_images" in sig.parameters:
+        return True
+    return any(
+        param.kind == inspect.Parameter.VAR_KEYWORD
+        for param in sig.parameters.values()
+    )
+
+
 def main() -> None:
     """Run the CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -335,6 +373,11 @@ def main() -> None:
     parser.add_argument(
         "prompt", nargs="?", default="a beautiful landscape",
         help="The text prompt for image generation."
+    )
+    parser.add_argument(
+        "--prompt-file",
+        default=None,
+        help="Read the text prompt from a UTF-8 file. Overrides the positional prompt.",
     )
     parser.add_argument(
         "--aspect_ratio", default="1:1", choices=ALL_ASPECT_RATIOS,
@@ -355,6 +398,17 @@ def main() -> None:
     parser.add_argument(
         "--model", "-m", default=None,
         help="Model name. Default depends on backend."
+    )
+    parser.add_argument(
+        "--reference", "--refs",
+        dest="references",
+        nargs="+",
+        action="append",
+        default=[],
+        help=(
+            "Reference image path(s) used as style/structure anchors. "
+            "Can be repeated; supported by backends that accept reference_images."
+        ),
     )
     parser.add_argument(
         "--backend", "-b", default=None, choices=SUPPORTED_BACKENDS,
@@ -386,14 +440,34 @@ def main() -> None:
     print(f"Using backend: {backend_name}\n")
 
     try:
-        backend.generate(
-            prompt=args.prompt,
-            aspect_ratio=args.aspect_ratio,
-            image_size=args.image_size,
-            output_dir=args.output,
-            filename=args.filename,
-            model=args.model,
-        )
+        if args.prompt_file:
+            prompt_path = Path(args.prompt_file).expanduser()
+            if not prompt_path.is_file():
+                raise FileNotFoundError(f"Prompt file not found: {args.prompt_file}")
+            args.prompt = prompt_path.read_text(encoding="utf-8")
+
+        references = _validate_reference_images(args.references)
+        generate_kwargs = {
+            "prompt": args.prompt,
+            "aspect_ratio": args.aspect_ratio,
+            "image_size": args.image_size,
+            "output_dir": args.output,
+            "filename": args.filename,
+            "model": args.model,
+        }
+        if references:
+            if not _backend_accepts_references(backend):
+                raise RuntimeError(
+                    f"Backend '{backend_name}' does not support reference images. "
+                    "Use a backend with reference_images support or remove --reference/--refs."
+                )
+            generate_kwargs["reference_images"] = references
+            print("Reference images:")
+            for ref in references:
+                print(f"  - {ref}")
+            print()
+
+        backend.generate(**generate_kwargs)
     except (ValueError, FileNotFoundError) as e:
         print(f"Error: {e}")
         sys.exit(1)

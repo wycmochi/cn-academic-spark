@@ -1,6 +1,7 @@
 > See [`image-base.md`](./image-base.md) for the common framework. Technical SVG/PPT constraints are in [`shared-standards.md`](./shared-standards.md).
 
 # Image_Searcher Reference Manual
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5 有 web 搜图资源时读取；它定义搜索、许可、下载、归因和 manifest 写入规则。
 
 Role definition for the **web image acquisition path**: translate Strategist intent into keyword queries, search openly-licensed providers, download a license-cleared image into `project/images/`, and record provenance + license metadata into `image_sources.json`.
 
@@ -82,7 +83,7 @@ Then `build_query_progression` tries: original → simplified (4 words) → simp
 |---|---|
 | Subject | Use 1-2 concrete nouns only: `offshore wind farm`, `Xiamen skyline`, `boardroom meeting` |
 | Quality cues | **DO NOT ADD QUALITY CUES** like `professional editorial photography` or `clean composition`. These APIs use exact keyword matching; adding long adjectives will result in 0 matches. |
-| Language | For Chinese landmarks: use precise Chinese names (e.g., `磁器口古镇`) if specifically targeting `--provider wikimedia`. For general stock providers (Pexels/Pixabay), use simple English nouns (e.g., `Chongqing Jiefangbei`); do NOT use complex Chinese sentences or overly long English descriptive strings which fail on these platforms. |
+| Language | For Chinese landmarks, use precise romanized or English place names for general stock providers; use the official local-language name only when the selected provider is known to index it. Do not use complex non-English sentences or overly long descriptive strings. |
 
 **Forbidden — web negative prompts**: `not tourist snapshot`, `no amateur photo`, `avoid low quality`.
 

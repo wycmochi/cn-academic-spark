@@ -22,8 +22,8 @@ TLS fingerprint handling:
     Install for WeChat / Chinese-portal coverage:
         pip install curl_cffi
 
-    If curl_cffi is unavailable on your platform, the Node.js counterpart
-    (scripts/source_to_md/web_to_md.cjs) remains available as a fallback.
+    This skill currently ships the Python importer only. If curl_cffi is
+    unavailable, the script falls back to plain requests.
 """
 
 import argparse

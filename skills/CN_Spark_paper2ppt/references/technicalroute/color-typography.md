@@ -1,95 +1,115 @@
-# Color & Typography · 命名色板与字体规则
+# TechnicalRoute Color And Typography
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5.5 写路线图 spec_lock 时读取；它让技术路线图继承整套 PPT 的颜色、字体、强调色和圆角规范。
 
-> 本文件给所有 archetype 共享的命名色板与字体规则。`content.yaml.color_scheme` 必须从这里选一个名字，**不允许**在 yaml 里直接写 HEX。HEX 由本文件统一维护，方便日后切换 / 跟随学校色 / 跟随期刊色。
+TechnicalRoute pages must look like part of the same academic deck. They inherit the parent `design_spec.md` and `spec_lock.md`. If the user supplied a PPTX template and it has been registered, that template palette has the highest priority.
 
-## 命名色板（直接在 `content.yaml.color_scheme` 中使用其名）
+## Palette Priority
 
-| 名称 | primary | secondary | accent | muted | 适用学科示意 |
+Use this order:
+1. User-provided PPTX template palette and institution identity, when present.
+2. Project `spec_lock.md` color roles.
+3. Project `design_spec.md` color strategy.
+4. TechnicalRoute fallback named palettes in this file.
+5. Neutral academic blue if no other information exists.
+
+Do not let Custom_gallery, literature references, or AI image defaults override the user PPTX template palette.
+
+## Route Color Roles
+
+Write resolved colors into route `spec_lock.md` with HEX values:
+
+```yaml
+colors:
+  primary: "#1F4E79"
+  secondary: "#2E7D32"
+  accent: "#C00000"
+  muted: "#888888"
+  surface: "#F5F8FB"
+  text: "#1A1A1A"
+  brick_red: "#A23B2A"
+```
+
+Rules:
+- Use a four-role semantic budget: primary, secondary, accent, muted.
+- White and light surface tints are allowed as backgrounds.
+- Accent area should normally stay below 5% of the diagram.
+- Brick red `#A23B2A` is for concise high-priority text only, with bold weight.
+- Do not recolor the whole diagram with brick red or accent red.
+- Use muted gray for captions, transition labels, and weak annotations.
+
+## Fallback Named Palettes
+
+These are fallback choices only. Do not use them when project or user-template colors exist.
+
+| Name | primary | secondary | accent | muted | Typical fit |
 |---|---|---|---|---|---|
-| `academic_blue_green` | `#1F4E79` | `#2E7D32` | `#C00000` | `#888888` | 地理 / 城市 / 公共卫生 / 社会科学 |
-| `academic_blue_teal` | `#005B8C` | `#00897B` | `#FFB300` | `#888888` | 经济 / 管理 / 教育 / 综合 |
-| `academic_purple_green` | `#7E57C2` | `#43A047` | `#EF5350` | `#757575` | 机器学习 / 计算 / 数据科学 |
-| `academic_navy_amber` | `#1A237E` | `#FF8F00` | `#D32F2F` | `#888888` | 工程 / 材料 / 物理 |
-| `academic_indigo_lime` | `#283593` | `#9E9D24` | `#C62828` | `#888888` | 生物 / 化学 / 农学 |
-| `academic_blue_pink` | `#1565C0` | `#C2185B` | `#FBC02D` | `#888888` | 医学 / 临床 / 公共健康 |
-| `academic_grey_red` | `#37474F` | `#C62828` | `#FFB300` | `#90A4AE` | 法律 / 政策 / 风险 |
-| `academic_neutral_blue` | `#1F4E79` | `#90A4AE` | `#C00000` | `#888888` | 极简学院风（综述讲解） |
+| `academic_blue_green` | `#1F4E79` | `#2E7D32` | `#C00000` | `#888888` | geography, public health, social science |
+| `academic_blue_teal` | `#005B8C` | `#00897B` | `#FFB300` | `#888888` | economics, management, education |
+| `academic_purple_green` | `#7E57C2` | `#43A047` | `#EF5350` | `#757575` | machine learning, computation, data science |
+| `academic_navy_amber` | `#1A237E` | `#FF8F00` | `#D32F2F` | `#888888` | engineering, materials, physics |
+| `academic_indigo_lime` | `#283593` | `#9E9D24` | `#C62828` | `#888888` | biology, chemistry, agriculture |
+| `academic_blue_pink` | `#1565C0` | `#C2185B` | `#FBC02D` | `#888888` | medicine, clinical, public health |
+| `academic_grey_red` | `#37474F` | `#C62828` | `#FFB300` | `#90A4AE` | policy, law, governance, risk |
+| `academic_neutral_blue` | `#1F4E79` | `#90A4AE` | `#C00000` | `#888888` | neutral academic deck |
 
-每条色板都满足：
+## Typography
 
-- primary 与 secondary 的色相相距足够远，便于辨识；
-- accent 只在"核心问题 / 主张 / 警示"位置用，且整图占比 ≤ 5%；
-- muted 用于引文 / 说明 / 弱信息，在白底上有 ≥ 4.5:1 对比度（AA 级）。
+Default mixed-font strategy:
+- Chinese text: `Microsoft YaHei` or `Source Han Sans SC`.
+- Latin letters, numbers, and technical abbreviations: `Times New Roman` for academic text, or the parent deck Latin font if locked.
+- Code and model identifiers: `Inter Mono` or `Roboto Mono` only when a monospaced distinction is useful.
+- Formula appearance: LaTeX-style serif. For normal PPT pages, render formulas through `scripts/latex_formula_to_png.py`.
 
-## `discipline_default` 别名
+When building SVG text:
+- Use mixed-font `<tspan>` segmentation for Chinese, Latin, numbers, and symbols.
+- Keep all text editable in Version A.
+- Do not use `<foreignObject>`.
+- Do not split one phrase into multiple overlapping text boxes.
 
-`content.yaml.color_scheme: discipline_default` 时按学科自动落到上面某条：
+## Font Sizes For 1280 x 720 SVG
 
-| 学科关键词（出现在 title / subtitle） | 落到 |
-|---|---|
-| 城市 / 地理 / 公共卫生 / 暴露 / GIS / 流动性 | `academic_blue_green` |
-| 机器学习 / 深度学习 / 神经网络 / 计算 / 算法 | `academic_purple_green` |
-| 医学 / 临床 / 病人 / 疾病 / 影像 | `academic_blue_pink` |
-| 政策 / 法规 / 风险 / 评估 / 治理 | `academic_grey_red` |
-| 经济 / 管理 / 教育 / 经营 | `academic_blue_teal` |
-| 工程 / 材料 / 物理 / 力学 | `academic_navy_amber` |
-| 生物 / 化学 / 农学 / 生态 | `academic_indigo_lime` |
-| 其他 / 无法判定 | `academic_neutral_blue` |
+| Role | Size |
+|---|---:|
+| route page title | 28-34 px |
+| diagram title inside figure | 22-28 px |
+| panel / stage label | 15-20 px |
+| node body text | 13-16 px |
+| arrow label / caption | 11-13 px |
+| formula text inside method diagram | 18-24 px |
 
-判定关键词不在标题里时，本字段保留为 `discipline_default` 并在 prompt 中标注让图像模型走"中性学院蓝"。
+Adjust down only when the template has a documented dense layout. Never shrink below legibility to force too much content into one diagram.
 
-## 角色 → HEX 在 prompt 中的注入
+## Shape Radius
 
-`generate_route_image.py prompt` 把 `color_scheme` 解析后注入：
+Default values:
 
+```yaml
+shape_radius:
+  node_rx: 6
+  dense_node_rx: 3
+  card_rx: 6
+  large_panel_rx: 8
 ```
-[COLOR DISCIPLINE]
-primary  = #1F4E79  (用于 panel 主色、step 标题条、核心节点)
-secondary = #2E7D32 (用于次要 panel、辅助节点、过渡)
-accent   = #C00000  (仅用于核心问题 / 主张横幅，整图占比 ≤ 5%)
-muted    = #888888  (引文 / 说明 / 弱信息)
 
-Do NOT introduce hues outside this 4-color budget except for:
-  - pure white (#FFFFFF) backgrounds
-  - dark text (#1A1A1A or muted) for body copy
-  - alpha-modulated tints of the above 4 (e.g., primary @ 20% for surface fills)
+Use smaller corners for dense academic route diagrams. Avoid very round card-like UI shapes unless the selected template requires them. If the user asks where to adjust the default, modify `shape_radius.node_rx` in the route `spec_lock.md` or the corresponding template-level `spec_lock_reference.md`.
+
+## Emphasis Rule
+
+High-priority text may be bold and brick red:
+
+```yaml
+emphasis:
+  color: "#A23B2A"
+  weight: 700
+  use_for: key finding | central risk | decisive constraint
 ```
 
-## 字体规则
+Use it once or twice per route page. Do not use brick red for ordinary labels.
 
-### 默认（学术汇报 95% 场景适用）
+## Do Not
 
-| 用途 | 字体族 |
-|---|---|
-| 中文（标题 / bullet / 标签） | `Microsoft YaHei` / `Source Han Sans SC` |
-| 英文 + 数字 + 拉丁字符 | `Times New Roman` |
-| 公式 LaTeX | `Computer Modern` / `STIX Two Math` 风格的衬线（图像模型按 "LaTeX style" 渲染即可） |
-| 代码 / 模型名 | `Inter Mono` / `Roboto Mono` |
-
-### 切换条件
-
-| `content.yaml.typography` | 用途 |
-|---|---|
-| `cn_yahei_en_times` (default) | 答辩 / 综述 / 大多数学术场景 |
-| `cn_songti_en_inter` | 论文风、严肃文献综述 |
-| `cn_yahei_en_inter` | 计算 / 工程 / 互联网氛围 |
-| `cn_pingfang_en_helvetica` | 极简学院 / 设计学院 / 建筑 |
-
-## 字号（基于 1080×1920 输出，**不是** SVG 1280×720）
-
-| 角色 | 字号 |
-|---|---|
-| 主标题 | 36–44 |
-| 段标题（panel label） | 22–28 |
-| Bullet 主文 | 16–20 |
-| Bullet 副解释 / 含义 | 13–15 |
-| 公式 LaTeX | 24–30（变量与数字） |
-| 角标 / 引用 / 时间戳 | 10–12 |
-
-## 不要做的事
-
-- ❌ 在一张图里出现 ≥ 5 种饱和色相；
-- ❌ 红色 / 强调色用在装饰位置（必须承载语义）；
-- ❌ 中英文走同一种字体（中英混排必须分 family）；
-- ❌ 公式区用饱和底色（必须浅灰 `#F5F8FB` 或白）；
-- ❌ 在 yaml 里直接写 HEX（必须用本文件的命名色板）。
+- Do not introduce five or more saturated hues.
+- Do not use gradients, glows, large shadows, or decorative color blobs.
+- Do not let AI generation invent a new palette.
+- Do not use the same font family for all Chinese and Latin text when mixed-font rules are available.
+- Do not use saturated backgrounds behind formulas.

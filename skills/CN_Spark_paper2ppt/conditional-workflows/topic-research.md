@@ -1,119 +1,133 @@
 ---
-description: Gather source materials via web search when the user supplies only a topic or requirements without source files. Produces a Markdown document and an image folder that feed SKILL.md Step 2's import-sources.
+description: Gather citeable academic source materials when the user supplies only a topic or broad requirements without source files.
 ---
 
 # Topic Research Workflow
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在用户只有主题但没有论文、报告、URL 或其他材料时读取；它指导检索权威可引用资料、保存研究文档和候选图片，并把产物交给 SKILL.md Step 1/2。
 
-> Standalone pre-processing step. Run before SKILL.md Step 1 when the user supplies only a topic or requirements with no source files. Output is a research document + image folder, both shaped to feed `project_manager.py import-sources` directly.
+Standalone pre-processing workflow. Run before SKILL.md Step 1 when the user asks for an academic PPT but provides only a topic, requirement, or broad direction without source files.
 
-This workflow is **independent**: it owns the source-acquisition step when no file exists; subsequent SKILL.md steps proceed normally with the produced materials as input.
+Output is a citeable research Markdown document plus an image / figure folder that can be imported as source material.
 
-## When to Run
+## When To Run
 
-| User-supplied input | Action |
+| User input | Action |
 |---|---|
-| Topic name only (e.g. "做一个关于宫崎骏的 PPT") | Run this workflow |
-| Requirement description without facts (e.g. "介绍我们公司新产品") | Run this workflow |
-| ≥1 page of substantive content already in chat | Skip — feed chat content into SKILL.md Step 1 directly |
-| Source file attached (PDF / DOCX / URL / Markdown) | Skip — go to SKILL.md Step 1 source converter |
+| Topic only | Run this workflow. |
+| Requirement description without substantive facts | Run this workflow. |
+| One or more academic source files attached | Skip; go to SKILL.md Step 1. |
+| At least one page of substantive pasted content | Skip; treat chat content as source material. |
+| User explicitly asks for a literature-backed deck but no source package exists | Run this workflow. |
 
----
+## Step 1 - Confirm Scope Once
 
-## Step 1: Confirm topic
+Ask one bundled clarification only when the initial request is under-specified:
 
-⛔ **BLOCKING**: confirm scope as a single bundled clarifier. Skip when the user's initial message already covers it.
+- topic;
+- academic field;
+- intended route if obvious: paper explanation, course report, proposal, or literature review;
+- depth;
+- time span;
+- output language;
+- target audience;
+- expected source type;
+- file slug.
 
-| Item | Default if user did not specify |
+Do not ask row by row. If the user already specified enough, proceed.
+
+## Step 2 - Source Priority
+
+Use citeable sources. For academic decks, prioritize:
+
+| Tier | Source type |
 |---|---|
-| Topic | (from user input) |
-| Scope / focus | Broad overview |
-| Depth | General-knowledge level |
-| Output language | Match user input |
-| Slug for files (`<topic_slug>`) | snake_case English identifier derived from topic |
+| 1 | User-provided papers, PDFs, datasets, reports. |
+| 2 | DOI landing pages, journal pages, conference proceedings, official preprint pages. |
+| 3 | University, laboratory, government, standards body, institutional pages. |
+| 4 | Reputable academic databases, textbooks, official project docs. |
+| 5 | Reputable news or policy sources only for Route B context. |
+| Avoid | Unsourced blogs, reposts, watermarked stock images, social posts without primary source. |
 
-**Forbidden — itemized confirmation**: do NOT ask each row separately. One bundled clarifier or none.
+For Route C and Route D, gather enough references to support a reference page. For Route D, prefer a small representative paper set over shallow coverage of many unrelated sources.
 
----
+## Step 3 - Search Strategy
 
-## Step 2: Gather via web search
-
-**Tools** — use the web search and web fetch tools the current IDE provides:
-
-| IDE | Web search | Web fetch |
-|---|---|---|
-| Claude Code | `WebSearch` | `WebFetch` |
-| Cursor / Codebuddy / VS Code + Copilot | provider-equivalent built-in | provider-equivalent built-in |
-| None available | — | fallback below |
-
-**Fallback when no IDE web tools** — pause, ask the user for 2–4 authoritative URLs (Wikipedia / official site / institutional release), then fetch each:
+Use available web search tools if the environment supports them. If web tools are unavailable, ask the user for 2-4 authoritative URLs and convert them with:
 
 ```bash
-python3 ${SKILL_DIR}/scripts/source_to_md/web_to_md.py <URL>
+python3 scripts/source_to_md/web_to_md.py <URL>
 ```
 
-**Search strategy**:
+Search in phases:
 
-| Phase | Action |
-|---|---|
-| Landscape | One broad search; identify authoritative sources |
-| Deep fetch | Pull 2–4 highest-signal pages in full |
-| Targeted fill | Search for subtopics the deep fetch flagged |
+1. Broad landscape search to identify field vocabulary and authoritative sources.
+2. Targeted search for high-value papers, reports, datasets, standards, or official pages.
+3. Figure / table search from original source pages only.
+4. Citation metadata cleanup.
 
-**Source priority**:
+Stop when the material covers background, core concepts, representative evidence, current gap or controversy, source list, and candidate figures or tables.
 
-| Tier | Source |
-|---|---|
-| 1 | Wikipedia / Wikimedia Commons |
-| 2 | Official sites, institutional releases |
-| 3 | Reputable news / academic articles |
-| Avoid | Stock-aggregator watermarked images, social-media reposts without source |
+## Step 4 - Save Research Artifacts
 
-**Stop condition**: stop when gathered material covers overview / history / key aspects / impact / sources with concrete facts and named entities. Endless searching produces noise.
-
----
-
-## Step 3: Save materials
-
-Two artifacts under `projects/`:
+Save under `projects/`, not the repository root:
 
 | Artifact | Path |
 |---|---|
 | Research document | `projects/<topic_slug>.md` |
-| Image folder | `projects/<topic_slug>/` |
+| Image / figure folder | `projects/<topic_slug>/` |
 
-**Hard rule — naming**: filename (without `.md`) and folder name MUST match. **Hard rule — location**: under `projects/`, never the repository root.
+Filename and folder name must match.
 
-**Document structure** — section layout follows the topic: person → biography / works / impact; technology → background / mechanism / applications / outlook; company → overview / products / market / culture. The file MUST end with a `## Sources` section listing the URLs used.
-
-**Content density** — concrete facts (dates, names, numbers, quotes). Skip filler prose; the Strategist composes final slide copy.
-
-**Images**:
-
-| Decision | Rule |
-|---|---|
-| Quantity | Cover the deck's likely scenes (cover, key aspects, key entities); the Strategist decides the final cut |
-| Resolution | Prefer originals. Wikimedia: strip `/thumb/` and the `Npx-` prefix from the URL to get full resolution |
-| License | Wikimedia / public-domain / CC-licensed; avoid stock-aggregator watermarks and unsourced uploads |
-| Filename | descriptive English snake_case (`joe_hisaishi_concert.jpg`, not `image1.jpg`) |
-
-```bash
-mkdir -p "projects/<topic_slug>"
-curl -L -o "projects/<topic_slug>/<descriptive_name>.<ext>" "<image_url>"
-```
-
----
-
-## Hand-off
-
-Output a checkpoint, then continue with the main pipeline. The artifacts feed directly into Step 2's `import-sources`:
+Research document structure:
 
 ```markdown
-## ✅ Topic Research Complete
-- [x] Document: `projects/<topic_slug>.md` (N sections)
-- [x] Images: `projects/<topic_slug>/` (N files)
-- [ ] **Next**: SKILL.md Step 2 →
-  `project_manager.py init <project_name> --format <format>`
-  `project_manager.py import-sources projects/<project_name> projects/<topic_slug>.md projects/<topic_slug>/*.* --move`
+# <Topic>
+
+## Scope
+## Key Questions
+## Background
+## Core Concepts
+## Evidence And Findings
+## Candidate Figures And Tables
+## Open Questions
+## Suggested PPT Route
+## Sources
 ```
 
-`<project_name>` is the user's chosen project identifier (typically `<format>_<topic_slug>`, e.g. `ppt169_joe_hisaishi`); `--move` removes the research artifacts from `projects/<topic_slug>` after they are imported.
+Every factual claim that is likely to enter the PPT must be backed by a listed source.
+
+## Step 5 - Figure And Image Rules
+
+Prefer figures from papers, official charts, government statistics, dataset diagrams, institution-provided images, and complex tables that can be screenshotted with citation.
+
+Avoid decorative stock images, unsourced internet diagrams, low-resolution reposted figures, watermarked images, and images whose license or origin is unclear.
+
+Use descriptive English snake_case filenames such as `study_flow_diagram.png`, `policy_timeline_2024.png`, or `dataset_sample_distribution.png`.
+
+## Step 6 - Route Handoff
+
+Recommend a route:
+
+- Route A: one specific paper dominates.
+- Route B: course report, policy report, case analysis, or thematic report.
+- Route C: proposal or research plan.
+- Route D: literature review or multi-paper synthesis.
+
+The output Markdown should contain enough structure for SKILL.md Step 1 and Step 4 to classify paper type and build the deck.
+
+## Hand-Off
+
+After saving artifacts, continue with the main pipeline:
+
+```bash
+python3 scripts/project_manager.py init <project_name> --format ppt169
+python3 scripts/project_manager.py import-sources <project_path> projects/<topic_slug>.md projects/<topic_slug>/*.* --move
+```
+
+Report:
+
+- research document path;
+- number of sources;
+- number of images / figures;
+- recommended route;
+- any gaps or sources requiring user confirmation.

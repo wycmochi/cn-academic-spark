@@ -1,50 +1,122 @@
-# Seed URLs · 学术文献样式检索站点说明
+# TechnicalRoute Seed URLs And Reference Priority
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5.5 选择参考图路径时读取；它把在线学术检索、完全离线用户参考图和 atlas-only 降级路径接入主流程。
 
-> 由 `literature_search.py` 自动读取 [seed_sites.json](seed_sites.json) 调用。本文件用文字解释每个站点的特点 / 局限 / 何时切到 fallback。
+Use this file before building `style_refs` for Version B AI reference generation. The goal is to collect or assess visual style anchors, not to collect semantic content. The paper, user material, and `content.yaml` remain the only content sources.
 
-## 优先级与适配场景
+`scripts/technicalroute/literature_search.py` reads `references/technicalroute/seed_sites.json` for the concrete academic-search site configuration. This Markdown file explains how the agent should choose the branch and prioritize reference classes; it must not become a second hard-coded site list.
 
-| Site | 适合的内容 | 不适合的场景 |
-|---|---|---|
-| **Google Scholar** | 所有学科的英文与部分中文文献。优先 — 检索能力最强，PDF 直链多 | 受墙 / 验证码概率高 |
-| **Semantic Scholar API** | 计算机 / 信息 / 部分医学。返回 JSON，最适合自动化 | 中文文献覆盖弱 |
-| **ScienceDirect** | Elsevier 期刊，地理 / 城市 / 环境 / 医学最强 | 全文需订阅；figure 缩略一般可见 |
-| **CNKI** | 中文学位论文 / 中文期刊 | 访问需登录，自动化困难，**只作人工补充** |
-| **arXiv** | 计算 / 机器学习 / 物理 / 量化金融的工作流图 | 文科少 |
-| **Wikimedia Commons** | CC 授权图片，可直接下载 | 学术 figure 偏少，主要是科普图 |
-| **ResearchGate** | 跨学科作者主页 | 需登录，优先级低 |
-| **Baidu Scholar** | 中文文献补充 | 检索质量不如 Google Scholar |
+## Reference Priority
 
-## 实际抓取流程
+Use this order:
+1. Internal `templates/technicalroute/Custom_gallery/` raster anchors.
+2. Academic-website and relevant-literature raster references: DOI-linked journal or publisher pages, official lab / university / project pages, paper supplementary material, reputable academic sources, open course materials, documentation pages, and institutional repositories, only when they provide flowchart / framework / workflow / route-diagram / explanatory-legend style references.
+3. User-provided relevant reference images, when the user uploads at least three structure-similar images.
+4. Atlas-only neutral academic route style when no external or user references are available.
 
-1. **首选** — IDE 提供 `WebSearch` + `WebFetch`（Claude Code / Cursor / VS Code Copilot）：
-   - `literature_search.py` 组装搜索 URL；
-   - 主代理用 `WebSearch` 取前 10 条结果，过滤标题与摘要含 `technical route` / `research framework` / `技术路线` / `研究框架` 的论文；
-   - 对每篇 paper 调 `WebFetch` 拿到 abstract + figure URLs；
-   - 下载 figure 缩略到 `style_refs/`。
+Do not invent URLs. Do not claim that search succeeded when it did not. Do not treat Version A SVGs, assembled SVG templates, result charts, histograms, ROC curves, maps, heatmaps, or raw tables as AI image references. Uploaded paper content and outline are semantic sources through `content.yaml`, not image-reference sources for Version B.
 
-2. **降级** — 没有 IDE web 工具：
-   - 输出搜索 URL 列表给用户；
-   - 请用户挑 5–8 张图保存到 `projects/<project_name>/style_refs/`；
-   - 用户保存后回到 SKILL.md Step 3。
+## Site Configuration Source
 
-3. **完全离线** — 用户上传 ≥ 3 张参考图：
-   - `literature_search.py --offline --hints <folder>` 直接把用户图作为参考；
-   - 跳过 Step 2，进入 Step 3。
+The concrete search URLs, priorities, login flags, minimum reference count, and image-filter hints live only in `references/technicalroute/seed_sites.json`. When the user or maintainer changes that JSON, the search behavior follows the JSON without editing this Markdown file. Agents must not paste a separate website list into `prompt_ai.md`, `spec_lock.md`, `ppt_outline_cn.md`, or any generated project notes.
 
-## 图片过滤启发式
+Valid external style references are local raster files downloaded or screenshotted from the search plan emitted by `literature_search.py emit-plan`, then recorded with `literature_search.py record` into `<route_workdir>/style_refs/manifest.json`.
 
-`literature_search.py` 抓到 figure 后按下述启发式过滤：
+## Branch Selection
 
-- **关键词命中**：title / caption / surrounding text 含 "technical route / research framework / pipeline / workflow / 技术路线 / 研究框架 / 研究设计" 加 +1；
-- **关键词排除**：含 "regression / histogram / scatter / heatmap / boxplot / ROC / loss curve" 减 -1（结果图不是框架图）；
-- **宽高比**：1.2 ≤ aspect ≤ 3.0；
-- **像素**：宽 ≥ 800 px；
-- 按得分排序取前 N（默认 8）。
+### Online Branch
 
-## 学术伦理
+Use when search or browser tools are available and the topic benefits from discipline-specific visual conventions.
 
-- 仅作**视觉风格参考**，**不**复用文字与数值；
-- 在 `style_refs/manifest.json` 保留 DOI / 期刊 / 标题 / 作者；
-- 最终图在 paper2ppt 嵌入时**不需要**引用这些参考论文（只是风格参考）；
-- 若用户希望致谢，可在 PPT 末页"图来源"栏列出。
+```bash
+python3 scripts/technicalroute/literature_search.py emit-plan --topic "<topic>" --archetype <thinking|method|workflow> --max 8 --out <route_workdir>/style_refs/
+```
+
+Then use available search tools to inspect the generated search plan. Record useful references:
+
+```bash
+python3 scripts/technicalroute/literature_search.py record --out <route_workdir>/style_refs/ --doi "<doi>" --title "<title>" --journal "<journal>" --year "<year>" --authors "<authors>" --source-url "<url>" --image-url "<figure_url>" --downloaded "<local_file>" --caption-hint "<why it fits>" --score <score>
+```
+
+Assess the collected references:
+
+```bash
+python3 scripts/technicalroute/literature_search.py assess --out <route_workdir>/style_refs/
+```
+
+If `assess` recommends `literature`, continue to `generate_route_image.py prompt --reference-mode literature`. If it recommends `atlas_only`, follow `handling-no-references.md`.
+
+### Fully Offline User-Reference Branch
+
+Use when the user provides at least three relevant reference images.
+
+```bash
+python3 scripts/technicalroute/literature_search.py offline --hints <folder_with_user_reference_images> --out <route_workdir>/style_refs/ --topic "<topic>" --archetype <thinking|method|workflow> --max 8
+python3 scripts/technicalroute/literature_search.py assess --out <route_workdir>/style_refs/
+```
+
+In this branch:
+- skip online search;
+- treat user images as style references only;
+- continue to Version A template selection;
+- for Version B prompt generation, use the generated `style_profile.md` or `manifest.json` as style context. Because `generate_route_image.py prompt` currently accepts only `literature` and `atlas_only`, call it with `--reference-mode literature` when offline references are available and usable.
+
+### Atlas-Only Branch
+
+Use when no online references are available, the user did not provide enough images, or `assess` recommends atlas-only.
+
+```bash
+python3 scripts/technicalroute/literature_search.py assess --out <route_workdir>/style_refs/
+python3 scripts/technicalroute/generate_route_image.py prompt --archetype <thinking|method|workflow> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode atlas_only --out <route_workdir>/prompt_ai.md
+```
+
+Atlas-only means:
+- use only raster anchors selected from `templates/technicalroute/Custom_gallery/gallery_index.json` as fallback style guidance; do not use template SVGs, PPTX editable pages, or Version A screenshots as AI references;
+- do not claim external literature reference support;
+- keep article-derived `content.yaml` as the only semantic source.
+
+## Image Filtering Heuristics
+
+Keep references that match these signals:
+- title, caption, or surrounding text includes route, framework, pipeline, workflow, research design, method framework, or similar terms;
+- aspect ratio is suitable for slide composition, normally 1.2 to 3.0;
+- image width is at least 800 px when possible;
+- the figure shows nodes, stages, panels, arrows, lanes, or conceptual grouping;
+- it matches the selected archetype and sub-variant.
+
+Reject or down-rank:
+- result charts that do not show process or framework structure;
+- heatmaps, boxplots, ROC curves, loss curves, regression plots, or scatter plots when they are only empirical results;
+- screenshots with dense unreadable text;
+- watermarked, promotional, or non-academic graphics;
+- images whose visual grammar conflicts with the deck style.
+
+## Style Profile Requirements
+
+`style_profile.md` or the assessed reference summary should capture:
+- discipline or domain;
+- selected archetype and likely sub-variant;
+- node shape style;
+- connector style;
+- density level;
+- color saturation level and accent placement;
+- typography hints;
+- features to avoid.
+
+## Academic Integrity Rules
+
+- References are style and structure anchors only.
+- SVG files are never passed as Version B AI image references.
+- Do not copy text, numbers, formulas, dataset names, model names, author names, captions, citations, or place names from references.
+- Keep DOI, title, author, and source metadata in `style_refs/manifest.json` for traceability.
+- The final route diagram normally does not cite style references, because it does not use their content. If the user requests an acknowledgement, list them in the deck's source-note or reference appendix.
+
+## Workflow Placement
+
+This file is Step 5.5 item 3 in the main workflow:
+1. Write `contract.md`.
+2. Write `content.yaml`.
+3. Choose reference mode using this file.
+4. Inspect `Custom_gallery` and selected template atlas.
+5. Generate Version A using `image-templatedraw.md`.
+6. Generate Version B using `image-aigenerate.md`.
+7. Audit and insert both pages.

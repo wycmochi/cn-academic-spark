@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PPT Master - PPTX Animation Module
+PPTX Animation Module
 
 Provides XML generation for slide transition effects and entrance animations.
 

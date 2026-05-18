@@ -69,15 +69,21 @@ def parse_transform(transform_str: str) -> tuple[float, float, float, float, flo
     sx, sy = 1.0, 1.0
     angle_deg = 0.0
 
-    m = re.search(r'translate\(\s*([-\d.]+)[\s,]+([-\d.]+)\s*\)', transform_str)
-    if m:
-        dx = float(m.group(1))
-        dy = float(m.group(2))
+    number_re = r'[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?'
 
-    m = re.search(r'scale\(\s*([-\d.]+)(?:[\s,]+([-\d.]+))?\s*\)', transform_str)
+    m = re.search(r'translate\(\s*([^)]*?)\s*\)', transform_str)
     if m:
-        sx = float(m.group(1))
-        sy = float(m.group(2)) if m.group(2) else sx
+        nums = [float(n) for n in re.findall(number_re, m.group(1))]
+        if nums:
+            dx = nums[0]
+            dy = nums[1] if len(nums) > 1 else 0.0
+
+    m = re.search(r'scale\(\s*([^)]*?)\s*\)', transform_str)
+    if m:
+        nums = [float(n) for n in re.findall(number_re, m.group(1))]
+        if nums:
+            sx = nums[0]
+            sy = nums[1] if len(nums) > 1 else sx
 
     m = re.search(r'rotate\(\s*([-\d.]+)', transform_str)
     if m:
@@ -213,6 +219,8 @@ def _supports_matrix_transform(elem: ET.Element) -> bool:
     if tag == 'image':
         return True
     if tag == 'svg':
+        if elem.get('data-template-type') == 'formula_block_png':
+            return True
         visual_children = [
             child for child in elem
             if child.tag.replace(f'{{{SVG_NS}}}', '') not in _NON_VISUAL_TAGS
@@ -352,6 +360,11 @@ def convert_svg_to_slide_shapes(
     from .tspan_flattener import flatten_positional_tspans
     if flatten_positional_tspans(tree) and verbose:
         print('  Flattened positional <tspan> into independent <text>')
+
+    from .textbox_normalizer import normalize_text_boxes
+    normalized_text = normalize_text_boxes(root)
+    if verbose and normalized_text:
+        print(f'  Normalized {normalized_text} text box contract(s)')
 
     unsupported = _collect_unsupported_visuals(root)
     if unsupported:
