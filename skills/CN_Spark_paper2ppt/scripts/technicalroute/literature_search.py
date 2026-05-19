@@ -10,7 +10,7 @@ literature_search.py · 学术文献样式检索
   2. 调用本脚本 emit-plan 生成检索计划与每个站点的搜索 URL；
   2. 用 WebSearch / WebFetch 按计划逐站执行；
   3. 用 record 把抓到的 figure URL + DOI 注入到 manifest.json；
-  4. 若用户已上传 ≥3 张结构相似参考图，直接用 offline --hints <folder>。
+  4. 若文献检索无可用图，则只能用 prepare-ai-refs 进入 Custom_gallery 最近意图兜底。
 
 本脚本不直接发起网络请求（避免把 cookie / 限频 / 验证码逻辑揉进来）；它做：
   - 读取 seed_sites.json
@@ -25,7 +25,7 @@ Usage:
   python3 literature_search.py record --out <project_path>/style_refs/ \\
         --doi "10.xxxx/xxxx" --title "..." --image-url "..." --downloaded ref_001.png
 
-  python3 literature_search.py offline --hints <folder> --out <project_path>/style_refs/
+  # offline/user-upload references are rejected for Version B; use prepare-ai-refs fallback.
 
   python3 literature_search.py filter --image <path> --topic "<text>"
 """
@@ -52,6 +52,11 @@ CUSTOM_GALLERY = HERE.parent.parent / "templates" / "technicalroute" / "Custom_g
 GALLERY_INDEX = CUSTOM_GALLERY / "gallery_index.json"
 RASTER_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 FORBIDDEN_AI_REF_SUFFIXES = {".svg", ".pptx", ".ppt", ".odp", ".key"}
+ARCHETYPE_NEARNESS = {
+    "workflow": {"workflow": 6, "method": 4, "thinking": 3},
+    "method": {"method": 6, "workflow": 4, "thinking": 2},
+    "thinking": {"thinking": 6, "workflow": 3, "method": 2},
+}
 
 
 def load_seed_sites() -> dict:
@@ -218,6 +223,15 @@ def cmd_record(args: argparse.Namespace) -> int:
 
 
 def cmd_offline(args: argparse.Namespace) -> int:
+    print(
+        "Error: the offline/user-upload reference branch is forbidden for TechnicalRoute "
+        "Version B. Use seed-sites literature refs first, then prepare-ai-refs "
+        "--allow-gallery-fallback-after-search --search-completed for Custom_gallery "
+        "nearest-intent fallback.",
+        file=sys.stderr,
+    )
+    return 2
+
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     hints_dir = Path(args.hints)
@@ -362,6 +376,15 @@ def _contains_any(text: str, needles: list[str]) -> bool:
     return any(str(needle).lower() in low for needle in needles if needle)
 
 
+def _tokenize_intent_text(text: str) -> list[str]:
+    tokens: list[str] = []
+    for raw in re.split(r"[\s,;，；、/|()\[\]{}:：.!?。！？\"'“”‘’<>]+", text.lower()):
+        raw = raw.strip()
+        if len(raw) >= 2:
+            tokens.append(raw)
+    return tokens
+
+
 def _valid_raster_ref(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() in RASTER_SUFFIXES
 
@@ -411,22 +434,40 @@ def _discipline_candidates(index: dict, discipline: str, topic: str) -> list[tup
             score += 4
         scored.append((score, key, cfg))
     scored.sort(key=lambda item: item[0], reverse=True)
-    return [(key, cfg) for score, key, cfg in scored if score > 0] or [(scored[0][1], scored[0][2])] if scored else []
+    if not scored:
+        return []
+    positives = [(key, cfg) for score, key, cfg in scored if score > 0]
+    if positives:
+        return positives
+    # Keep fallback gallery-only: when no discipline alias matches, use the
+    # closest available gallery discipline rather than borrowing any SVG/PPT
+    # template, exported slide, or external image.
+    return [(scored[0][1], scored[0][2])]
 
 
-def _score_gallery_ref(item: dict, topic: str, archetype: str, sub_variant: str) -> int:
+def _score_gallery_ref(item: dict, topic: str, archetype: str, sub_variant: str) -> tuple[int, list[str]]:
     score = 0
-    if item.get("archetype") == archetype:
-        score += 5
+    reasons: list[str] = []
+    item_arch = str(item.get("archetype") or "").strip()
+    arch_score = ARCHETYPE_NEARNESS.get(archetype, {}).get(item_arch, 0)
+    if arch_score:
+        score += arch_score
+        reasons.append("exact_archetype" if item_arch == archetype else f"near_archetype:{item_arch}")
     if sub_variant and item.get("sub_variant") == sub_variant:
         score += 4
+        reasons.append("exact_sub_variant")
     hay = " ".join([item.get("label", ""), item.get("sub_variant", ""), " ".join(item.get("keywords") or [])])
-    for token in re.split(r"[\s,;，；、]+", topic):
-        if token and token.lower() in hay.lower():
+    hay_low = hay.lower()
+    for token in _tokenize_intent_text(topic):
+        if token in hay_low:
             score += 1
+            reasons.append(f"topic_token:{token}")
     if _contains_any(topic, list(item.get("keywords") or [])):
         score += 3
-    return score
+        reasons.append("keyword_hit")
+    if not reasons:
+        reasons.append("nearest_available_gallery_anchor")
+    return score, reasons
 
 
 def _select_gallery_refs(
@@ -450,7 +491,16 @@ def _select_gallery_refs(
             enriched["discipline"] = discipline_key
             enriched["path"] = str(full)
             enriched["source"] = "custom_gallery"
-            selected.append((_score_gallery_ref(enriched, topic, archetype, sub_variant), enriched))
+            score, reasons = _score_gallery_ref(enriched, topic, archetype, sub_variant)
+            enriched["selection_score"] = score
+            enriched["selection_reasons"] = reasons
+            enriched["selection_policy"] = "nearest_intent_within_custom_gallery_only"
+            enriched["selection_note"] = (
+                "Selected from Custom_gallery after completed zero-result seed-site search; "
+                "if no exact discipline/archetype match exists, the highest-scoring nearest "
+                "intent raster anchor is used. No SVG/PPT/PPTX or editable route source is allowed."
+            )
+            selected.append((score, enriched))
     selected.sort(key=lambda pair: pair[0], reverse=True)
     return [item for _score, item in selected[:max_refs]]
 
@@ -587,9 +637,11 @@ def cmd_prepare_ai_refs(args: argparse.Namespace) -> int:
             "semantic_source": "paper content/content.yaml only",
             "style_sources": [
                 "seed_sites literature raster mechanism/model-principle/technical-route figures first",
-                "Custom_gallery raster anchors only after seed-site search completed and yielded zero usable literature refs"
+                "Custom_gallery raster anchors only after seed-site search completed and yielded zero usable literature refs",
+                "if no exact Custom_gallery match exists, choose the highest-scoring nearest-intent gallery raster"
             ],
             "fallback_gate": "gallery_only_fallback requires --allow-gallery-fallback-after-search plus seed_search_completed=true",
+            "gallery_selection_policy": "nearest_intent_within_custom_gallery_only",
             "forbidden": [
                 "Version A editable SVG",
                 "any SVG file",
@@ -610,7 +662,7 @@ def cmd_prepare_ai_refs(args: argparse.Namespace) -> int:
 
 
 def cmd_assess(args: argparse.Namespace) -> int:
-    """评估 style_refs 目录的整体质量，输出 score + recommended_mode（literature / offline / atlas_only）。
+    """评估 style_refs 目录的整体质量，输出 score + recommended_mode（literature_only / gallery_only_fallback）。
 
     用于 SKILL.md Step 2 完成后，判断是否需要降级到 handling-no-references.md fallback。
     """
@@ -624,8 +676,8 @@ def cmd_assess(args: argparse.Namespace) -> int:
             "score": 0.0,
             "ref_count": 0,
             "min_required": min_refs,
-            "recommended_mode": "atlas_only",
-            "rationale": "manifest.json not found or empty; trigger handling-no-references.md fallback",
+            "recommended_mode": "gallery_only_fallback",
+            "rationale": "manifest.json not found or empty; trigger Custom_gallery fallback after completed seed-site search",
         }
         print(json.dumps(decision, ensure_ascii=False, indent=2))
         return 1
@@ -648,14 +700,11 @@ def cmd_assess(args: argparse.Namespace) -> int:
     score = round(0.55 * quantity_score + 0.45 * quality_score, 3)
 
     if score >= 0.6 and n >= min_refs and with_local >= 3:
-        mode = "literature"
-        rationale = "sufficient quantity + local files; proceed with literature reference mode"
-    elif n >= 3 and with_local >= 3:
-        mode = "offline"
-        rationale = "marginal quantity but enough local files; treat as offline (user-supplied) refs"
+        mode = "literature_only"
+        rationale = "sufficient quantity + local files; proceed with literature_only reference mode"
     else:
-        mode = "atlas_only"
-        rationale = "too few usable refs; fall back to atlas-only per handling-no-references.md"
+        mode = "gallery_only_fallback"
+        rationale = "too few usable literature refs; fall back to Custom_gallery only after completed seed-site search"
 
     decision = {
         "score": score,
@@ -672,7 +721,7 @@ def cmd_assess(args: argparse.Namespace) -> int:
     out_file.write_text(json.dumps(decision, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(decision, ensure_ascii=False, indent=2))
     print(f"\n✅ 已写入 {out_file}")
-    return 0 if mode != "atlas_only" else 1
+    return 0 if mode == "literature_only" else 1
 
 
 def main(argv: Iterable[str] | None = None) -> int:
@@ -700,7 +749,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     p_rec.add_argument("--score", type=int, default=0)
     p_rec.set_defaults(func=cmd_record)
 
-    p_off = sub.add_parser("offline", help="离线模式：用用户上传的参考图")
+    p_off = sub.add_parser("offline", help="blocked: user-uploaded references are forbidden for Version B")
     p_off.add_argument("--hints", required=True)
     p_off.add_argument("--out", required=True)
     p_off.add_argument("--topic", default="")
@@ -745,7 +794,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     )
     p_prep.set_defaults(func=cmd_prepare_ai_refs)
 
-    p_ass = sub.add_parser("assess", help="评估 style_refs 整体质量并给出 recommended_mode（literature/offline/atlas_only）")
+    p_ass = sub.add_parser("assess", help="评估 style_refs 整体质量并给出 recommended_mode（literature_only/gallery_only_fallback）")
     p_ass.add_argument("--out", required=True, help="style_refs 目录")
     p_ass.set_defaults(func=cmd_assess)
 

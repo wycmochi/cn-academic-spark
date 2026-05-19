@@ -29,7 +29,7 @@ Write `<route_workdir>/prompt_ai.md` with these sections:
 [CHINESE CONTENT - render exactly as written, no translation]
 [GLOSSARY - preserve verbatim]
 [REFERENCE IMAGE USAGE]          # only when refs are provided
-[ATLAS-ONLY MODE]                # only when reference-mode is atlas_only
+[GALLERY-ONLY FALLBACK MODE]     # only when reference-mode is gallery_only_fallback
 [NEGATIVE]
 ```
 
@@ -168,15 +168,15 @@ The provided reference images are style and structure anchors only. Use them to 
 Do not copy any text, node label, formula, dataset name, place name, model name, author name, citation, caption, or specific numeric value from the references. Replace all semantic content with the content block and glossary. Any verbatim copy of reference text is forbidden.
 ```
 
-Use this clause for both Custom_gallery and literature / offline style references.
+Use this clause for both seed-sites literature style references and Custom_gallery fallback references.
 
-## Atlas-Only Clause
+## Gallery-Only Fallback Clause
 
-When `--reference-mode atlas_only`, include:
+When `--reference-mode gallery_only_fallback`, include:
 
 ```text
-[ATLAS-ONLY MODE]
-No usable literature or user reference images are available. Render using only the declared structure, shape recipes, color discipline, typography rules, and article-derived content. Default to a clean restrained academic route diagram with generous whitespace, thin strokes, flat fills, and no decorative flourishes.
+[GALLERY-ONLY FALLBACK MODE]
+The seed-sites academic search has completed with zero usable literature raster references. Use only the selected Custom_gallery raster anchors supplied through route_ai_refs.json as style and structure anchors. Do not use user reference images, SVG/PPT/PPTX files, exported slides, screenshots, or the editable Version A route page. All semantic content must come from content.yaml.
 ```
 
 ## Negative Constraints
@@ -192,7 +192,7 @@ No 3D, no isometric view, no large shadows, no glow effects, no gradients, no em
 Prompt generation:
 
 ```bash
-python3 scripts/technicalroute/generate_route_image.py prompt --archetype <thinking|method|workflow> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode <literature|atlas_only> --out <route_workdir>/prompt_ai.md
+python3 scripts/technicalroute/generate_route_image.py prompt --archetype <thinking|method|workflow> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode <literature_only|gallery_only_fallback> --out <route_workdir>/prompt_ai.md
 ```
 
 Reference bridge:
@@ -206,7 +206,7 @@ python3 scripts/technicalroute/literature_search.py prepare-ai-refs --topic "<pa
 python3 scripts/technicalroute/literature_search.py prepare-ai-refs --topic "<paper title / keywords>" --keywords "<paper keywords>" --discipline <discipline> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs --allow-gallery-fallback-after-search --search-completed
 ```
 
-`prepare-ai-refs` is the only allowed bridge into AI route generation. The required sequence is: generate `search_plan.json` from `references/technicalroute/seed_sites.json`, actually search similar papers for raster mechanism/model-principle/technical-route/workflow figures, record accepted files into `style_refs/manifest.json`, then build `style_refs/route_ai_refs.json`. If manifest-listed literature refs exist, `refs` is `literature_only` and contains no gallery files. If the completed seed-site search produces zero usable literature refs, `gallery_only_fallback` is allowed only with `--allow-gallery-fallback-after-search` plus `--search-completed` (or `style_refs/search_completed.json` with `{"completed": true}`), and contains only discipline fallback anchors from `templates/technicalroute/Custom_gallery/gallery_index.json`.
+`prepare-ai-refs` is the only allowed bridge into AI route generation. The required sequence is: generate `search_plan.json` from `references/technicalroute/seed_sites.json`, actually search similar papers for raster mechanism/model-principle/technical-route/workflow figures, record accepted files into `style_refs/manifest.json`, then build `style_refs/route_ai_refs.json`. If manifest-listed literature refs exist, `refs` is `literature_only` and contains no gallery files. If the completed seed-site search produces zero usable literature refs, `gallery_only_fallback` is allowed only with `--allow-gallery-fallback-after-search` plus `--search-completed` (or `style_refs/search_completed.json` with `{"completed": true}`), and contains only raster anchors from `templates/technicalroute/Custom_gallery/gallery_index.json`. When no exact gallery match exists, `prepare-ai-refs` must select the highest-scoring nearest-intent gallery raster and record `selection_policy: nearest_intent_within_custom_gallery_only`; it must never search or borrow any third source.
 
 Image generation and immediate PPT-page embedding:
 
@@ -214,9 +214,9 @@ Image generation and immediate PPT-page embedding:
 python3 scripts/technicalroute/generate_route_image.py run-ai-variant --prompt <route_workdir>/prompt_ai.md --aspect_ratio 16:9 --image_size 4K --filename route_ai_<id> --out <route_workdir>/output --refs-plan <route_workdir>/style_refs/route_ai_refs.json --direct-slide-manifest <project_path>/svg_output/_direct_image_slides.json --after-svg-stem <NN>_route_template
 ```
 
-The generated route AI page is a direct PPTX picture page. Do not wrap Version B in an SVG page, global layout, title, caption, footer, page number, or template. `run-ai-variant` writes `_direct_image_slides.json`; `scripts/svg_to_pptx.py` reads that manifest and adds the PNG directly to the deck. The PNG must be normalized to at least 330ppi target pixels for the slide format.
+The generated route AI page is a direct PPTX picture page. Do not wrap Version B in an SVG page, global layout, title, caption, footer, page number, or template. `run-ai-variant` writes `_direct_image_slides.json`; `scripts/svg_to_pptx.py` reads that manifest and adds the PNG directly to the deck. `create-ai-slide` is blocked by default and must not be used for production. The PNG must be normalized to at least 330ppi target pixels for the slide format.
 
-Forbidden AI references: manual `--refs`, mixed literature+gallery plans, SVG files, PPTX/PPT files, editable Version A route pages, screenshots of editable route pages, chart templates, assembled SVGs, and any reference file not listed in `route_ai_refs.json`.
+Forbidden AI references: manual `--refs`, mixed literature+gallery plans, SVG files, PPTX/PPT files, editable Version A route pages, screenshots of editable route pages, chart templates, assembled SVGs, exported slide images, and any reference file not listed in `route_ai_refs.json`.
 
 Backend selection follows `.env.example`: set `IMAGE_BACKEND` plus provider-specific keys/model variables in the current environment or `.env`. Do not pass `--backend` or `--model` in normal deck generation; those CLI options are only temporary overrides. Reference-image generation requires a backend whose `generate()` accepts `reference_images` (currently OpenAI-compatible and Gemini backends in this skill). If the configured backend cannot use references, the run must fail loudly or fall back to the deterministic local PNG rather than silently dropping references.
 
@@ -259,7 +259,7 @@ Before `run-ai-variant`, the route image chain must prove its reference source o
 3. Download only accepted raster figures and register them with `scripts/technicalroute/literature_search.py record` so they appear in `style_refs/manifest.json`.
 4. Run `scripts/technicalroute/literature_search.py prepare-ai-refs` to write `style_refs/route_ai_refs.json`.
 
-If manifest-listed literature refs exist, `route_ai_refs.json` must be `mode: literature_only` and contain only those academic-search raster files. A `gallery_only_fallback` plan is valid only after the seed-site search has actually completed, produced zero usable raster refs, and `prepare-ai-refs --allow-gallery-fallback-after-search --search-completed` records `gallery_fallback_after_search: true` and `seed_search_completed: true`. `Custom_gallery` is never a first-choice source and never substitutes for executing the academic search.
+If manifest-listed literature refs exist, `route_ai_refs.json` must be `mode: literature_only` and contain only those academic-search raster files. A `gallery_only_fallback` plan is valid only after the seed-site search has actually completed, produced zero usable raster refs, and `prepare-ai-refs --allow-gallery-fallback-after-search --search-completed` records `gallery_fallback_after_search: true` and `seed_search_completed: true`. `Custom_gallery` is never a first-choice source and never substitutes for executing the academic search. If the exact discipline / archetype / sub-variant is absent from `Custom_gallery`, the fallback must still remain gallery-only and choose the highest-scoring nearest-intent raster according to `selection_score` / `selection_reasons`.
 
 Then call:
 

@@ -7,8 +7,10 @@ Supports heading levels, bold, italic, and list detection.
 
 import argparse
 import hashlib
+import json
 import os
 import re
+import struct
 import sys
 from pathlib import Path
 from collections import Counter
@@ -430,6 +432,71 @@ def render_figure_png(
     return pix.tobytes("png"), rect
 
 
+def find_nearby_caption(page: "fitz.Page", figure_rect: "fitz.Rect") -> str:
+    """Return the first caption-like line immediately around a figure/table."""
+    try:
+        text_blocks = page.get_text("blocks")
+    except Exception:
+        return ""
+    candidates: list[tuple[float, str]] = []
+    for tb in text_blocks:
+        if len(tb) < 5:
+            continue
+        x0, y0, x1, _y1, text = tb[0], tb[1], tb[2], tb[3], tb[4]
+        if not isinstance(text, str):
+            continue
+        plain = " ".join(text.strip().split())
+        if not plain or not CAPTION_RE.match(plain):
+            continue
+        if y0 < figure_rect.y0 - FIGURE_CAPTION_LOOKAHEAD:
+            continue
+        if y0 > figure_rect.y1 + FIGURE_CAPTION_LOOKAHEAD:
+            continue
+        if x1 < figure_rect.x0 - FIGURE_MERGE_DIST or x0 > figure_rect.x1 + FIGURE_MERGE_DIST:
+            continue
+        candidates.append((abs(y0 - figure_rect.y1), plain))
+    candidates.sort(key=lambda item: item[0])
+    return candidates[0][1] if candidates else ""
+
+
+def classify_figure_role(caption: str, filename_hint: str = "") -> str:
+    """Classify an extracted paper visual so PPT planning can prioritize it."""
+    text = f"{caption} {filename_hint}".lower()
+    if any(token in text for token in ("mechanism", "framework", "conceptual", "机制", "框架")):
+        return "mechanism_diagram"
+    if any(token in text for token in ("model", "algorithm", "principle", "workflow", "flow", "模型", "算法", "原理", "流程")):
+        return "model_or_principle_diagram"
+    if any(token in text for token in ("result", "effect", "ale", "shap", "regression", "结果", "影响", "效应")):
+        return "result_figure"
+    if any(token in text for token in ("table", "tab.", "表")):
+        return "table_snapshot"
+    return "paper_figure"
+
+
+def image_size_from_bytes(data: bytes, ext: str) -> tuple[int | None, int | None]:
+    """Best-effort image dimensions without adding a Pillow dependency here."""
+    ext = ext.lower().lstrip(".")
+    if ext == "png" and data.startswith(b"\x89PNG\r\n\x1a\n") and len(data) >= 24:
+        try:
+            return struct.unpack(">II", data[16:24])
+        except struct.error:
+            return None, None
+    if ext in {"jpg", "jpeg"} and data.startswith(b"\xff\xd8"):
+        i = 2
+        while i + 9 < len(data):
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marker = data[i + 1]
+            if marker in {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}:
+                return int.from_bytes(data[i + 7:i + 9], "big"), int.from_bytes(data[i + 5:i + 7], "big")
+            seg_len = int.from_bytes(data[i + 2:i + 4], "big")
+            if seg_len < 2:
+                break
+            i += 2 + seg_len
+    return None, None
+
+
 def should_keep_image(
     block: dict[str, object],
     page_rect: fitz.Rect,
@@ -614,6 +681,7 @@ def extract_pdf_to_markdown(
         img_dir = output_path.parent / rel_img_dir
 
     img_count = 0
+    image_manifest: list[dict[str, object]] = []
 
     for page_num, page in enumerate(doc, 1):
         if page_num > 1:
@@ -846,10 +914,12 @@ def extract_pdf_to_markdown(
                             image_data = block["image"]
                             ext = block["ext"]
                             tag = "embed-fallback"
+                            clip_rect = fitz.Rect(block["bbox"])
                     else:
                         image_data = block["image"]
                         ext = block["ext"]
                         tag = "embed"
+                        clip_rect = fitz.Rect(block["bbox"])
 
                     image_name = f"{safe_filename}_p{page_num}_{img_count}.{ext}"
                     image_path = img_dir / image_name
@@ -862,6 +932,30 @@ def extract_pdf_to_markdown(
                         if prev_was_list:
                             markdown_content += "\n"
                         markdown_content += f"![{image_name}]({rel_img_dir}/{image_name})\n\n"
+                        caption_hint = find_nearby_caption(page, clip_rect)
+                        width_px, height_px = image_size_from_bytes(image_data, ext)
+                        figure_role = classify_figure_role(caption_hint, image_name)
+                        image_manifest.append({
+                            "filename": image_name,
+                            "relative_path": f"{rel_img_dir}/{image_name}",
+                            "source": "pdf_rendered_figure" if image_extract == "render" else "pdf_embedded_image",
+                            "page": page_num,
+                            "image_index": img_count,
+                            "caption_hint": caption_hint,
+                            "figure_role": figure_role,
+                            "paper_figure_candidate": True,
+                            "ppt_required": True,
+                            "coverage_priority": "high",
+                            "requires_targeted_explanation": True,
+                            "explanation_guidance": (
+                                "Place this source figure/table in the PPT with a short slide-specific "
+                                "Chinese explanation tied to the paper argument, method, mechanism, or result."
+                            ),
+                            "extract_mode": tag,
+                            "width": width_px,
+                            "height": height_px,
+                            "clip_bbox": [round(clip_rect.x0, 2), round(clip_rect.y0, 2), round(clip_rect.x1, 2), round(clip_rect.y1, 2)],
+                        })
                         img_count += 1
                         prev_was_list = False
                         print(f"  [OK] Extracted image ({tag}): {image_name}")
@@ -871,6 +965,17 @@ def extract_pdf_to_markdown(
         # Flush code block at end of page
         if prev_was_code:
             flush_code_block()
+
+    if img_dir and image_manifest:
+        manifest_path = img_dir / "image_manifest.json"
+        try:
+            manifest_path.write_text(
+                json.dumps(image_manifest, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"[OK] Saved image manifest to: {manifest_path}")
+        except Exception as e:
+            print(f"  [WARN] Failed to save image manifest: {e}")
 
     doc.close()
 

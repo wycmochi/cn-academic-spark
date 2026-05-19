@@ -65,11 +65,11 @@ Machine or semi-machine checks:
 ## Version B AI Reference QA
 
 - `route_ai_image_path` exists.
-- The generation command uses `--backend openai --model gpt-image-2 --aspect_ratio 16:9 --image_size 2K` unless the environment explicitly documents another supported backend/model.
+- The generation command normally omits `--backend` and `--model` so `scripts/image_gen.py` selects the agent/model from the process environment or `.env.example` provider variables. Only pass `--backend` / `--model` for an explicit temporary override documented in the route workdir.
 - The generation command uses `--refs-plan <route_workdir>/style_refs/route_ai_refs.json`.
 - `route_ai_refs.json` is either `literature_only` with only manifest-listed raster files from `style_refs/manifest.json`, or `gallery_only_fallback` with only discipline `Custom_gallery` raster anchors after the seed-site search was executed and found zero usable literature refs. It must not mix the two.
 - Academic-search references in `style_refs/manifest.json` were collected from a search plan generated from `references/technicalroute/seed_sites.json`; the search targeted similar-paper mechanism diagrams, model-principle diagrams, technical-route figures, and workflow figures. No separate hard-coded research website list appears in `prompt_ai.md`, route `spec_lock.md`, or project QA notes.
-- `prompt_ai.md` uses article content plus exactly these visual reference classes: Custom_gallery and research-search manifest refs. It does not use Version A SVG, assembled SVG, chart SVG, or template SVG as an AI image reference.
+- `prompt_ai.md` uses article content plus exactly one visual reference class: seed-sites research-search manifest refs, or Custom_gallery fallback refs after a completed zero-result search. It does not use Version A SVG, assembled SVG, chart SVG, template SVG, exported slide images, PPT/PPTX pages, or user-uploaded references as an AI image reference.
 - The image differs meaningfully from Version A in style or composition while preserving the same logic.
 - No reference-image text, number, caption, author, citation, institution, or place name leaks into the output.
 - If AI labels are unreliable, add editable SVG labels, callouts, or captions on top of the PPT page.
@@ -89,8 +89,8 @@ Compare Version B with selected `gallery_refs` and `style_refs`:
 - Page titles are different and include the version meaning.
 - Both pages inherit parent footer, page number, bottom banner rules, and citation policy.
 - Both output paths are recorded in project assets or route `spec_lock.md`.
-- `_direct_image_slides.json` contains a `technicalroute_ai` entry whose `image_path` points to the Version B PNG; SVG wrappers for Version B are legacy-only and should not be used in normal execution.
-- `finalize_svg.py` preserves the PNG data URI, and `svg_to_pptx.py` decodes it into the PPTX media folder as an embedded image object.
+- `_direct_image_slides.json` contains a `technicalroute_ai` entry whose `image_path` points to the Version B PNG; SVG wrappers for Version B are blocked by default and must not be used in production execution.
+- `svg_to_pptx.py` reads `_direct_image_slides.json` and inserts the Version B PNG directly into the PPTX as a picture slide.
 - Final deck checklist marks both pages as TechnicalRoute pages.
 - Non-TechnicalRoute visual coverage rules do not mistakenly require extra images on these route pages.
 

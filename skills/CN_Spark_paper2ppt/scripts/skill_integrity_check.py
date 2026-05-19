@@ -351,34 +351,30 @@ class IntegrityCheck:
         png = workdir / "route_ai.png"
         png.write_bytes(base64.b64decode(_ONE_PIXEL_PNG_B64))
         out_svg = workdir / "route_ai_slide.svg"
-        self._run_cmd([
-            PYTHON,
-            str(ROOT / "scripts/technicalroute/generate_route_image.py"),
-            "create-ai-slide",
-            "--image",
-            str(png),
-            "--out-svg",
-            str(out_svg),
-            "--title",
-            "Research Route: AI Reference Version",
-        ])
-        text = out_svg.read_text(encoding="utf-8")
-        if 'href="data:image/png;base64,' not in text:
-            raise AssertionError("AI route slide did not embed PNG data URI")
-        if 'data-ai-image-source="route_ai.png"' not in text:
-            raise AssertionError("AI route slide missing data-ai-image-source marker")
-        lowered = text.lower()
-        if "<text" in lowered or "<rect" in lowered:
-            raise AssertionError("AI route slide should be a direct image page without title/caption/layout SVG")
-        if 'x="0" y="0" width="1280" height="720"' not in text:
-            raise AssertionError("AI route slide image is not full-canvas")
-        payload = text.split('href="data:image/png;base64,', 1)[1].split('"', 1)[0]
-        png_bytes = base64.b64decode(payload)
-        width, height = struct.unpack(">II", png_bytes[16:24])
-        if width < 4400 or height < 2475:
-            raise AssertionError(f"AI route slide image was not normalized to >=330ppi target: {width}x{height}")
+        proc = subprocess.run(
+            [
+                PYTHON,
+                str(ROOT / "scripts/technicalroute/generate_route_image.py"),
+                "create-ai-slide",
+                "--image",
+                str(png),
+                "--out-svg",
+                str(out_svg),
+            ],
+            cwd=str(ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=120,
+        )
+        if proc.returncode == 0:
+            raise AssertionError("create-ai-slide should be blocked by default; Version B must not go through SVG")
+        if "_direct_image_slides.json" not in proc.stdout or "Do not wrap" not in proc.stdout:
+            raise AssertionError("create-ai-slide block did not explain the direct picture manifest route")
 
-        return "legacy create-ai-slide still emits a normalized SVG wrapper; production export blocks it"
+        return "create-ai-slide is blocked by default; Version B uses direct PPTX image manifest"
 
 
     def check_direct_ai_pptx_image_slide(self) -> str:
@@ -408,6 +404,34 @@ class IntegrityCheck:
         except ImportError as exc:
             raise AssertionError("Pillow is required for direct AI slide smoke PNG generation") from exc
         Image.new("RGB", (4400, 2475), "#0B3A66").save(route_png)
+        gallery_root = (ROOT / "templates/technicalroute/Custom_gallery").resolve()
+        gallery_ref = next(
+            (p for p in gallery_root.rglob("*") if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}),
+            None,
+        )
+        if gallery_ref is None:
+            raise AssertionError("Custom_gallery has no raster reference for direct AI slide smoke")
+        route_style_refs = project / "technicalroute/route_01/style_refs"
+        route_style_refs.mkdir(parents=True)
+        (route_style_refs / "route_ai_refs.json").write_text(
+            json.dumps({
+                "version": 1,
+                "mode": "gallery_only_fallback",
+                "gallery_only": True,
+                "reference_flow": "academic_search_then_gallery_fallback",
+                "seed_search_completed": True,
+                "gallery_fallback_after_search": True,
+                "seed_sites_path": str(ROOT / "references/technicalroute/seed_sites.json"),
+                "gallery_index_path": str(ROOT / "templates/technicalroute/Custom_gallery/gallery_index.json"),
+                "refs": [str(gallery_ref)],
+                "gallery_refs": [{
+                    "path": str(gallery_ref),
+                    "source": "custom_gallery",
+                    "selection_policy": "nearest_intent_within_custom_gallery_only",
+                }],
+            }, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         (project / "svg_output/_direct_image_slides.json").write_text(
             json.dumps({
                 "version": 1,
@@ -562,6 +586,11 @@ class IntegrityCheck:
         gallery_root = (ROOT / "templates/technicalroute/Custom_gallery").resolve()
         for ref in fallback_plan.get("refs", []):
             Path(ref).resolve().relative_to(gallery_root)
+        if not all(
+            item.get("selection_policy") == "nearest_intent_within_custom_gallery_only"
+            for item in fallback_plan.get("gallery_refs", [])
+        ):
+            raise AssertionError("gallery fallback did not record nearest-intent Custom_gallery selection policy")
 
         outside = workdir / "outside_ref.png"
         outside.write_bytes(base64.b64decode(_ONE_PIXEL_PNG_B64))
@@ -951,6 +980,11 @@ class IntegrityCheck:
         with zipfile.ZipFile(docx_files[-1], "r") as zf:
             if "word/document.xml" not in set(zf.namelist()):
                 raise AssertionError("speaker notes DOCX missing word/document.xml")
+            doc_xml = zf.read("word/document.xml").decode("utf-8", errors="replace")
+            if "01_smoke" in doc_xml or "w:type=\"page\"" in doc_xml:
+                raise AssertionError("speaker notes DOCX should be a continuous manuscript without slide headings or page breaks")
+            if "This note validates notesSlide" not in doc_xml:
+                raise AssertionError("speaker notes DOCX missing continuous note body")
         return pptx.name
 
 

@@ -10,7 +10,7 @@
 2. **按 archetype 收口候选**——根据 `contract.md §2` 中决定的 `archetype` (`thinking` / `method` / `workflow`)，从 `archetypes.<name>.templates` 里取该 archetype 的全部模板。
 3. **按 sub_variant + 内容形状打分**——结合 `contract.md §2.sub_variant`（quad / cascade / twin / mechanism-block / formula-grid / horizontal-pipeline / circular / vertical-stack …）与 `content.yaml` 的真实节点数、是否含公式、是否需要循环、轴是否分类型等，给每个候选模板按 summary 中的 "Pick / Skip" 条款打 0–3 分。
 4. **用 `quickLookup` 二次校验**——例如 contract 提到 "2×2 quadrant" 而打分前 1 名不在 `quickLookup["2x2_quadrant"]` 里，说明判断可能跑偏，回到 step 3 重看 summary。
-5. **没有 ≥ 2 分的候选 → 走 AI 生图后备**——`atlas-only` / `image_gen.py` 链路，详见 [`../../references/handling-no-references.md`](../../references/handling-no-references.md)。
+5. **没有 ≥ 2 分的候选 → 走 AI 生图后备**——只能先走 seed-sites 文献检索，若零可用结果再走 `gallery_only_fallback` / `image_gen.py` 链路，详见 [`../../references/handling-no-references.md`](../../references/handling-no-references.md)。
 6. **命中模板后**——`Read` 该 SVG，**把占位文本替换为 `content.yaml` 中的具体术语**，颜色按 `contract.md §5 color_scheme` 改写。**严禁照搬模板里的示例文本**——文本必须来自当前论文 / 用户材料。
 
 ## 当前模板（18 张，按 archetype 分组）

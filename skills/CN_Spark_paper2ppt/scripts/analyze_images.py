@@ -151,6 +151,12 @@ def _apply_manifest_metadata(result: ImageAnalysis, meta: dict | None) -> None:
     """Copy optional manifest fields into an image analysis row."""
     result["usage_count"] = _manifest_usage_count(meta)
     result["display_ratio_variants"] = _manifest_ratio_variants(meta)
+    result["paper_figure_candidate"] = bool(meta.get("paper_figure_candidate")) if meta else False
+    result["ppt_required"] = bool(meta.get("ppt_required")) if meta else False
+    result["coverage_priority"] = meta.get("coverage_priority", "") if meta else ""
+    result["figure_role"] = meta.get("figure_role", "") if meta else ""
+    result["caption_hint"] = meta.get("caption_hint", "") if meta else ""
+    result["requires_targeted_explanation"] = bool(meta.get("requires_targeted_explanation")) if meta else False
     if not meta:
         return
 
@@ -456,11 +462,11 @@ def generate_markdown(results: list[ImageAnalysis], canvas_key: str) -> None:
     print("> intent is side-by-side; ignore them for hero / atmosphere / accent intents.\n")
 
     if has_layout:
-        print("| Filename | Size | Ratio | Category | Img Area (SxS) | Text Area (SxS) | Intent | Usage | Type | Status | Generation Description |")
-        print("|----------|------|-------|----------|----------------|-----------------|--------|-------|------|--------|-----------------------|")
+        print("| Filename | Size | Ratio | Category | Img Area (SxS) | Text Area (SxS) | PPT Required | Figure Role | Caption Hint | Intent | Usage | Type | Status | Targeted Explanation |")
+        print("|----------|------|-------|----------|----------------|-----------------|--------------|-------------|--------------|--------|-------|------|--------|----------------------|")
     else:
-        print("| Filename | Size | Ratio | Category | Intent | Usage | Type | Status | Generation Description |")
-        print("|----------|------|-------|----------|--------|-------|------|--------|-----------------------|")
+        print("| Filename | Size | Ratio | Category | PPT Required | Figure Role | Caption Hint | Intent | Usage | Type | Status | Targeted Explanation |")
+        print("|----------|------|-------|----------|--------------|-------------|--------------|--------|-------|------|--------|----------------------|")
 
     for img in results:
         ratio_str = f"{img['aspect_ratio']:.2f}"
@@ -471,13 +477,21 @@ def generate_markdown(results: list[ImageAnalysis], canvas_key: str) -> None:
             if asset_kind == "office_vector" and not img.get('svg_renderable', True)
             else "Existing"
         )
+        ppt_required = "yes" if img.get("ppt_required") else ""
+        figure_role = str(img.get("figure_role") or "")
+        caption_hint = str(img.get("caption_hint") or "").replace("|", "/")[:80]
+        explanation = (
+            "must add slide-specific Chinese explanation"
+            if img.get("requires_targeted_explanation")
+            else "-"
+        )
 
         if has_layout:
             img_area = f"{img['image_w']}x{img['image_h']}"
             text_area = f"{img['text_w']}x{img['text_h']}"
-            print(f"| {img['filename']} | {img['width']}x{img['height']} | {ratio_str} | {img['layout_hint']} | {img_area} | {text_area} | (to be filled) | {img.get('usage_count', 1)} refs | {image_type} | {status} | - |")
+            print(f"| {img['filename']} | {img['width']}x{img['height']} | {ratio_str} | {img['layout_hint']} | {img_area} | {text_area} | {ppt_required} | {figure_role} | {caption_hint} | (to be filled) | {img.get('usage_count', 1)} refs | {image_type} | {status} | {explanation} |")
         else:
-            print(f"| {img['filename']} | {img['width']}x{img['height']} | {ratio_str} | {img['layout_hint']} | (to be filled) | {img.get('usage_count', 1)} refs | {image_type} | {status} | - |")
+            print(f"| {img['filename']} | {img['width']}x{img['height']} | {ratio_str} | {img['layout_hint']} | {ppt_required} | {figure_role} | {caption_hint} | (to be filled) | {img.get('usage_count', 1)} refs | {image_type} | {status} | {explanation} |")
 
     print("\n" + "=" * REPORT_WIDTH + "\n")
 
@@ -491,13 +505,15 @@ def save_csv(results: list[ImageAnalysis], csv_path: str) -> None:
     # does not prescribe a layout.
     with open(csv_path, 'w', encoding='utf-8') as f:
         if has_layout:
-            f.write("No,Filename,Width,Height,AspectRatio,PixelAspectRatio,RatioSource,UsageCount,DisplayRatioVariants,AssetKind,SvgRenderable,PptxNativeSupported,SizeKB,Category,ImageArea_SxS,TextArea_SxS\n")
+            f.write("No,Filename,Width,Height,AspectRatio,PixelAspectRatio,RatioSource,UsageCount,DisplayRatioVariants,PaperFigureCandidate,PptRequired,CoveragePriority,FigureRole,RequiresTargetedExplanation,CaptionHint,AssetKind,SvgRenderable,PptxNativeSupported,SizeKB,Category,ImageArea_SxS,TextArea_SxS\n")
             for i, img in enumerate(results, 1):
-                f.write(f"{i},{img['filename']},{img['width']},{img['height']},{img['aspect_ratio']:.2f},{img.get('pixel_aspect_ratio', img['aspect_ratio']):.2f},{img.get('ratio_source', 'pixel')},{img.get('usage_count', 1)},{img.get('display_ratio_variants', '')},{img.get('asset_kind', 'bitmap')},{img.get('svg_renderable', True)},{img.get('pptx_native_supported', True)},{img['filesize_kb']:.1f},{img['layout_hint']},{img['image_w']}x{img['image_h']},{img['text_w']}x{img['text_h']}\n")
+                caption = str(img.get('caption_hint', '')).replace(',', '，').replace('\n', ' ')
+                f.write(f"{i},{img['filename']},{img['width']},{img['height']},{img['aspect_ratio']:.2f},{img.get('pixel_aspect_ratio', img['aspect_ratio']):.2f},{img.get('ratio_source', 'pixel')},{img.get('usage_count', 1)},{img.get('display_ratio_variants', '')},{img.get('paper_figure_candidate', False)},{img.get('ppt_required', False)},{img.get('coverage_priority', '')},{img.get('figure_role', '')},{img.get('requires_targeted_explanation', False)},{caption},{img.get('asset_kind', 'bitmap')},{img.get('svg_renderable', True)},{img.get('pptx_native_supported', True)},{img['filesize_kb']:.1f},{img['layout_hint']},{img['image_w']}x{img['image_h']},{img['text_w']}x{img['text_h']}\n")
         else:
-            f.write("No,Filename,Width,Height,AspectRatio,PixelAspectRatio,RatioSource,UsageCount,DisplayRatioVariants,AssetKind,SvgRenderable,PptxNativeSupported,SizeKB,Category\n")
+            f.write("No,Filename,Width,Height,AspectRatio,PixelAspectRatio,RatioSource,UsageCount,DisplayRatioVariants,PaperFigureCandidate,PptRequired,CoveragePriority,FigureRole,RequiresTargetedExplanation,CaptionHint,AssetKind,SvgRenderable,PptxNativeSupported,SizeKB,Category\n")
             for i, img in enumerate(results, 1):
-                f.write(f"{i},{img['filename']},{img['width']},{img['height']},{img['aspect_ratio']:.2f},{img.get('pixel_aspect_ratio', img['aspect_ratio']):.2f},{img.get('ratio_source', 'pixel')},{img.get('usage_count', 1)},{img.get('display_ratio_variants', '')},{img.get('asset_kind', 'bitmap')},{img.get('svg_renderable', True)},{img.get('pptx_native_supported', True)},{img['filesize_kb']:.1f},{img['layout_hint']}\n")
+                caption = str(img.get('caption_hint', '')).replace(',', '，').replace('\n', ' ')
+                f.write(f"{i},{img['filename']},{img['width']},{img['height']},{img['aspect_ratio']:.2f},{img.get('pixel_aspect_ratio', img['aspect_ratio']):.2f},{img.get('ratio_source', 'pixel')},{img.get('usage_count', 1)},{img.get('display_ratio_variants', '')},{img.get('paper_figure_candidate', False)},{img.get('ppt_required', False)},{img.get('coverage_priority', '')},{img.get('figure_role', '')},{img.get('requires_targeted_explanation', False)},{caption},{img.get('asset_kind', 'bitmap')},{img.get('svg_renderable', True)},{img.get('pptx_native_supported', True)},{img['filesize_kb']:.1f},{img['layout_hint']}\n")
     print(f"\nCSV saved to: {csv_path}")
 
 

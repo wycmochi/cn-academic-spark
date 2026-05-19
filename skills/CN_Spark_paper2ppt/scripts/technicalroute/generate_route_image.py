@@ -11,8 +11,8 @@ PPT engine 的 ``scripts/image_gen.py`` 做多后端生图。
   run            run-ai-variant 的兼容别名
   embed          把生成的 PNG 嵌入 PPT engine 项目的某张 SVG 页面
 
-默认 backend = gemini（gemini-3-pro-image-preview，即 nano banana pro），
-环境变量 ``IMAGE_BACKEND`` / ``GEMINI_API_KEY`` 由用户在 PPT engine 的 ``.env`` 中配置。
+默认由 ``scripts/image_gen.py`` 按当前进程环境变量或 PPT engine ``.env`` 选择 backend/model；
+可配置的变量名称以 PPT engine ``.env.example`` 中列出的 provider-specific keys 为准。
 
 生图脚本路径查找顺序（最高优先级在前）：
 
@@ -372,15 +372,16 @@ def cmd_prompt(args: argparse.Namespace) -> int:
     rendered = render_skeleton(skeleton, content)
     cn_block = build_chinese_content_block(content)
 
-    reference_mode = getattr(args, "reference_mode", "literature")
+    reference_mode = getattr(args, "reference_mode", "literature_only")
     ref_clause = ""
-    if reference_mode == "atlas_only":
+    if reference_mode == "gallery_only_fallback":
         ref_clause = "\n\n".join([
-            "[ATLAS-ONLY MODE]",
-            "No literature or Custom_gallery reference images are available. Render using ONLY",
-            "[STRUCTURE], [SHAPE RECIPES], [COLOR DISCIPLINE], and the article-derived",
-            "[CHINESE CONTENT] as layout truth. Default to a clean, restrained, academic-poster",
-            "look with generous white space, thin strokes, flat fills, and no decorative flourishes.",
+            "[GALLERY-ONLY FALLBACK MODE]",
+            "The seed-sites academic search has completed with zero usable literature raster references.",
+            "Use only the Custom_gallery raster references supplied through route_ai_refs.json as",
+            "style and structure anchors. Do not infer style from any SVG, PPTX, exported slide,",
+            "Version A editable route page, screenshot, or user-uploaded reference image.",
+            "All semantic text must come from [CHINESE CONTENT], [STRUCTURE], and the glossary.",
         ])
 
     prompt_parts = [
@@ -1271,7 +1272,16 @@ def _parse_bbox_arg(raw: str) -> tuple[int, int, int, int]:
 
 
 def cmd_create_ai_slide(args: argparse.Namespace) -> int:
-    # Create a standalone SVG slide that embeds the Version B AI route image.
+    print(
+        "Error: create-ai-slide is blocked. TechnicalRoute Version B must be "
+        "generated as a PNG by run-ai-variant from route_ai_refs.json, then "
+        "inserted through svg_output/_direct_image_slides.json as a direct "
+        "PPTX picture slide. Do not wrap the AI result in SVG.",
+        file=sys.stderr,
+    )
+    return 2
+
+    # Unreachable legacy wrapper body kept only for historical diff context.
     image_path = Path(args.image).expanduser().resolve()
     if not image_path.is_file():
         print(f"Error: image not found: {image_path}", file=sys.stderr)
@@ -1348,7 +1358,7 @@ typography: cn_yahei_en_times
 emphasis_usage: <核心问题 / 主张 / 警示，或 "无">
 
 ## 6. Reference 模式
-mode: literature        # literature | offline_user_uploads | atlas_only
+mode: literature_only   # literature_only | gallery_only_fallback
 expected_refs_count: 5
 note: <可选>
 
@@ -1770,7 +1780,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     p_prompt.add_argument("--archetype", choices=["thinking", "method", "workflow"])
     p_prompt.add_argument("--content", required=True, help="content.yaml")
     p_prompt.add_argument("--style", help="style_profile.md (optional)")
-    p_prompt.add_argument("--reference-mode", choices=["literature", "atlas_only"], default="literature", help="参考模式；atlas_only 时在 prompt 中写入无参考图引导")
+    p_prompt.add_argument(
+        "--reference-mode",
+        choices=["literature_only", "gallery_only_fallback"],
+        default="literature_only",
+        help="Reference mode for the refs-plan gate.",
+    )
     p_prompt.add_argument("--out", required=True, help="prompt_ai.md")
     p_prompt.set_defaults(func=cmd_prompt)
 
@@ -1850,7 +1865,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         "run",
         help=(
             "兼容别名：生成 B 版 AI参考 PNG。建议新流程使用 run-ai-variant。"
-            "默认 backend = gemini（nano banana pro），可切 qwen（image2）等。"
+            "backend/model 默认由 scripts/image_gen.py 按当前环境或 .env 选择；变量名参考 .env.example。"
         ),
     )
     add_run_args(p_run)
@@ -1872,13 +1887,10 @@ def main(argv: Iterable[str] | None = None) -> int:
     p_emb.add_argument("--caption", default="")
     p_emb.set_defaults(func=cmd_embed)
 
-    p_ai_slide = sub.add_parser(
-        "create-ai-slide",
-        help="Legacy compatibility: create an SVG wrapper for Version B (quality gate will reject this in production decks).",
-    )
+    p_ai_slide = sub.add_parser("create-ai-slide", help="blocked: Version B must use direct PNG insertion")
     p_ai_slide.add_argument("--image", required=True, help="Generated route_ai image path")
     p_ai_slide.add_argument("--out-svg", required=True, help="Target svg_output/<NN>_route_ai.svg path")
-    p_ai_slide.add_argument("--title", required=True)
+    p_ai_slide.add_argument("--title", default="")
     p_ai_slide.add_argument("--subtitle", default="")
     p_ai_slide.add_argument("--caption", default="")
     p_ai_slide.add_argument("--footer", default="")

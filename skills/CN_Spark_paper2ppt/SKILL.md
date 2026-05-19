@@ -45,10 +45,10 @@ Hard requirements:
 | `scripts/image_gen.py` | Generate AI images when required by the asset plan. |
 | `scripts/latex_formula_to_png.py` | Render extracted LaTeX formulas to transparent PNG assets for PPT insertion. |
 | `scripts/technicalroute/generate_route_image.py` | Internal route-diagram commands: `contract`, `prompt`, `assemble`, `run-ai-variant`, `embed`, `audit`. |
-| `scripts/technicalroute/literature_search.py` | Build literature / offline / atlas style references for route diagrams. |
+| `scripts/technicalroute/literature_search.py` | Build the route AI reference plan: seed-site literature rasters first, Custom_gallery nearest-intent raster fallback only after completed zero-result search. |
 | `scripts/svg_quality_checker.py` | Validate SVG compatibility. |
 | `scripts/total_md_split.py` | Split speaker notes by slide. |
-| `scripts/notes_to_docx.py` | Export speaker notes as a standalone DOCX, one section per slide. |
+| `scripts/notes_to_docx.py` | Export speaker notes as a standalone continuous DOCX manuscript without slide headings by default. |
 | `scripts/finalize_svg.py` | Remove unused template placeholders, embed icons, align / embed images, flatten text, and normalize SVG. |
 | `scripts/svg_to_pptx.py` | Convert SVG pages to editable DrawingML PPTX. |
 | `scripts/pptx_openability_check.py` | Validate exported PPTX package relationships, notes master parts, content types, and current-user read/open permission. |
@@ -193,8 +193,9 @@ references/image-layout-spec.md
 ```
 
 Academic image priorities:
-- Reuse source figures, experimental results, methodological diagrams, and complex table screenshots when available.
-- Run `scripts/analyze_images.py` to create captions and placement recommendations.
+- Reuse every extracted paper figure/table that is marked `ppt_required` in `image_manifest.json`; mechanism diagrams, principle/model diagrams, workflow figures, result figures, and complex table screenshots are high-priority evidence and should not be silently dropped.
+- Run `scripts/analyze_images.py` to create captions, placement recommendations, figure roles, and targeted-explanation requirements before writing the slide roster.
+- For each reused paper figure/table, add a concise slide-specific Chinese explanation tied to the paper's mechanism, method, data, or result. In SVG, tag the image or explanation with `data-source-figure="<filename>"` / `data-explains-image="<filename>"` when possible so `svg_quality_checker.py` can verify coverage.
 - Label embedded source figures with citation markers.
 - For self-drawn research route, framework, thinking map, or full-paper workflow diagrams, switch to Step 5.5.
 
@@ -217,12 +218,12 @@ Execution order:
 2. Classify `archetype` and `sub_variant`, then read exactly one matching archetype file: `archetype-thinking.md`, `archetype-method.md`, or `archetype-workflow.md`.
 3. Read `references/technicalroute/content-schema.md` and write `<route_workdir>/content.yaml` from the source and confirmed spec only. No Custom_gallery or literature-reference text may enter `content.yaml`.
 4. Read `references/technicalroute/color-typography.md` and `references/technicalroute/shape-recipes.md`; write route `spec_lock.md` with inherited deck colors, user PPTX template palette priority, shape radius, `template_key`, `slot_map`, `color_var_map`, `gallery_refs`, and forbidden additions.
-5. Read `references/technicalroute/seed_urls.md` for the branch rules, and treat `references/technicalroute/seed_sites.json` as the only source of online academic-search sites. First run `literature_search.py emit-plan --topic <paper title/keywords> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs`, execute the generated `search_plan.json` with academic search over `seed_sites.json`, inspect similar papers for mechanism diagrams / model-principle diagrams / technical-route or workflow figures, download accepted raster figures, and record them with `literature_search.py record`. Then run `literature_search.py prepare-ai-refs --topic <paper title/keywords> --discipline <discipline> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs`. If usable literature refs exist, `refs` must contain only those manifest-listed raster figures. Only after the seed-site search completed and produced zero usable raster refs may `prepare-ai-refs --allow-gallery-fallback-after-search --search-completed` select discipline-matched raster anchors from `templates/technicalroute/Custom_gallery/gallery_index.json`; alternatively write `style_refs/search_completed.json` with `{"completed": true}` before running fallback. The refs list must never mix literature and gallery sources. Do not hard-code sites or use SVG/PPTX/editable route pages as AI references.
-6. Inspect `templates/technicalroute/Custom_gallery/` and record 0-3 suitable `gallery_refs`; do not invent files and do not copy reference text.
+5. Read `references/technicalroute/seed_urls.md` for the branch rules, and treat `references/technicalroute/seed_sites.json` as the only source of online academic-search sites. First run `literature_search.py emit-plan --topic <paper title/keywords> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs`, execute the generated `search_plan.json` with academic search over `seed_sites.json`, inspect similar papers for mechanism diagrams / model-principle diagrams / technical-route or workflow figures, download accepted raster figures, and record them with `literature_search.py record`. Then run `literature_search.py prepare-ai-refs --topic <paper title/keywords> --discipline <discipline> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs`. If usable literature refs exist, `refs` must contain only those manifest-listed raster figures. Only after the seed-site search completed and produced zero usable raster refs may `prepare-ai-refs --allow-gallery-fallback-after-search --search-completed` select raster anchors from `templates/technicalroute/Custom_gallery/gallery_index.json`; if no exact gallery match exists, it must choose the highest-scoring nearest-intent gallery raster and record `selection_policy: nearest_intent_within_custom_gallery_only`. The refs list must never mix literature and gallery sources. Do not hard-code sites or use SVG/PPTX/editable route pages as AI references.
+6. Inspect `templates/technicalroute/Custom_gallery/` only through `prepare-ai-refs` fallback output; record the selected `gallery_refs` from `route_ai_refs.json`, do not invent files, and do not copy reference text.
 7. Read `references/technicalroute/image-templatedraw.md`; select a template from `templates/technicalroute/templates/templates_index.json`, complete the slot map, and generate Version A with `generate_route_image.py assemble`.
 8. Read `references/technicalroute/image-aigenerate.md`; build `prompt_ai.md` from the article outline / `content.yaml`, then generate Version B with `generate_route_image.py run-ai-variant --refs-plan <route_workdir>/style_refs/route_ai_refs.json`. Let `run-ai-variant` write `<project_path>/svg_output/_direct_image_slides.json` automatically, or pass `--direct-slide-manifest <project_path>/svg_output/_direct_image_slides.json --after-svg-stem <NN>_route_template`, so the generated PNG is inserted by the PPTX exporter as a direct picture slide without any SVG wrapper. `--refs-plan` is the single allowed reference bridge: it must be either `literature_only` with seed-site manifest raster refs, or `gallery_only_fallback` with Custom_gallery raster anchors only when the seed-site search completed, produced no usable refs, and both `gallery_fallback_after_search` and `seed_search_completed` are true. Mixing the two classes, manual `--refs`, SVG, PPTX, and screenshots of Version A are forbidden. Version B is prompt/reference independent from Version A; never feed `route_template_svg_path`, `pipeline_with_stages.svg`, assembled SVGs, PPT exports, or screenshots into the AI image call.
    Backend/model selection follows `.env.example`: set `IMAGE_BACKEND` plus provider-specific keys/model variables in the process environment or `.env`; do not pass `--backend` / `--model` unless the user explicitly needs a temporary override. Keep `--aspect_ratio 16:9 --image_size 4K`; the script then normalizes the PNG to at least 330ppi full-slide target pixels before PPT insertion.
-9. Verify `route_ai_image_path` exists and `<project_path>/svg_output/_direct_image_slides.json` contains a `technicalroute_ai` entry whose `image_path` points to that PNG and whose `after_svg_stem` points to the Version A route template slide. `create-ai-slide --out-svg` remains only a legacy manual recovery path. Normal execution must not wrap Version B in SVG; `scripts/svg_to_pptx.py` reads `_direct_image_slides.json` and inserts the PNG as the next PPTX picture slide directly. Run `references/technicalroute/qa-checklist.md` before export.
+9. Verify `route_ai_image_path` exists and `<project_path>/svg_output/_direct_image_slides.json` contains a `technicalroute_ai` entry whose `image_path` points to that PNG and whose `after_svg_stem` points to the Version A route template slide. `create-ai-slide --out-svg` is blocked by default and must not be used in production. Normal execution must not wrap Version B in SVG; `scripts/svg_to_pptx.py` reads `_direct_image_slides.json` and inserts the PNG as the next PPTX picture slide directly. Run `references/technicalroute/qa-checklist.md` before export.
 
 TechnicalRoute output record:
 ```yaml
@@ -234,12 +235,12 @@ route_ai_image_path: <route_workdir>/output/route_ai_<id>.png
 audit_report_path: <route_workdir>/audit_report.md
 route_template_slide_svg_path: <project_path>/svg_output/<NN>_route_template.svg
 route_ai_direct_slide_manifest: <project_path>/svg_output/_direct_image_slides.json
-reference_mode: literature | offline_user_uploads | atlas_only
+reference_mode: literature_only | gallery_only_fallback
 gallery_refs: []
 style_refs_manifest: <route_workdir>/style_refs/manifest.json
 ```
 
-Academic integrity lock: Custom_gallery, literature references, and offline user reference images are only style / structure anchors. All visible labels, formulas, data names, method names, place names, author names, citations, and numeric values must come from the uploaded paper, user material, or confirmed `design_spec.md`.
+Academic integrity lock: TechnicalRoute Version B may use only literature-search rasters listed in `route_ai_refs.json` or Custom_gallery fallback rasters selected by `prepare-ai-refs`; offline user reference images, SVG/PPT/PPTX files, exported slides, and Version A screenshots are forbidden. All visible labels, formulas, data names, method names, place names, author names, citations, and numeric values must come from the uploaded paper, user material, or confirmed `design_spec.md`.
 
 ### Step 6 - Generate SVG Pages And Notes
 
@@ -283,7 +284,7 @@ Keep the default `finalize_svg.py` steps enabled for user PPTX template decks; `
 
 Native DrawingML export must read `svg_output/`, not `svg_final/`. `svg_final/` is only for the explicit diagnostic SVG-reference fallback because post-processing may convert rounded rectangles and simple lines into SVG paths, which become many `<a:custGeom>` objects and can cause PowerPoint repair / missing-content failures. `svg_output` pages must not be authored as full-slide `<image id="slide-raster-image">` bitmaps; that produces non-editable PPT slides and is a hard quality failure. TechnicalRoute Version B is the only full-slide bitmap exception, but it must be inserted through `_direct_image_slides.json` as a direct PPTX picture slide, not authored as a normal SVG page. The PNG must be image-only, full-canvas, and >=330ppi target resolution. Keep slide transitions disabled by default with `-t none`; add transitions only when the user explicitly asks for them.
 
-Speaker notes are exported as a standalone DOCX. Do not embed notes into the PPTX because notes-heavy packages can trigger PowerPoint repair prompts and COM/RPC open failures. The PPTX exporter strips notesSlide / notesMaster package parts even if a legacy flag is passed.
+Speaker notes are exported as a standalone DOCX. The DOCX is a continuous speech manuscript: do not print `第 N 页` / slide filename headings by default; keep slide notes merged in deck order and separated by normal paragraphs. Do not embed notes into the PPTX because notes-heavy packages can trigger PowerPoint repair prompts and COM/RPC open failures. The PPTX exporter strips notesSlide / notesMaster package parts even if a legacy flag is passed.
 
 The PPTX openability check is mandatory before handing the file to the user. It must pass zip readability, internal relationship targets, notes slide -> notes master packaging, `[Content_Types].xml` notes overrides, `presentation.xml` notes master linkage, current-user file read/open permission, custom-geometry budget, and slide-transition budget. If it reports a broken package, excess `<a:custGeom>`, transition risk, or access-denied risk, fix the SVG-to-DrawingML export path and rerun export; do not bypass the converter by generating a different standard PowerPoint package.
 
@@ -296,7 +297,7 @@ If a user says the generated PPTX cannot open, asks to repair a PPTX, or reports
 
 If charts are used, run `conditional-workflows/verify-charts.md` before final export.
 
-Final checklist: numbered module titles, semantically coherent cover title grouping, visual coverage on non-exempt slides, proportional/equal-frame paper figures, consistent citations, consecutive TechnicalRoute A/B pages with Version B inserted through `_direct_image_slides.json`, formula blocks rendered as PNG, no unused user-template placeholders, separate summary and thank-you pages, spoken notes, and editable PPTX output.
+Final checklist: numbered module titles, semantically coherent cover title grouping, visual coverage on non-exempt slides, all `ppt_required` source figures/tables used with targeted Chinese explanations, proportional/equal-frame paper figures, consistent citations, consecutive TechnicalRoute A/B pages with Version B inserted through `_direct_image_slides.json`, formula blocks rendered as PNG, no unused user-template placeholders, separate summary and thank-you pages, spoken notes, and editable PPTX output.
 
 Write `<project_path>/ppt_outline_cn.md` as the only final QA summary after export. It must report page count, notes coverage, image / formula object count, TechnicalRoute page locations and editability, citation handling, known limitations, and a per-page checklist. Do not create a second outline or duplicate QA report under another filename.
 

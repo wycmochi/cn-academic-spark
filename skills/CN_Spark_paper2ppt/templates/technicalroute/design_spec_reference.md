@@ -74,12 +74,11 @@ Rules:
 
 Choose one reference mode from `seed_urls.md`. For online academic search, the concrete site list must come from `references/technicalroute/seed_sites.json` through `literature_search.py emit-plan`; do not write a separate site list here:
 - `literature`: online academic / institutional visual references are available.
-- `offline`: user uploaded at least three reference images; use `literature_search.py offline --hints <folder>`.
-- `atlas_only`: no online references and no sufficient user images; use `templates/technicalroute/Custom_gallery/`.
+- `gallery_only_fallback`: the seed-sites search completed with zero usable raster references; use nearest-intent rasters from `templates/technicalroute/Custom_gallery/gallery_index.json`.
 
 Record:
 - search topic and discipline
-- selected seed sites from `seed_sites.json` or offline hint folder
+- selected seed sites from `seed_sites.json`; if no usable refs, record completed-search proof and nearest-intent Custom_gallery selection
 - `style_profile.md` path
 - 1-3 `gallery_refs` from `templates/technicalroute/Custom_gallery/`
 
@@ -121,7 +120,7 @@ Record:
 
 Prompt constraints:
 - Include the paper topic, diagram purpose, node list, relation logic, visual style, deck palette, label language, and no-invention rule.
-- Use Custom_gallery and literature/offline references as style anchors only.
+- Use seed-sites literature references or Custom_gallery gallery-only fallback references as style anchors only.
 - The AI image may be raster, but its labels must be legible at PPT size.
 - It should differ meaningfully from Version A while conveying the same article logic.
 
@@ -173,4 +172,4 @@ Must pass:
 
 ## Version B slide embedding rule
 
-The `route_ai_image_path` file is only an intermediate artifact. Normal execution must call `generate_route_image.py run-ai-variant --refs-plan <route_workdir>/style_refs/route_ai_refs.json --direct-slide-manifest <project_path>/svg_output/_direct_image_slides.json --after-svg-stem <NN>_route_template` so the PPTX exporter inserts the generated PNG as the next direct picture slide. Do not create a Version B SVG wrapper, do not use screenshots of Version A, and do not leave a path-only image href in an SVG slide. `create-ai-slide --out-svg` is legacy manual recovery only.
+The `route_ai_image_path` file is only an intermediate artifact. Normal execution must call `generate_route_image.py run-ai-variant --refs-plan <route_workdir>/style_refs/route_ai_refs.json --direct-slide-manifest <project_path>/svg_output/_direct_image_slides.json --after-svg-stem <NN>_route_template` so the PPTX exporter inserts the generated PNG as the next direct picture slide. Do not create a Version B SVG wrapper, do not use screenshots of Version A, and do not leave a path-only image href in an SVG slide. `create-ai-slide --out-svg` is blocked.

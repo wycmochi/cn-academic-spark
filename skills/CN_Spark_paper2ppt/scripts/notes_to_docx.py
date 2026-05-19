@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Export per-slide speaker notes to a standalone DOCX.
+"""Export speaker notes to a standalone DOCX.
 
 The PPTX exporter intentionally avoids embedding notes by default because some
 PowerPoint COM/open flows fail on notes-heavy packages. This script keeps the
-same slide-to-notes mapping but writes a separate Word document, one section per
-slide, using only the Python standard library.
+same slide-to-notes mapping internally but writes a continuous speech manuscript:
+slide headings are structural only and are not printed by default.
 """
 
 from __future__ import annotations
@@ -79,19 +79,22 @@ def _p(text: str = "", *, style: str | None = None) -> str:
     )
 
 
-def _document_xml(svg_files: list[Path], notes: dict[str, str]) -> str:
+def _document_xml(svg_files: list[Path], notes: dict[str, str], *, include_slide_headings: bool = False) -> str:
     body: list[str] = []
+    emitted_blocks = 0
     for idx, svg in enumerate(svg_files, 1):
-        title = f"第 {idx} 页：{svg.stem}"
-        body.append(_p(title, style="Heading1"))
         lines = _plain_note_lines(notes.get(svg.stem, ""))
         if not lines:
-            body.append(_p("（本页暂无讲稿）"))
-        else:
-            for line in lines:
-                body.append(_p(line) if line else _p(""))
-        if idx != len(svg_files):
-            body.append('<w:p><w:r><w:br w:type="page"/></w:r></w:p>')
+            continue
+        if emitted_blocks:
+            body.append(_p(""))
+        if include_slide_headings:
+            body.append(_p(f"第 {idx} 页：{svg.stem}", style="Heading1"))
+        for line in lines:
+            body.append(_p(line) if line else _p(""))
+        emitted_blocks += 1
+    if not body:
+        body.append(_p("暂无讲稿内容。"))
 
     sect = (
         '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
@@ -126,7 +129,12 @@ def _styles_xml() -> str:
     )
 
 
-def write_notes_docx(project_path: Path, output_path: Path | None = None) -> Path:
+def write_notes_docx(
+    project_path: Path,
+    output_path: Path | None = None,
+    *,
+    include_slide_headings: bool = False,
+) -> Path:
     svg_files = _find_svg_files(project_path)
     if not svg_files:
         raise FileNotFoundError(f"No SVG files found under {project_path / 'svg_output'}")
@@ -170,7 +178,10 @@ def write_notes_docx(project_path: Path, output_path: Path | None = None) -> Pat
         zf.writestr("_rels/.rels", root_rels)
         zf.writestr("word/_rels/document.xml.rels", doc_rels)
         zf.writestr("word/styles.xml", _styles_xml())
-        zf.writestr("word/document.xml", _document_xml(svg_files, notes))
+        zf.writestr(
+            "word/document.xml",
+            _document_xml(svg_files, notes, include_slide_headings=include_slide_headings),
+        )
     return output_path
 
 
@@ -178,12 +189,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Export slide speaker notes to DOCX.")
     parser.add_argument("project_path", help="Project directory path")
     parser.add_argument("-o", "--output", help="Output DOCX path")
+    parser.add_argument(
+        "--include-slide-headings",
+        action="store_true",
+        help="Include slide number/file headings. Default is a continuous manuscript without slide headings.",
+    )
     args = parser.parse_args()
 
     project = Path(args.project_path).expanduser().resolve()
     output = Path(args.output).expanduser().resolve() if args.output else None
     try:
-        docx = write_notes_docx(project, output)
+        docx = write_notes_docx(project, output, include_slide_headings=args.include_slide_headings)
     except Exception as exc:  # noqa: BLE001 - CLI needs concise failure text
         print(f"Error: {exc}", file=sys.stderr)
         return 1

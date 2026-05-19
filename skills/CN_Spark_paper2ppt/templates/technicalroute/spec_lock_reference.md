@@ -66,21 +66,21 @@ Allowed `archetype` values:
 
 ## reference_mode
 
-- mode: atlas_only
+- mode: literature_only | gallery_only_fallback
 - online_search_plan: technicalroute/route_01/style_refs/search_plan.md
-- offline_hints_folder: <optional_user_reference_folder>
+- seed_sites_path: references/technicalroute/seed_sites.json
+- gallery_index_path: templates/technicalroute/Custom_gallery/gallery_index.json
 - selected_seed_site_1: <optional site name from seed_sites.json>
 - gallery_ref_1: templates/technicalroute/Custom_gallery/<discipline>/<file>
 - gallery_ref_2: <optional>
 - style_refs_manifest: technicalroute/route_01/style_refs/manifest.json
-- fallback_note: <why atlas_only or offline was chosen>
+- fallback_note: <why gallery_only_fallback was chosen; include completed search proof and nearest-intent gallery reason>
 
 Allowed route-level `mode` values:
-- `literature`: online academic / institutional references were used.
-- `offline_user_uploads`: the user uploaded at least three route reference images.
-- `atlas_only`: internal Custom_gallery / template atlas only.
+- `literature_only`: seed-sites academic / institutional raster references were used.
+- `gallery_only_fallback`: Custom_gallery raster anchors were used only after the completed seed-sites search produced zero usable literature refs.
 
-When calling `generate_route_image.py prompt`, use `--reference-mode literature` for both `literature` and `offline_user_uploads`, because the prompt command currently accepts only `literature` and `atlas_only`.
+When calling `generate_route_image.py prompt`, use `--reference-mode literature_only` or `--reference-mode gallery_only_fallback`. User-uploaded references, PPT/PPTX pages, SVG templates, exported slides, and editable Version A pages must not be recorded as Version B AI references.
 
 ## source_choice
 
@@ -234,7 +234,7 @@ Version B must be generated from article content plus one mutually exclusive ref
 
 - contract: python3 scripts/technicalroute/generate_route_image.py contract --out <route_workdir>/contract.md --project <project_name> --archetype <thinking|method|workflow>
 - assemble: python3 scripts/technicalroute/generate_route_image.py assemble --spec-lock <route_workdir>/spec_lock.md --content <route_workdir>/content.yaml --out <route_workdir>/output/route_template_01.svg
-- prompt: python3 scripts/technicalroute/generate_route_image.py prompt --archetype <archetype> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode <literature|atlas_only> --out <route_workdir>/prompt_ai.md
+- prompt: python3 scripts/technicalroute/generate_route_image.py prompt --archetype <archetype> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode <literature_only|gallery_only_fallback> --out <route_workdir>/prompt_ai.md
 - prepare_ai_refs: python3 scripts/technicalroute/literature_search.py prepare-ai-refs --topic "<paper title / keywords>" --discipline <discipline> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs
 - run_ai_variant: python3 scripts/technicalroute/generate_route_image.py run-ai-variant --prompt <route_workdir>/prompt_ai.md --backend openai --model gpt-image-2 --aspect_ratio 16:9 --image_size 4K --filename route_ai_01 --out <route_workdir>/output --refs-plan <route_workdir>/style_refs/route_ai_refs.json --direct-slide-manifest <project_path>/svg_output/_direct_image_slides.json --after-svg-stem 08_route_template
 - audit: python3 scripts/technicalroute/generate_route_image.py audit --image <route_workdir>/output/route_ai_01.png --content <route_workdir>/content.yaml --contract <route_workdir>/contract.md --out <route_workdir>/audit_report.md

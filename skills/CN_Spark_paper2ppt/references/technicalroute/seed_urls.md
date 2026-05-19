@@ -1,5 +1,5 @@
 # TechnicalRoute Seed URLs And Reference Priority
-document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5.5 选择参考图路径时读取；它把在线学术检索、完全离线用户参考图和 atlas-only 降级路径接入主流程。
+document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 5.5 选择参考图路径时读取；它把 seed-sites 在线学术检索和 Custom_gallery 最近意图降级路径接入主流程。
 
 Use this file before building `style_refs` for Version B AI reference generation. The goal is to collect or assess visual style anchors, not to collect semantic content. The paper, user material, and `content.yaml` remain the only content sources.
 
@@ -8,9 +8,8 @@ Use this file before building `style_refs` for Version B AI reference generation
 ## Reference Priority
 
 Use this order:
-1. Academic-website and relevant-literature raster references: DOI-linked journal or publisher pages, official lab / university / project pages, paper supplementary material, reputable academic sources, open course materials, documentation pages, and institutional repositories, only when they provide flowchart / framework / workflow / route-diagram / explanatory-legend style references.
-3. User-provided relevant reference images, when the user uploads at least three structure-similar images.
-4. Atlas-only neutral academic route style when no external or user references are available.
+1. Academic-website and relevant-literature raster references from the `seed_sites.json` search plan: DOI-linked journal or publisher pages, official lab / university / project pages, paper supplementary material, reputable academic sources, open course materials, documentation pages, and institutional repositories, only when they provide flowchart / framework / workflow / route-diagram / explanatory-legend style references.
+2. Custom_gallery nearest-intent raster anchors selected through `templates/technicalroute/Custom_gallery/gallery_index.json`, only after the seed-sites search has completed and produced zero usable academic raster references.
 
 Do not invent URLs. Do not claim that search succeeded when it did not. Do not treat Version A SVGs, assembled SVG templates, result charts, histograms, ROC curves, maps, heatmaps, or raw tables as AI image references. Uploaded paper content and outline are semantic sources through `content.yaml`, not image-reference sources for Version B.
 
@@ -42,34 +41,24 @@ Assess the collected references:
 python3 scripts/technicalroute/literature_search.py assess --out <route_workdir>/style_refs/
 ```
 
-If accepted raster references exist, continue to `generate_route_image.py prompt --reference-mode literature` and then `prepare-ai-refs` normally. If the completed search produced zero usable figures, run `prepare-ai-refs --allow-gallery-fallback-after-search --search-completed` so `route_ai_refs.json` records `gallery_only_fallback`, `gallery_fallback_after_search: true`, and `seed_search_completed: true`.
+If accepted raster references exist, continue to `generate_route_image.py prompt --reference-mode literature_only` and then `prepare-ai-refs` normally. If the completed search produced zero usable figures, run `prepare-ai-refs --allow-gallery-fallback-after-search --search-completed` so `route_ai_refs.json` records `gallery_only_fallback`, `gallery_fallback_after_search: true`, and `seed_search_completed: true`. If no exact Custom_gallery entry matches the paper's discipline/archetype/sub-variant, the fallback still must stay inside Custom_gallery and use the highest-scoring nearest-intent raster recorded with `selection_policy: nearest_intent_within_custom_gallery_only`.
 
-### Fully Offline User-Reference Branch
+### Offline / User-Reference Branch Is Forbidden For Version B
 
-Use when the user provides at least three relevant reference images.
+Do not use user-uploaded reference images, exported PPT screenshots, previous demo images, or local SVG/PPT-derived rasters as Version B AI references. The Version B reference bridge has exactly two allowed source classes: seed-site academic-search raster figures first, and Custom_gallery raster fallback after a completed zero-result search. User-provided images may inform the editable deck style elsewhere, but they must not enter `route_ai_refs.json` and must not be passed to `run-ai-variant`.
 
-```bash
-python3 scripts/technicalroute/literature_search.py offline --hints <folder_with_user_reference_images> --out <route_workdir>/style_refs/ --topic "<topic>" --archetype <thinking|method|workflow> --max 8
-python3 scripts/technicalroute/literature_search.py assess --out <route_workdir>/style_refs/
-```
+### Gallery-Only Fallback Branch
 
-In this branch:
-- skip online search;
-- treat user images as style references only;
-- continue to Version A template selection;
-- for Version B prompt generation, use the generated `style_profile.md` or `manifest.json` as style context. Because `generate_route_image.py prompt` currently accepts only `literature` and `atlas_only`, call it with `--reference-mode literature` when offline references are available and usable.
-
-### Atlas-Only Branch
-
-Use when no online references are available, the user did not provide enough images, or `assess` recommends atlas-only.
+Use when the seed-sites search has completed and no usable academic raster references are available.
 
 ```bash
 python3 scripts/technicalroute/literature_search.py assess --out <route_workdir>/style_refs/
-python3 scripts/technicalroute/generate_route_image.py prompt --archetype <thinking|method|workflow> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode atlas_only --out <route_workdir>/prompt_ai.md
+python3 scripts/technicalroute/literature_search.py prepare-ai-refs --topic "<paper title / keywords>" --discipline <discipline> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs --allow-gallery-fallback-after-search --search-completed
+python3 scripts/technicalroute/generate_route_image.py prompt --archetype <thinking|method|workflow> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode gallery_only_fallback --out <route_workdir>/prompt_ai.md
 ```
 
-Atlas-only / gallery-only fallback means:
-- use only raster anchors selected from `templates/technicalroute/Custom_gallery/gallery_index.json` as fallback style guidance after a completed zero-result seed-site search; do not use template SVGs, PPTX editable pages, PPT exports, or Version A screenshots as AI references;
+Gallery-only fallback means:
+- use only raster anchors selected from `templates/technicalroute/Custom_gallery/gallery_index.json` as fallback style guidance after a completed zero-result seed-site search; when there is no exact match, choose the nearest-intent gallery raster by score; do not use template SVGs, PPTX editable pages, PPT exports, user images, or Version A screenshots as AI references;
 - do not claim external literature reference support;
 - keep article-derived `content.yaml` as the only semantic source.
 

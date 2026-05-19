@@ -40,7 +40,7 @@ gallery/
 ]
 ```
 
-3. 生图时 `literature_search.py offline --hints templates/technicalroute/Custom_gallery/<discipline>/<archetype>-<sub_variant>/` 会把这些图作为 B 版 AI参考生成图的结构 / 风格参考。
+3. 生图时必须通过 `literature_search.py prepare-ai-refs --allow-gallery-fallback-after-search --search-completed` 读取 `gallery_index.json`，由 `route_ai_refs.json` 把这些图作为 B 版 AI 参考生成图的结构 / 风格参考；禁止走 `offline --hints` 或手动传图。
 
 ## 不要做的事
 

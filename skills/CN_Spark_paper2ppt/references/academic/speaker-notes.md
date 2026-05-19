@@ -1,7 +1,7 @@
 # Academic Speaker Notes
 document explanation(It doesn't affect the process, it only helps with understanding）：本文件在 Step 6 写 notes/total.md 时读取；它规定中文学术汇报的口播稿结构、语气、页间衔接和 TTS 友好写法。
 
-Write speaker notes to `<project_path>/notes/total.md`. The master file uses one section per slide. `scripts/total_md_split.py` splits it into per-slide files, and `scripts/notes_to_docx.py` exports a standalone DOCX with one section per slide. `scripts/svg_to_pptx.py` strips PPTX notes package parts; use the DOCX for all speaker notes.
+Write speaker notes to `<project_path>/notes/total.md`. The master file uses one structural section per slide so `scripts/total_md_split.py` can split it into per-slide files. `scripts/notes_to_docx.py` then exports a standalone continuous DOCX manuscript: slide headings and filenames are not printed by default, and each slide's spoken note is appended in deck order as normal separated paragraphs. `scripts/svg_to_pptx.py` strips PPTX notes package parts; use the DOCX for all speaker notes.
 
 ## Output Format
 

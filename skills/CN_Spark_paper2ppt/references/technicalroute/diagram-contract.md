@@ -85,11 +85,12 @@ shape_radius:
 emphasis_usage:
 
 ## 9. Reference Mode
-mode: literature | offline_user_uploads | atlas_only
+mode: literature_only | gallery_only_fallback
 expected_refs_count:
 gallery_refs:
 style_refs:
 fallback_note:
+source_gate: seed_sites_literature_first_then_custom_gallery_only
 
 ## 10. Dual Output Lock
 version_a: editable template SVG through image-templatedraw.md
@@ -138,7 +139,7 @@ Record concrete forbidden additions, not generic warnings. Examples of useful fo
 
 ## Reference Integrity
 
-Custom_gallery and literature references are style and structure anchors only. They never become semantic sources. The contract must explicitly state that all node labels, formulas, dataset names, model names, place names, author names, and numeric values come from the uploaded source or confirmed user material.
+Custom_gallery and seed-sites literature references are style and structure anchors only. They never become semantic sources. TechnicalRoute Version B must not use user-uploaded images, exported PPT screenshots, assembled SVGs, editable Version A pages, PPT/PPTX templates, or any file outside `style_refs/manifest.json` and `templates/technicalroute/Custom_gallery/gallery_index.json` as AI references. The contract must explicitly state that all node labels, formulas, dataset names, model names, place names, author names, and numeric values come from the uploaded source or confirmed user material.
 
 ## Dual Output Lock
 

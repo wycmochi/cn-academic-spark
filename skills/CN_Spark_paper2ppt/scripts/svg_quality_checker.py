@@ -2022,7 +2022,9 @@ class SVGQualityChecker:
         self._check_technicalroute_requirement_declared(dir_path, svg_files)
         self._check_technicalroute_dual_output(svg_files)
         self._check_technicalroute_ai_svg_wrapper_forbidden(svg_files)
+        self._check_route_ai_reference_plan_integrity(dir_path)
         self._check_ai_image_assets_inserted(dir_path, svg_files)
+        self._check_source_figure_coverage(dir_path, svg_files)
         self._check_unique_page_numbers(svg_files)
         self._check_cover_metadata_only(svg_files)
         self._check_cover_title_semantic_contract(svg_files)
@@ -2179,6 +2181,258 @@ class SVGQualityChecker:
         return any(Path(entry["image_path"]).is_file() for entry in self._direct_route_ai_entries(project_root))
 
     @staticmethod
+    def _is_forbidden_route_ai_ref_path(path: Path) -> bool:
+        norm = str(path).replace("\\", "/").lower()
+        forbidden_tokens = (
+            "/svg_output/",
+            "/svg_final/",
+            "/exports/",
+            "/pptx/",
+            "/slides/",
+            "/slide/",
+            "/route_workflow/",
+            "/technicalroute/templates/",
+            "pipeline_with_stages",
+            "route_template",
+            "research_route_editable",
+            "research_route_visual",
+            "editable_route",
+            "version_a",
+            "ppt_style",
+            "ppt_layout",
+            "screenshot",
+            "screen_shot",
+        )
+        return any(token in norm for token in forbidden_tokens)
+
+    def _check_route_ai_reference_plan_integrity(self, dir_path: Path) -> None:
+        """Require route AI picture pages to have an auditable refs plan.
+
+        This catches demo/build scripts that create or insert a route AI image
+        directly from an SVG/PPT-style source while bypassing run-ai-variant.
+        """
+        project_root = self._project_root_from_dir(dir_path)
+        direct_entries = self._direct_route_ai_entries(project_root)
+        if not direct_entries:
+            return
+
+        skill_root = Path(__file__).resolve().parent.parent
+        gallery_root = (skill_root / "templates" / "technicalroute" / "Custom_gallery").resolve()
+        seed_sites = (skill_root / "references" / "technicalroute" / "seed_sites.json").resolve()
+        gallery_index = (gallery_root / "gallery_index.json").resolve()
+        raster_suffixes = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+
+        candidates = sorted(project_root.glob("technicalroute/**/route_ai_refs.json"))
+        candidates += sorted(project_root.glob("**/style_refs/route_ai_refs.json"))
+        seen: set[Path] = set()
+        plans: list[tuple[Path, dict]] = []
+        for candidate in candidates:
+            resolved = candidate.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            try:
+                data = json.loads(candidate.read_text(encoding="utf-8-sig"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(data, dict):
+                plans.append((resolved, data))
+
+        if not plans:
+            names = ", ".join(Path(entry["image_path"]).name for entry in direct_entries[:3])
+            self._project_issues.append((
+                "error",
+                "technicalroute_ai_refs_plan_missing",
+                f"{names}: direct TechnicalRoute AI picture slide exists, but no route_ai_refs.json "
+                "was found. Generate it with literature_search.py prepare-ai-refs; the AI image "
+                "may reference only seed-site literature rasters or Custom_gallery fallback rasters."
+            ))
+            return
+
+        def _under(path: Path, parent: Path) -> bool:
+            try:
+                path.resolve().relative_to(parent)
+                return True
+            except ValueError:
+                return False
+
+        for plan_path, plan in plans:
+            mode = str(plan.get("mode") or "")
+            refs = plan.get("refs") or []
+            if plan.get("reference_flow") != "academic_search_then_gallery_fallback":
+                self._project_issues.append((
+                    "error",
+                    "technicalroute_ai_refs_policy_invalid",
+                    f"{plan_path.name}: reference_flow must be academic_search_then_gallery_fallback."
+                ))
+            if mode not in {"literature_only", "gallery_only_fallback"}:
+                self._project_issues.append((
+                    "error",
+                    "technicalroute_ai_refs_mode_invalid",
+                    f"{plan_path.name}: unsupported mode {mode!r}; use literature_only or gallery_only_fallback."
+                ))
+                continue
+            if not isinstance(refs, list) or not refs:
+                self._project_issues.append((
+                    "error",
+                    "technicalroute_ai_refs_empty",
+                    f"{plan_path.name}: refs must contain at least one allowed raster reference."
+                ))
+                continue
+            seed_raw = str(plan.get("seed_sites_path") or "")
+            gallery_raw = str(plan.get("gallery_index_path") or "")
+            if seed_raw and Path(seed_raw).expanduser().resolve() != seed_sites:
+                self._project_issues.append((
+                    "error",
+                    "technicalroute_ai_seed_sites_wrong",
+                    f"{plan_path.name}: seed_sites_path must be the skill references/technicalroute/seed_sites.json."
+                ))
+            if gallery_raw and Path(gallery_raw).expanduser().resolve() != gallery_index:
+                self._project_issues.append((
+                    "error",
+                    "technicalroute_ai_gallery_index_wrong",
+                    f"{plan_path.name}: gallery_index_path must be the skill Custom_gallery/gallery_index.json."
+                ))
+            if mode == "gallery_only_fallback" and not (
+                plan.get("seed_search_completed") and plan.get("gallery_fallback_after_search")
+            ):
+                self._project_issues.append((
+                    "error",
+                    "technicalroute_ai_gallery_gate_missing",
+                    f"{plan_path.name}: gallery fallback requires seed_search_completed=true and "
+                    "gallery_fallback_after_search=true after a zero-result academic search."
+                ))
+
+            for raw_ref in refs:
+                ref_path = Path(str(raw_ref)).expanduser()
+                if not ref_path.is_absolute():
+                    ref_path = (plan_path.parent / ref_path).resolve()
+                suffix = ref_path.suffix.lower()
+                if suffix not in raster_suffixes:
+                    self._project_issues.append((
+                        "error",
+                        "technicalroute_ai_ref_not_raster",
+                        f"{plan_path.name}: forbidden AI reference type for {ref_path.name}; only raster images are allowed."
+                    ))
+                    continue
+                if self._is_forbidden_route_ai_ref_path(ref_path):
+                    self._project_issues.append((
+                        "error",
+                        "technicalroute_ai_ref_forbidden_source",
+                        f"{plan_path.name}: {ref_path.name} appears to come from SVG/PPT/export/editable-route output. "
+                        "Route AI references may come only from seed-site literature rasters or Custom_gallery."
+                    ))
+                    continue
+                in_gallery = _under(ref_path, gallery_root)
+                if mode == "gallery_only_fallback" and not in_gallery:
+                    self._project_issues.append((
+                        "error",
+                        "technicalroute_ai_gallery_ref_outside_gallery",
+                        f"{plan_path.name}: gallery fallback ref {ref_path.name} is outside Custom_gallery."
+                    ))
+                if mode == "literature_only" and in_gallery:
+                    self._project_issues.append((
+                        "error",
+                        "technicalroute_ai_literature_ref_mixes_gallery",
+                        f"{plan_path.name}: literature_only must not include Custom_gallery refs."
+                    ))
+
+    def _check_source_figure_coverage(self, dir_path: Path, svg_files: List[Path]) -> None:
+        """Require extracted paper figures/tables to be used with explanation.
+
+        source_to_md/pdf_to_md.py writes image_manifest.json for academic
+        figures. Those images are high-value source evidence, so they should
+        appear in the deck unless explicitly marked ppt_required=false.
+        """
+        project_root = self._project_root_from_dir(dir_path)
+        manifest_paths = [
+            path for path in project_root.rglob("image_manifest.json")
+            if "technicalroute" not in {part.lower() for part in path.parts}
+        ]
+        if not manifest_paths:
+            return
+
+        combined_svg = "\n".join(
+            svg.read_text(encoding="utf-8", errors="replace")
+            for svg in svg_files
+            if svg.exists()
+        )
+        combined_lower = combined_svg.lower()
+        visible_text = html.unescape(re.sub(r"<[^>]+>", " ", combined_svg))
+        visible_text = " ".join(visible_text.split()).lower()
+
+        def _caption_hit(caption: str) -> bool:
+            caption = " ".join(caption.split()).lower()
+            if not caption:
+                return False
+            # Captions may be shortened on slides; a stable fragment is enough.
+            words = [w for w in re.split(r"[\s,;，；、.。:：()\[\]{}]+", caption) if len(w) >= 3]
+            if not words:
+                return caption[:20] in visible_text
+            fragment = " ".join(words[: min(6, len(words))])
+            return fragment in visible_text or any(word in visible_text for word in words[:4])
+
+        for manifest_path in manifest_paths:
+            try:
+                data = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(data, list):
+                continue
+            base_dir = manifest_path.parent
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                filename = str(item.get("filename") or Path(str(item.get("relative_path") or "")).name).strip()
+                if not filename:
+                    continue
+                required = bool(item.get("ppt_required", item.get("paper_figure_candidate", False)))
+                if not required:
+                    continue
+                rel = str(item.get("relative_path") or filename)
+                image_path = Path(rel)
+                if not image_path.is_absolute():
+                    image_path = (base_dir / image_path.name).resolve() if "/" not in rel.replace("\\", "/") else (project_root / rel).resolve()
+                if not image_path.is_file() and not (base_dir / filename).is_file():
+                    continue
+                basename = Path(filename).name
+                stem = Path(basename).stem
+                used = (
+                    basename.lower() in combined_lower
+                    or stem.lower() in combined_lower
+                    or str(rel).replace("\\", "/").lower() in combined_lower
+                    or f'data-source-figure="{basename.lower()}"' in combined_lower
+                    or f"data-source-figure='{basename.lower()}'" in combined_lower
+                )
+                if not used:
+                    self._project_issues.append((
+                        "error",
+                        "source_figure_missing_from_deck",
+                        f"{basename}: extracted paper figure/table is marked ppt_required but is not referenced "
+                        "by any SVG page. Include source mechanisms, principle diagrams, result figures, and "
+                        "tables in the PPT with proportional image placement."
+                    ))
+                    continue
+
+                if item.get("requires_targeted_explanation"):
+                    caption = str(item.get("caption_hint") or "")
+                    has_explanation = (
+                        f'data-explains-image="{basename.lower()}"' in combined_lower
+                        or f"data-explains-image='{basename.lower()}'" in combined_lower
+                        or f'data-source-figure-explanation="{basename.lower()}"' in combined_lower
+                        or f"data-source-figure-explanation='{basename.lower()}'" in combined_lower
+                        or _caption_hit(caption)
+                    )
+                    if not has_explanation:
+                        self._project_issues.append((
+                            "error",
+                            "source_figure_explanation_missing",
+                            f"{basename}: source figure/table is used, but no targeted explanation marker or "
+                            "caption-derived explanatory text was found. Add a concise Chinese explanation tied "
+                            "to this figure's mechanism, method, or result."
+                        ))
+
+    @staticmethod
     def _route_ai_required_pixels(canvas_w: float, canvas_h: float) -> tuple[int, int]:
         if abs((canvas_w / max(canvas_h, 1.0)) - (4.0 / 3.0)) < 0.04:
             return 3300, 2475
@@ -2210,11 +2464,30 @@ class SVGQualityChecker:
         expected: set[str] = set()
         path_lines = list(re.finditer(r'\bpath\s*:\s*["\']?([^"\'\n|]+?\.(?:png|jpg|jpeg|webp))["\']?', spec_text, re.IGNORECASE))
         for match in path_lines:
+            raw_path = match.group(1).strip()
+            raw_lower = raw_path.replace("\\", "/").lower()
+            if "custom_gallery" in raw_lower or "/style_refs/" in raw_lower or "style_refs/" in raw_lower:
+                continue
             start = max(0, match.start() - 240)
             end = min(len(spec_text), match.end() + 240)
             context = spec_text[start:end].lower()
-            if any(token in context for token in ('technicalroute_ai_png', 'ai_supporting_image', 'route_ai_', 'acquire via | ai', 'acquire via: ai', ' ai |')):
-                expected.add(match.group(1).strip())
+            if any(token in context for token in (
+                'route_ai_refs',
+                'gallery_refs',
+                'literature_refs',
+                'custom_gallery',
+                'style_refs/manifest',
+                'source_policy',
+            )):
+                continue
+            if (
+                "route_ai" in raw_lower
+                or any(token in context for token in (
+                    'technicalroute_ai_png',
+                    'route_ai_image_path',
+                ))
+            ):
+                expected.add(raw_path)
         for match in re.finditer(r'([A-Za-z0-9_./\\-]*(?:route_ai|ai_[A-Za-z0-9_-]+)[A-Za-z0-9_./\\-]*\.(?:png|jpg|jpeg|webp))', spec_text, re.IGNORECASE):
             expected.add(match.group(1).strip())
         for match in re.finditer(
@@ -2248,6 +2521,9 @@ class SVGQualityChecker:
             basename = Path(normalized).name
             if not basename:
                 continue
+            is_route_ai = 'route_ai' in basename.lower() or 'route_ai_image_path' in raw_path.lower()
+            if not is_route_ai:
+                continue
             asset_path = (project_root / normalized).resolve()
             if not asset_path.exists():
                 direct_path = Path(raw_path).expanduser()
@@ -2261,7 +2537,6 @@ class SVGQualityChecker:
                         "Run the AI image generation step and verify route_ai_image_path before creating PPTX."
                     ))
                     continue
-            is_route_ai = 'route_ai' in basename.lower() or 'route_ai_image_path' in raw_path.lower()
             if is_route_ai and not (has_embedded_route_slide or has_direct_route_slide):
                 self._project_issues.append((
                     'error',

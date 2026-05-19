@@ -507,7 +507,7 @@ Auto-split `notes/total.md` into per-page files in `notes/`.
 # 1. Split speaker notes
 python3 scripts/total_md_split.py <project_path>
 
-# 2. Export speaker notes as DOCX
+# 2. Export speaker notes as DOCX (continuous manuscript, no slide headings by default)
 python3 scripts/notes_to_docx.py <project_path>
 
 # 3. SVG post-processing (auto-embed icons, images, etc.)

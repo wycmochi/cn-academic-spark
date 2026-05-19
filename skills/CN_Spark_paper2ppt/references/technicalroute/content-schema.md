@@ -280,4 +280,4 @@ Before generating either output:
 - The chosen archetype reference has been read.
 - `content.yaml` contains no gallery-derived text.
 - `glossary_preserve` includes terms likely to be mistranslated or abbreviated.
-- The content fits at least one editable template or the reason for atlas-only AI generation is recorded.
+- The content fits at least one editable template or the reason for gallery-only fallback AI generation is recorded.
