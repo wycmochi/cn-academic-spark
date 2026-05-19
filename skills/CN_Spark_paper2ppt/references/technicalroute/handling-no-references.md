@@ -15,10 +15,9 @@ Use this file when any condition is true:
 
 ## Fallback Order
 
-1. User-uploaded raster images, if at least three are structurally similar and are not screenshots of Version A.
-2. Seed-site literature raster figures recorded in `style_refs/manifest.json` when they are route, framework, method, or workflow diagrams.
-3. Closest Custom_gallery raster anchors selected through `templates/technicalroute/Custom_gallery/gallery_index.json`.
-4. Neutral academic infographic style if the discipline gallery has no usable raster anchor.
+1. Seed-site literature raster figures recorded in `style_refs/manifest.json` when they are route, framework, method, or workflow diagrams.
+2. Closest Custom_gallery raster anchors selected through `templates/technicalroute/Custom_gallery/gallery_index.json` only after the seed-site literature search has been executed and no usable mechanism/model/technical-route raster refs exist.
+3. Hard failure if neither source class has a usable raster reference; do not invent neutral styles or use user-uploaded/editor screenshots as AI references.
 
 At every level, semantic content still comes only from `content.yaml`.
 
@@ -47,9 +46,9 @@ Actions:
 - Generate Version B with the refs-plan bridge:
 
 ```bash
-python3 scripts/technicalroute/literature_search.py prepare-ai-refs --topic "<paper title / keywords>" --discipline <discipline> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs
+python3 scripts/technicalroute/literature_search.py prepare-ai-refs --topic "<paper title / keywords>" --discipline <discipline> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs --allow-gallery-fallback-after-search
 python3 scripts/technicalroute/generate_route_image.py prompt --archetype <thinking|method|workflow> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode atlas_only --out <route_workdir>/prompt_ai.md
-python3 scripts/technicalroute/generate_route_image.py run-ai-variant --prompt <route_workdir>/prompt_ai.md --aspect_ratio 16:9 --filename route_ai_<id> --out <route_workdir>/output --refs-plan <route_workdir>/style_refs/route_ai_refs.json --out-svg <project_path>/svg_output/<NN>_route_ai.svg
+python3 scripts/technicalroute/generate_route_image.py run-ai-variant --prompt <route_workdir>/prompt_ai.md --aspect_ratio 16:9 --filename route_ai_<id> --out <route_workdir>/output --refs-plan <route_workdir>/style_refs/route_ai_refs.json --direct-slide-manifest <project_path>/svg_output/_direct_image_slides.json --after-svg-stem <NN>_route_template
 ```
 
 The prompt must include an atlas-only clause: no literature references are available, so the model must use only the declared structure, shape recipes, deck color roles, and article-derived content.

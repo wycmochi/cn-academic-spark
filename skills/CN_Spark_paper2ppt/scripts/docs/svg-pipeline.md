@@ -36,7 +36,7 @@ Convert project SVGs into PPTX.
 ```bash
 python3 scripts/svg_to_pptx.py <project_path>
 python3 scripts/svg_to_pptx.py <project_path> --only native
-python3 scripts/svg_to_pptx.py <project_path> --only legacy
+python3 scripts/svg_to_pptx.py <project_path> --only legacy --allow-legacy-image-pptx
 python3 scripts/svg_to_pptx.py <template_import_output> --only native -s svg-flat
 python3 scripts/notes_to_docx.py <project_path>
 python3 scripts/svg_to_pptx.py <project_path> --no-notes
@@ -54,7 +54,7 @@ Behavior:
   - `backup/<timestamp>/<project_name>_svg.pptx` — SVG snapshot for visual reference
   - `backup/<timestamp>/svg_output/` — copy of Executor SVG source, so the pptx can be rebuilt via `finalize_svg → svg_to_pptx` without re-running the LLM
 - Explicit `-o/--output` keeps the legacy side-by-side `_svg.pptx` next to the chosen path and skips `backup/`
-- Recommended source behavior: leave `-s` unset. The native editable PPTX reads `svg_output/`; the legacy/preview SVG-reference PPTX reads `svg_final/`.
+- Recommended source behavior: leave `-s` unset. The default deliverable is native editable PPTX from `svg_output/`. The legacy/preview SVG-reference PPTX reads `svg_final/` only when explicitly requested with `--only legacy --allow-legacy-image-pptx`.
 - For PPTX template-import workspaces, use `-s svg-flat` when you need a visual round-trip check. The layered `svg/` tree is the machine-readable template source and intentionally does not inline inherited master / layout decoration into each slide.
 - Native mode is strict about unsupported visual SVG elements: if a visual element cannot be represented or safely preserved, export fails with the SVG file, element tag, and position instead of silently dropping content.
 - Native output uses content-hash media filenames, so identical images are reused and different images cannot overwrite each other by sharing a basename.

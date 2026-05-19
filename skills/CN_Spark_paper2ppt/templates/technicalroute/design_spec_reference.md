@@ -173,4 +173,4 @@ Must pass:
 
 ## Version B slide embedding rule
 
-The `route_ai_image_path` file is only an intermediate artifact. Normal execution must call `generate_route_image.py run-ai-variant --refs-plan <route_workdir>/style_refs/route_ai_refs.json --out-svg <project_path>/svg_output/<NN>_route_ai.svg` so the generated PNG is embedded into the Version B PPT page in the same step. `create-ai-slide` is manual recovery only. The generated SVG must contain `<image id="technicalroute-ai-reference-image" href="data:image/png;base64,...">`. Do not leave a path-only image href in the Version B slide.
+The `route_ai_image_path` file is only an intermediate artifact. Normal execution must call `generate_route_image.py run-ai-variant --refs-plan <route_workdir>/style_refs/route_ai_refs.json --direct-slide-manifest <project_path>/svg_output/_direct_image_slides.json --after-svg-stem <NN>_route_template` so the PPTX exporter inserts the generated PNG as the next direct picture slide. Do not create a Version B SVG wrapper, do not use screenshots of Version A, and do not leave a path-only image href in an SVG slide. `create-ai-slide --out-svg` is legacy manual recovery only.

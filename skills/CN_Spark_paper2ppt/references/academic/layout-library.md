@@ -133,7 +133,7 @@ Formula explanation blocks are rendered as transparent PNGs using:
 python3 scripts/latex_formula_to_png.py --block-json <project_path>/notes/formula_01.json --out <project_path>/images/formulas/formula_block_01.png --font-size 30 --dpi 260 --color "#111111"
 ```
 
-Read `formula-rendering.md` for the mandatory rendering and QA contract. Before drawing formula pages, inspect `templates/formula/formula_templates_index.json`; use `formula_explanation_block` for the common pattern shown by the user's examples. The final visual object is one PNG containing formula role, formula, `???`, and variable definitions.
+Read `formula-rendering.md` for the mandatory rendering and QA contract. Before drawing formula pages, inspect `templates/formula/formula_templates_index.json`; use `formula_explanation_block` for the common pattern shown by the user's examples. The final visual object is one PNG containing formula role, formula, `式中：`, and variable definitions.
 
 `formula_step`:
 - 1-5 formula block PNG modules per slide;

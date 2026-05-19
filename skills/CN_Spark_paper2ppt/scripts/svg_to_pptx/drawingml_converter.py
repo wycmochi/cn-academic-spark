@@ -358,11 +358,19 @@ def convert_svg_to_slide_shapes(
     # does the same flattening on disk; doing it here keeps native pptx output
     # correct when reading raw svg_output/.
     from .tspan_flattener import flatten_positional_tspans
+    from .textbox_normalizer import (
+        merge_simple_multiline_tspans,
+        normalize_text_boxes,
+        reconcile_text_boxes_with_shapes,
+    )
+    merged_tspans = merge_simple_multiline_tspans(root)
+    if verbose and merged_tspans:
+        print(f'  Merged {merged_tspans} multiline <tspan> block(s) into text boxes')
     if flatten_positional_tspans(tree) and verbose:
-        print('  Flattened positional <tspan> into independent <text>')
+        print('  Flattened remaining positional <tspan> into independent <text>')
 
-    from .textbox_normalizer import normalize_text_boxes
     normalized_text = normalize_text_boxes(root)
+    normalized_text += reconcile_text_boxes_with_shapes(root)
     if verbose and normalized_text:
         print(f'  Normalized {normalized_text} text box contract(s)')
 

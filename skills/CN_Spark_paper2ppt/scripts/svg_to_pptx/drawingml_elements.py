@@ -1211,20 +1211,37 @@ def _suspicious_explicit_textbox(
     """Detect generator mistakes that pin content text to the slide origin.
 
     The Spark executor should write card-local text boxes. Some generated SVGs
-    instead assign body/caption text a full-slide `data-box-x=0,width=1280`.
-    Trusting that contract makes PowerPoint place all text at the left edge.
-    Only true master/chrome text such as footers, citations, page numbers,
-    logos and school marks is allowed to use wide boxes.
+    assign ordinary labels a near-full-slide ``data-box-x=20,width=1240`` and
+    even mark them ``data-role="logo"``. Trusting that contract makes
+    PowerPoint place unrelated text in one wide left-aligned frame. True chrome
+    text such as footers, citations, page numbers and school marks remains
+    exempt; bogus logo roles do not get a blanket exemption.
     """
     if _text_has_declared_shape(elem):
         return False
     role_blob = _text_role_blob(elem)
-    if any(token in role_blob for token in _TEXTBOX_CHROME_TOKENS):
+    strict_chrome = (
+        'page-number', 'pagenum', 'sldnum', 'footer', 'citation', 'reference',
+        'school',
+    )
+    if any(token in role_blob for token in strict_chrome):
         return False
+
     anchor = (text_anchor or 'start').lower()
-    if box_w_svg >= 1000 and box_x_svg <= 8 and anchor == 'start' and text_x_svg >= box_x_svg + 40:
+    box_center = box_x_svg + box_w_svg / 2.0
+    box_right = box_x_svg + box_w_svg
+    near_full_width = box_w_svg >= 1000 and box_x_svg <= 32
+    full_width = box_w_svg >= 1200
+
+    if near_full_width and anchor == 'start' and text_x_svg >= box_x_svg + 40:
         return True
-    if box_w_svg >= 1200 and any(token in role_blob for token in _TEXTBOX_CONTENT_TOKENS):
+    if near_full_width and anchor == 'middle' and abs(text_x_svg - box_center) >= 40:
+        return True
+    if near_full_width and anchor == 'end' and text_x_svg <= box_right - 40:
+        return True
+    if full_width and any(token in role_blob for token in _TEXTBOX_CONTENT_TOKENS):
+        return True
+    if full_width and 'logo' in role_blob and abs(text_x_svg - box_x_svg) >= 40:
         return True
     return False
 
@@ -1317,7 +1334,9 @@ def convert_text(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
     if explicit_box is not None:
         box_x, box_y, box_w, box_h = explicit_box
         wrap_mode = elem.get('data-wrap') or elem.get('data-text-wrap') or 'square'
-        autofit_xml = '<a:normAutofit fontScale="65000" lnSpcReduction="20000"/>'
+        # Keep PPT-visible text at the authored size. Earlier 65% auto-fit
+        # let PowerPoint silently shrink 12px body text to about 8pt.
+        autofit_xml = '<a:normAutofit fontScale="100000" lnSpcReduction="0"/>'
     else:
         # Estimate text dimensions for ordinary baseline text. Keep a slightly
         # conservative box so PowerPoint does not clip glyphs after font

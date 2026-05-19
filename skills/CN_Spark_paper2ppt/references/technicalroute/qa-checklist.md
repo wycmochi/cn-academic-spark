@@ -67,8 +67,8 @@ Machine or semi-machine checks:
 - `route_ai_image_path` exists.
 - The generation command uses `--backend openai --model gpt-image-2 --aspect_ratio 16:9 --image_size 2K` unless the environment explicitly documents another supported backend/model.
 - The generation command uses `--refs-plan <route_workdir>/style_refs/route_ai_refs.json`.
-- `route_ai_refs.json` contains at least one discipline `Custom_gallery` raster anchor; if literature search found usable figures, they must be manifest-listed raster files from `style_refs/manifest.json`.
-- Academic-search references in `style_refs/manifest.json` were collected from a search plan generated from `references/technicalroute/seed_sites.json`; no separate hard-coded research website list appears in `prompt_ai.md`, route `spec_lock.md`, or project QA notes.
+- `route_ai_refs.json` is either `literature_only` with only manifest-listed raster files from `style_refs/manifest.json`, or `gallery_only_fallback` with only discipline `Custom_gallery` raster anchors after the seed-site search was executed and found zero usable literature refs. It must not mix the two.
+- Academic-search references in `style_refs/manifest.json` were collected from a search plan generated from `references/technicalroute/seed_sites.json`; the search targeted similar-paper mechanism diagrams, model-principle diagrams, technical-route figures, and workflow figures. No separate hard-coded research website list appears in `prompt_ai.md`, route `spec_lock.md`, or project QA notes.
 - `prompt_ai.md` uses article content plus exactly these visual reference classes: Custom_gallery and research-search manifest refs. It does not use Version A SVG, assembled SVG, chart SVG, or template SVG as an AI image reference.
 - The image differs meaningfully from Version A in style or composition while preserving the same logic.
 - No reference-image text, number, caption, author, citation, institution, or place name leaks into the output.
@@ -89,7 +89,7 @@ Compare Version B with selected `gallery_refs` and `style_refs`:
 - Page titles are different and include the version meaning.
 - Both pages inherit parent footer, page number, bottom banner rules, and citation policy.
 - Both output paths are recorded in project assets or route `spec_lock.md`.
-- The Version B SVG slide contains `<image id="technicalroute-ai-reference-image" href="data:image/png;base64,...">`; external, absolute, or relative href links are forbidden.
+- `_direct_image_slides.json` contains a `technicalroute_ai` entry whose `image_path` points to the Version B PNG; SVG wrappers for Version B are legacy-only and should not be used in normal execution.
 - `finalize_svg.py` preserves the PNG data URI, and `svg_to_pptx.py` decodes it into the PPTX media folder as an embedded image object.
 - Final deck checklist marks both pages as TechnicalRoute pages.
 - Non-TechnicalRoute visual coverage rules do not mistakenly require extra images on these route pages.
@@ -115,8 +115,8 @@ python3 scripts/svg_quality_checker.py <project_path>/svg_final
 
 The gate must fail if any of the following is true:
 - a Version A editable TechnicalRoute page exists without a consecutive Version B AI reference page;
-- the Version B SVG page lacks `<image id="technicalroute-ai-reference-image" ...>`;
+- `_direct_image_slides.json` is missing, lacks a `technicalroute_ai` entry, or points to a missing/low-resolution PNG;
 - the AI image href is not `data:image/png;base64,...`, has invalid base64, or does not decode to PNG bytes;
-- `run-ai-variant` failed, was skipped, or silently dropped usable `gallery_refs` / `style_refs`.
+- `run-ai-variant` failed, was skipped, silently dropped usable `style_refs`, or used `Custom_gallery` before the seed-site literature search was completed.
 
 Do not export PPTX until the AI reference image is generated, inserted, finalized, and verified.

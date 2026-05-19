@@ -72,15 +72,26 @@ def archetype_keywords(archetype: str) -> list[str]:
         "method": [
             "method overview",
             "model architecture",
+            "model principle diagram",
+            "mechanism diagram",
             "algorithm framework",
             "方法框架",
+            "模型原理图",
+            "机制图",
             "技术原理",
         ],
         "workflow": [
             "technical route",
+            "technical route diagram",
             "study workflow",
+            "research workflow figure",
+            "mechanism diagram",
+            "model principle diagram",
             "data pipeline",
             "技术路线",
+            "技术路线图",
+            "机制图",
+            "模型原理图",
             "研究流程",
         ],
     }
@@ -247,7 +258,15 @@ GOOD_HINTS = {
     "research design",
     "study workflow",
     "conceptual framework",
+    "mechanism diagram",
+    "model principle diagram",
+    "model architecture",
+    "methodological framework",
+    "graphical abstract",
     "技术路线",
+    "技术路线图",
+    "机制图",
+    "模型原理图",
     "研究框架",
     "研究设计",
     "pipeline",
@@ -436,14 +455,34 @@ def _select_gallery_refs(
     return [item for _score, item in selected[:max_refs]]
 
 
+def _seed_search_completed_evidence(out_dir: Path) -> bool:
+    """Return True only when the seed-site academic search has explicit completion evidence."""
+    for marker in (
+        out_dir / "search_completed.json",
+        out_dir / "seed_search_completed.json",
+        out_dir / "manifest.json",
+    ):
+        if not marker.is_file():
+            continue
+        try:
+            data = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if bool(data.get("seed_search_completed") or data.get("search_completed") or data.get("completed")):
+            return True
+    return False
+
+
 def cmd_prepare_ai_refs(args: argparse.Namespace) -> int:
     """Create the complete, auditable reference plan consumed by run-ai-variant.
 
     The path is intentionally strict:
     1. Build a search plan only from seed_sites.json and the paper topic/keywords.
     2. Read existing style_refs/manifest.json records produced by literature search.
-    3. Select discipline-matched Custom_gallery raster anchors as fallback/companion refs.
-    4. Write route_ai_refs.json; SVG/PPTX/editable route pages are never admitted.
+    3. If those records contain usable raster academic references, use only them.
+    4. If and only if no usable literature refs exist, select discipline-matched
+       Custom_gallery raster anchors as fallback.
+    5. Write route_ai_refs.json; SVG/PPTX/editable route pages are never admitted.
     """
     out = Path(args.out).expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -477,31 +516,64 @@ def cmd_prepare_ai_refs(args: argparse.Namespace) -> int:
         save_manifest(out, Manifest(topic=topic, archetype=args.archetype, max_refs=args.max_literature_refs))
 
     literature_refs = _manifest_local_refs(out)[: args.max_literature_refs]
-    gallery_refs = _select_gallery_refs(
-        topic=topic,
-        discipline=args.discipline,
-        archetype=args.archetype,
-        sub_variant=args.sub_variant,
-        max_refs=args.max_gallery_refs,
+    seed_search_completed = (
+        bool(literature_refs)
+        or bool(getattr(args, "search_completed", False))
+        or _seed_search_completed_evidence(out)
     )
-    if not gallery_refs:
-        print(
-            f"Error: no raster Custom_gallery reference found for discipline={args.discipline!r}, "
-            f"archetype={args.archetype!r}. Update {GALLERY_INDEX}.",
-            file=sys.stderr,
+    if literature_refs:
+        gallery_refs: list[dict] = []
+        refs = [item["path"] for item in literature_refs]
+        gallery_only = False
+        mode = "literature_only"
+    else:
+        if not getattr(args, "allow_gallery_fallback_after_search", False):
+            print(
+                "Error: no usable academic-search raster refs are recorded in style_refs/manifest.json. "
+                "Do not fall back to Custom_gallery yet. First run the seed_sites.json search plan, "
+                "inspect similar papers for mechanism diagrams / model-principle diagrams / technical-route figures, "
+                "record accepted raster figures with literature_search.py record, then rerun prepare-ai-refs. "
+                "Pass --allow-gallery-fallback-after-search only after that search completed and produced zero usable refs.",
+                file=sys.stderr,
+            )
+            return 2
+        if not seed_search_completed:
+            print(
+                "Error: gallery fallback is blocked because the seed_sites academic search has no completion evidence. "
+                "Run the generated search_plan.json first, then either pass --search-completed or write "
+                "search_completed.json with {\"completed\": true} only if the search produced zero usable raster refs.",
+                file=sys.stderr,
+            )
+            return 2
+        gallery_refs = _select_gallery_refs(
+            topic=topic,
+            discipline=args.discipline,
+            archetype=args.archetype,
+            sub_variant=args.sub_variant,
+            max_refs=args.max_gallery_refs,
         )
-        return 2
-
-    refs = [item["path"] for item in gallery_refs] + [item["path"] for item in literature_refs]
-    gallery_only = len(literature_refs) == 0
+        if not gallery_refs:
+            print(
+                f"Error: no usable academic-search raster refs and no raster Custom_gallery "
+                f"fallback found for discipline={args.discipline!r}, archetype={args.archetype!r}. "
+                f"Update {GALLERY_INDEX} or record literature refs from {SEED_SITES}.",
+                file=sys.stderr,
+            )
+            return 2
+        refs = [item["path"] for item in gallery_refs]
+        gallery_only = True
+        mode = "gallery_only_fallback"
     refs_plan = {
         "version": 1,
         "topic": topic,
         "discipline": args.discipline,
         "archetype": args.archetype,
         "sub_variant": args.sub_variant,
-        "mode": "gallery_only_fallback" if gallery_only else "literature_plus_gallery",
+        "mode": mode,
         "gallery_only": gallery_only,
+        "reference_flow": "academic_search_then_gallery_fallback",
+        "seed_search_completed": bool(seed_search_completed),
+        "gallery_fallback_after_search": bool(gallery_only and getattr(args, "allow_gallery_fallback_after_search", False)),
         "seed_sites_path": str(SEED_SITES.resolve()),
         "gallery_index_path": str(GALLERY_INDEX.resolve()),
         "search_plan_path": str(search_plan_path),
@@ -513,12 +585,17 @@ def cmd_prepare_ai_refs(args: argparse.Namespace) -> int:
         "forbidden_reference_types": sorted(FORBIDDEN_AI_REF_SUFFIXES),
         "source_policy": {
             "semantic_source": "paper content/content.yaml only",
-            "style_sources": ["seed_sites literature raster figures", "Custom_gallery raster anchors"],
+            "style_sources": [
+                "seed_sites literature raster mechanism/model-principle/technical-route figures first",
+                "Custom_gallery raster anchors only after seed-site search completed and yielded zero usable literature refs"
+            ],
+            "fallback_gate": "gallery_only_fallback requires --allow-gallery-fallback-after-search plus seed_search_completed=true",
             "forbidden": [
                 "Version A editable SVG",
                 "any SVG file",
                 "any PPTX/PPT file",
                 "screenshots of the editable technical route page",
+                "any exported PPT slide image or screenshot",
             ],
         },
     }
@@ -649,6 +726,23 @@ def main(argv: Iterable[str] | None = None) -> int:
     p_prep.add_argument("--out", required=True, help="Project style_refs directory.")
     p_prep.add_argument("--max-literature-refs", type=int, default=6)
     p_prep.add_argument("--max-gallery-refs", type=int, default=4)
+    p_prep.add_argument(
+        "--allow-gallery-fallback-after-search",
+        action="store_true",
+        help=(
+            "Allow Custom_gallery fallback only after the seed_sites search plan has been executed "
+            "and no usable literature raster refs were found."
+        ),
+    )
+    p_prep.add_argument(
+        "--search-completed",
+        action="store_true",
+        help=(
+            "Explicitly mark that search_plan.json was executed and produced zero usable literature "
+            "raster references. Required for Custom_gallery fallback unless search_completed.json "
+            "or manifest.json already records completed=true."
+        ),
+    )
     p_prep.set_defaults(func=cmd_prepare_ai_refs)
 
     p_ass = sub.add_parser("assess", help="评估 style_refs 整体质量并给出 recommended_mode（literature/offline/atlas_only）")
@@ -661,4 +755,3 @@ def main(argv: Iterable[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

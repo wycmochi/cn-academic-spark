@@ -161,12 +161,13 @@ Before drawing each page, look up its entry in `page_charts` to decide which cha
 - **Proximity**: group related elements with tight spacing; separate unrelated groups
 - **Spec adherence**: follow color, layout, canvas format, and typography in the spec
 - **Template structure**: if templates exist, inherit the visual framework
-- **Content bounds**: use `spec_lock.md canvas.safe_margin`, `title_zone_height`, `footer_zone_height`, and any user-template `editableContentRegion` to center the content inside the actual writable box, not inside the full slide.
+- **Content bounds**: use `spec_lock.md canvas.safe_margin`, `title_zone_height`, `footer_zone_height`, and any user-template `editableContentRegion` to center the content inside the actual writable box, not inside the full slide. Body shapes, images, tables, and text boxes must stay above the first footer/citation/bottom-banner/page-number protected element; if a table/list would enter that zone, split the slide or reduce row/gap spacing before export.
+- **Editable authoring only**: never solve layout instability by rasterizing a whole slide. `svg_output/*.svg` must be authored as SVG text, shapes, lines, charts, icons, and bounded source images. A full-canvas `<image id="slide-raster-image">` is forbidden because it exports to a non-editable PPT picture. The only full-slide bitmap exception is TechnicalRoute Version B, and normal execution must insert it through `_direct_image_slides.json` as a direct PPTX picture slide, not as an SVG page.
 - **Main-agent ownership**: SVG generation must run in the main agent (not sub-agents) — pages share upstream context for cross-page visual continuity
 - **Generation rhythm**: lock global design context first, then generate pages sequentially in one continuous context. No batched groups (e.g., 5 at a time).
 - **Phased batch generation** (recommended):
   1. **Visual Construction Phase**: generate all SVG pages sequentially for visual consistency. Use layout judgment for chart marks during the draft. **MUST embed plot-area markers** per §3.1 below on every chart page — coordinate calibration is a post-generation step (see [`conditional-workflows/verify-charts.md`](../conditional-workflows/verify-charts.md)) that depends on these markers.
-  2. **Quality Check Gate**: run `python3 scripts/svg_quality_checker.py <project_path>` on `svg_output/`. Any `error` (banned features, viewBox mismatch, spec_lock drift, non-PPT-safe font, etc.) MUST be fixed on the offending page before proceeding — regenerate and re-check. Address `warning`s when straightforward. Do NOT defer to after `finalize_svg.py` — finalize rewrites SVG and masks some violations.
+  2. **Quality Check Gate**: run `python3 scripts/svg_quality_checker.py <project_path>` on `svg_output/`. Any `error` (banned features, full-slide raster images, viewBox mismatch, spec_lock drift, non-PPT-safe font, etc.) MUST be fixed on the offending page before proceeding — regenerate and re-check. Address `warning`s when straightforward. Do NOT defer to after `finalize_svg.py` — finalize rewrites SVG and masks some violations.
   3. **Logic Construction Phase**: after SVGs pass the quality check, batch-generate speaker notes for narrative continuity.
 
 ### 3.0 Text Box Stability Contract
@@ -199,9 +200,10 @@ attributes: `data-box-x`, `data-box-y`, `data-box-width`, and
 `data-shape-x`, `data-shape-y`, `data-shape-width`, and
 `data-shape-height`. The SVG-to-PPTX converter uses these values as the actual
 PowerPoint text box and enables wrapping / conservative autofit inside that
-Vertical overflow rule: if text would exceed `data-box-height`, reduce font size first, then reduce vertical gaps between sibling shapes; never let text extend outside the data-box or sit on top of the bottom border.
 box. This prevents the text frame from being smaller than the shape that
 visually contains it.
+
+Vertical overflow rule: if text would exceed `data-box-height`, reduce font size first, then reduce vertical gaps between sibling shapes; never let text extend outside the data-box or sit on top of the bottom border. Do not insert manual line breaks merely to mimic a visual wrap; one semantic phrase should stay in one `data-box-*` frame and wrap naturally unless a deliberate phrase boundary improves readability.
 
 Mandatory numeric parameter:
 
@@ -220,9 +222,25 @@ If text does not fit the declared box, reduce wording, add explicit line-break
 `<tspan>` rows, reduce font size within the ramp, or choose a larger slot. Do
 not allow text to extend outside the visible card/shape or beyond the slide.
 
+Do not assign chrome-only roles such as `data-role="logo"`, `school`,
+`page-number`, `footer`, `citation`, or `reference` to ordinary titles,
+bullets, captions, or body text. Do not give local text a near-full-slide
+`data-box-x="0"` / `data-box-x="20"` plus canvas-width `data-box-width`.
+For an unboxed label, omit `data-box-*` and let the converter infer a local
+frame from the actual `x`, `y`, and `text-anchor`; for shaped text, declare a
+local box inside the visible shape with the mandatory 5pt inset.
+
 For academic slides, default rounded rectangles to `rx="6"` unless the selected
 template's imported slot already uses a smaller/larger radius. Do not use
 large pill-like rounding for normal evidence cards.
+
+Cover title semantic rule: the paper/topic title must be one coherent title
+group. If it needs multiple visual lines, keep them in one bounded title group
+or mark every title-line `<text>` with the same `data-title-group` and the same
+font family, fill, and weight. Do not split a source title into a large title
+plus a differently colored or differently typed subtitle. Report type,
+presenter, advisor, institution, date, source, and DOI are metadata blocks below
+the title, not a second title fragment.
 
 Content blocks must carry the standard external shadow unless the imported
 user template already provides an equivalent effect. Define the filter once per
@@ -405,6 +423,13 @@ Handle images by their status in the Design Spec's Image Resource List. Status e
 **Placeholder**: Dashed border `<rect stroke-dasharray="8,4" .../>` + description text
 
 **`no-crop` images**: when a `spec_lock.md images` entry ends with ` | no-crop`, size the container to the image's native ratio (from `analyze_images.py` or file dims) and use `preserveAspectRatio="xMidYMid meet"`. Untagged entries are croppable — default to `slice`.
+
+Paper source figures and table screenshots are always `no-crop` unless the
+user explicitly asks for a crop. Use `preserveAspectRatio="xMidYMid meet"` and
+a visible frame or reserved slot that absorbs the letterboxing. When two or
+more source figures/tables share one slide, make their display frames as equal
+as the page narrative allows; if one image must be much larger, mark it with
+`data-image-size-exempt="true"` and explain the hierarchy in `design_spec.md`.
 
 ### 6.1 Inline Attribution for Sourced Images (web path)
 

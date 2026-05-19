@@ -15,6 +15,8 @@ from typing import Any
 from pptx import Presentation
 from pptx.util import Emu
 
+EMU_PER_INCH = 914400
+
 from .drawingml_converter import convert_svg_to_slide_shapes
 from .pptx_dimensions import (
     CANVAS_FORMATS,
@@ -316,6 +318,65 @@ def _build_sequence_targets(
     return seq_targets, mixed_count
 
 
+def _entry_insert_index(entry: dict[str, Any], svg_files: list[Path]) -> int | None:
+    """Return the 0-based deck insertion index for a direct image slide."""
+    after_stem = str(entry.get("after_svg_stem") or entry.get("after_stem") or "").strip()
+    if after_stem:
+        after_stem = Path(after_stem).stem
+        for idx, svg_path in enumerate(svg_files):
+            if svg_path.stem == after_stem:
+                return idx + 1
+    after_index = entry.get("insert_after_index", entry.get("after_index"))
+    if after_index is not None:
+        try:
+            return max(0, min(len(svg_files), int(after_index)))
+        except (TypeError, ValueError):
+            return None
+    insert_at = entry.get("insert_at")
+    if insert_at is not None:
+        try:
+            return max(0, min(len(svg_files), int(insert_at) - 1))
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _build_deck_entries(svg_files: list[Path], direct_image_slides: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = [{"type": "svg", "path": path} for path in svg_files]
+    pending = list(direct_image_slides or [])
+    placed: set[int] = set()
+    offset = 0
+    for raw_idx, item in enumerate(pending):
+        insert_idx = _entry_insert_index(item, svg_files)
+        if insert_idx is None:
+            continue
+        entries.insert(insert_idx + offset, {"type": "image", **item})
+        placed.add(raw_idx)
+        offset += 1
+    for raw_idx, item in enumerate(pending):
+        if raw_idx not in placed:
+            entries.append({"type": "image", **item})
+    return entries
+
+
+def _add_direct_image_slide(slide, image_path: Path, width_emu: int, height_emu: int, entry: dict[str, Any]) -> None:
+    """Add an AI-generated bitmap directly as a PPT picture, without SVG wrapping."""
+    x = float(entry.get("x", 0) or 0)
+    y = float(entry.get("y", 0) or 0)
+    w = float(entry.get("width", 0) or 0)
+    h = float(entry.get("height", 0) or 0)
+    if w > 0 and h > 0:
+        slide.shapes.add_picture(
+            str(image_path),
+            int(x * EMU_PER_INCH),
+            int(y * EMU_PER_INCH),
+            width=int(w * EMU_PER_INCH),
+            height=int(h * EMU_PER_INCH),
+        )
+    else:
+        slide.shapes.add_picture(str(image_path), 0, 0, width=width_emu, height=height_emu)
+
+
 def create_pptx_with_native_svg(
     svg_files: list[Path],
     output_path: Path,
@@ -337,6 +398,7 @@ def create_pptx_with_native_svg(
     narration_audio: dict[str, Path] | None = None,
     use_narration_timings: bool = False,
     narration_padding: float = 0.5,
+    direct_image_slides: list[dict[str, Any]] | None = None,
 ) -> bool:
     """Create a PPTX file with native SVG.
 
@@ -369,7 +431,8 @@ def create_pptx_with_native_svg(
     Returns:
         Whether all slides were successfully created.
     """
-    if not svg_files:
+    direct_image_slides = list(direct_image_slides or [])
+    if not svg_files and not direct_image_slides:
         print("Error: No SVG files found")
         return False
 
@@ -416,6 +479,8 @@ def create_pptx_with_native_svg(
     if verbose:
         print(f"  Slide dimensions: {pixel_width} x {pixel_height} px")
         print(f"  SVG file count: {len(svg_files)}")
+        if direct_image_slides:
+            print(f"  Direct image slide count: {len(direct_image_slides)}")
         if use_native_shapes:
             print(f"  Mode: Native DrawingML shapes (directly editable)")
         elif use_compat_mode:
@@ -440,8 +505,16 @@ def create_pptx_with_native_svg(
         prs.slide_height = height_emu
 
         blank_layout = prs.slide_layouts[6]
-        for _ in svg_files:
-            prs.slides.add_slide(blank_layout)
+        deck_entries = _build_deck_entries(svg_files, direct_image_slides)
+        for entry in deck_entries:
+            if entry.get('type') == 'image':
+                image_path = Path(str(entry.get('image_path') or entry.get('path') or '')).expanduser().resolve()
+                if not image_path.is_file():
+                    raise FileNotFoundError(f"direct image slide not found: {image_path}")
+                slide = prs.slides.add_slide(blank_layout)
+                _add_direct_image_slide(slide, image_path, width_emu, height_emu, entry)
+            else:
+                prs.slides.add_slide(blank_layout)
 
         base_pptx = temp_dir / 'base.pptx'
         prs.save(str(base_pptx))
@@ -462,10 +535,20 @@ def create_pptx_with_native_svg(
         audio_exts_used: set[str] = set()
         mixed_animation_offset = 0
 
-        for i, svg_path in enumerate(svg_files, 1):
+        for i, entry in enumerate(deck_entries, 1):
             slide_num = i
 
             try:
+                if entry.get('type') == 'image':
+                    image_path = Path(str(entry.get('image_path') or entry.get('path') or '')).expanduser().resolve()
+                    has_any_image = True
+                    image_exts_used.add(image_path.suffix.lower().lstrip('.'))
+                    if verbose:
+                        print(f"  [{i}/{len(deck_entries)}] {image_path.name} (Direct picture)")
+                    success_count += 1
+                    continue
+
+                svg_path = Path(entry['path'])
                 # ---- Native shapes mode ----
                 if use_native_shapes:
                     slide_cfg = _slide_config(animation_config, svg_path.stem)
@@ -623,7 +706,7 @@ def create_pptx_with_native_svg(
                             image_exts_used.add('png')
                         else:
                             if verbose:
-                                print(f"  [{i}/{len(svg_files)}] {svg_path.name} - PNG generation failed, using pure SVG")
+                                print(f"  [{i}/{len(deck_entries)}] {svg_path.name} - PNG generation failed, using pure SVG")
                             svg_rid = 'rId2'
 
                     slide_xml_path = extract_dir / 'ppt' / 'slides' / f'slide{slide_num}.xml'
@@ -719,13 +802,13 @@ def create_pptx_with_native_svg(
                     else:
                         mode_str = " (SVG)"
                     narration_str = " +narration" if slide_num in narration_slides_created else ""
-                    print(f"  [{i}/{len(svg_files)}] {svg_path.name}{mode_str}{narration_str}")
+                    print(f"  [{i}/{len(deck_entries)}] {svg_path.name}{mode_str}{narration_str}")
 
                 success_count += 1
 
             except Exception as e:
                 if verbose:
-                    print(f"  [{i}/{len(svg_files)}] {svg_path.name} - Error: {e}")
+                    print(f"  [{i}/{len(deck_entries)}] {svg_path.name} - Error: {e}")
                 if use_native_shapes:
                     raise
 
@@ -778,7 +861,7 @@ def create_pptx_with_native_svg(
         if verbose:
             print()
             print(f"[Done] Saved: {output_path}")
-            print(f"  Succeeded: {success_count}, Failed: {len(svg_files) - success_count}")
+            print(f"  Succeeded: {success_count}, Failed: {len(deck_entries) - success_count}")
             for warning in permission_warnings + openability_report.warnings:
                 print(f"  [warn] Openability check: {warning}")
             for error in openability_report.errors:
@@ -788,7 +871,7 @@ def create_pptx_with_native_svg(
                 if PNG_RENDERER == 'svglib' and renderer_hint:
                     print(f"  [Tip] {renderer_hint}")
 
-        return success_count == len(svg_files) and openability_report.ok
+        return success_count == len(deck_entries) and openability_report.ok
 
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)

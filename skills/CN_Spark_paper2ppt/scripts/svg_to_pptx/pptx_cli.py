@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import shutil
 import argparse
+import json
 import contextlib
 import io
 from datetime import datetime
@@ -65,12 +66,63 @@ def _recorded_narration_on_click_slides(
     return blocked
 
 
+def _auto_repair_svg_output_layout(project_path: Path, *, verbose: bool) -> int:
+    """Normalize raw svg_output text boxes before the quality gate.
+
+    This is intentionally conservative: it only writes data-box contracts for
+    text already placed inside visible SVG rectangles, preserving the original
+    x/y instead of snapping every label to the full card. Remaining structural
+    problems still fail the quality gate.
+    """
+    svg_dir = project_path / "svg_output"
+    if not svg_dir.is_dir():
+        return 0
+    try:
+        from xml.etree import ElementTree as ET
+        from .drawingml_utils import SVG_NS
+        from .tspan_flattener import flatten_positional_tspans
+        from .textbox_normalizer import (
+            merge_simple_multiline_tspans,
+            normalize_text_boxes,
+            reconcile_text_boxes_with_shapes,
+        )
+    except Exception:
+        return 0
+    ET.register_namespace("", SVG_NS)
+    changed_files = 0
+    for svg_path in sorted(svg_dir.glob("*.svg")):
+        try:
+            tree = ET.parse(str(svg_path))
+            root = tree.getroot()
+            changed = 0
+            changed += merge_simple_multiline_tspans(root)
+            changed += normalize_text_boxes(root)
+            changed += reconcile_text_boxes_with_shapes(root)
+            if flatten_positional_tspans(tree):
+                changed += 1
+                root = tree.getroot()
+                changed += normalize_text_boxes(root)
+                changed += reconcile_text_boxes_with_shapes(root)
+            if changed:
+                tree.write(str(svg_path), encoding="unicode", xml_declaration=False)
+                changed_files += 1
+        except Exception as exc:
+            if verbose:
+                print(f"  [warn] layout auto-repair skipped {svg_path.name}: {exc}")
+    if verbose and changed_files:
+        print(f"  Layout auto-repair: normalized text boxes in {changed_files} SVG file(s)")
+    return changed_files
+
+
 def _run_svg_quality_gate(
     project_path: Path,
     *,
     expected_format: str | None,
     verbose: bool,
+    auto_repair_layout: bool = True,
 ) -> None:
+    if auto_repair_layout:
+        _auto_repair_svg_output_layout(project_path, verbose=verbose)
     checker = SVGQualityChecker()
     buffer = io.StringIO()
     with contextlib.redirect_stdout(buffer):
@@ -84,6 +136,46 @@ def _run_svg_quality_gate(
         sys.exit(1)
     if verbose and checker.summary.get('warnings', 0) > 0:
         print(f"  [warn] SVG quality gate: {checker.summary['warnings']} warning(s)")
+
+
+def _load_direct_image_slides(project_path: Path, manifest_arg: str | None, *, verbose: bool) -> list[dict]:
+    candidates: list[Path] = []
+    if manifest_arg:
+        manifest = Path(manifest_arg)
+        candidates.append(manifest if manifest.is_absolute() else project_path / manifest)
+    else:
+        candidates.extend([
+            project_path / "svg_output" / "_direct_image_slides.json",
+            project_path / "_direct_image_slides.json",
+            project_path / "technicalroute" / "_direct_image_slides.json",
+        ])
+
+    slides: list[dict] = []
+    for manifest in candidates:
+        if not manifest.is_file():
+            continue
+        data = json.loads(manifest.read_text(encoding="utf-8-sig"))
+        raw_slides = data.get("slides", data) if isinstance(data, dict) else data
+        if not isinstance(raw_slides, list):
+            raise ValueError(f"direct image slide manifest must contain a list: {manifest}")
+        for item in raw_slides:
+            if not isinstance(item, dict):
+                continue
+            image_value = item.get("image_path") or item.get("path")
+            if not image_value:
+                continue
+            image_path = Path(str(image_value)).expanduser()
+            if not image_path.is_absolute():
+                image_path = (manifest.parent / image_path).resolve()
+            if not image_path.is_file():
+                raise FileNotFoundError(f"direct image slide not found: {image_path}")
+            normalized = dict(item)
+            normalized["image_path"] = str(image_path)
+            slides.append(normalized)
+        if verbose and slides:
+            print(f"  Direct image slide manifest: {manifest} ({len(slides)} slide(s))")
+        break
+    return slides
 
 
 def main() -> None:
@@ -104,10 +196,10 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f'''
 Examples:
-    %(prog)s examples/ppt169_demo             # Default: native reads svg_output/; SVG snapshot reads svg_final/
-    %(prog)s examples/ppt169_demo --only native   # Only native shapes version
-    %(prog)s examples/ppt169_demo --only legacy   # Only SVG image version
-    %(prog)s examples/ppt169_demo -o out.pptx     # Explicit path (SVG ref -> out_svg.pptx)
+    %(prog)s examples/ppt169_demo             # Default: native editable PPTX from svg_output/
+    %(prog)s examples/ppt169_demo --only native   # Explicit native editable shapes version
+    %(prog)s examples/ppt169_demo --only legacy --allow-legacy-image-pptx   # Diagnostic SVG-image version
+    %(prog)s examples/ppt169_demo -o out.pptx     # Explicit native output path
 
     # Enable transition / change transition effect (default: no transition)
     %(prog)s examples/ppt169_demo -t push --transition-duration 1.0
@@ -181,6 +273,10 @@ Recorded narration:
                         choices=list(CANVAS_FORMATS.keys()), default=None,
                         help='Specify canvas format')
     parser.add_argument('-q', '--quiet', action='store_true', help='Quiet mode')
+    parser.add_argument('--no-auto-repair-layout', action='store_true',
+                        help='Disable conservative svg_output text-box repair before export quality gate')
+    parser.add_argument('--direct-image-slides', type=str, default=None,
+                        help='Optional JSON manifest for direct PPTX picture slides. Default: <project>/svg_output/_direct_image_slides.json when present.')
 
     parser.add_argument('--no-compat', action='store_true',
                         help='Disable Office compatibility mode (pure SVG only, requires Office 2019+)')
@@ -190,6 +286,8 @@ Recorded narration:
                             help='Only generate one version: native (editable shapes) or legacy (SVG image)')
     mode_group.add_argument('--native', action='store_true', default=False,
                             help='(Deprecated, now default) Convert SVG to native DrawingML shapes')
+    parser.add_argument('--allow-legacy-image-pptx', action='store_true', default=False,
+                        help='Explicitly allow legacy SVG-image PPTX export. Academic decks must stay native/editable by default.')
 
     def non_negative_float(value: str) -> float:
         try:
@@ -260,10 +358,18 @@ Recorded narration:
     if canvas_format is None and detected_format and detected_format != 'unknown':
         canvas_format = detected_format
 
-    # Determine which versions to generate
+    # Determine which versions to generate. Default is native-only:
+    # legacy SVG-reference PPTX is intentionally image-only and must be an
+    # explicit diagnostic opt-in, never the normal academic deliverable.
     only_mode = args.only
+    if only_mode == 'legacy' and not args.allow_legacy_image_pptx:
+        parser.error(
+            "--only legacy creates image-only PPTX and is disabled by default. "
+            "Use --allow-legacy-image-pptx only for diagnostic snapshots; "
+            "academic decks must use native editable DrawingML."
+        )
     gen_native = only_mode in (None, 'native')
-    gen_legacy = only_mode in (None, 'legacy')
+    gen_legacy = only_mode == 'legacy'
 
     # --native flag (deprecated) maps to --only native
     if args.native and only_mode is None:
@@ -316,13 +422,16 @@ Recorded narration:
         exports_dir = project_path / "exports"
         exports_dir.mkdir(parents=True, exist_ok=True)
         native_path = exports_dir / f"{project_name}_{timestamp}.pptx"
+        legacy_path = exports_dir / f"{project_name}_{timestamp}_svg.pptx"
 
-        backup_dir = project_path / "backup" / timestamp
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        legacy_path = backup_dir / f"{project_name}_svg.pptx"
+        if gen_legacy:
+            backup_dir = project_path / "backup" / timestamp
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            legacy_path = backup_dir / f"{project_name}_svg.pptx"
 
     native_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy_path.parent.mkdir(parents=True, exist_ok=True)
+    if gen_legacy:
+        legacy_path.parent.mkdir(parents=True, exist_ok=True)
 
     verbose = not args.quiet
 
@@ -481,10 +590,17 @@ Recorded narration:
                 print(f"  ... and {len(on_click_slides) - 20} more", file=sys.stderr)
             sys.exit(1)
 
+    try:
+        direct_image_slides = _load_direct_image_slides(project_path, args.direct_image_slides, verbose=verbose)
+    except Exception as exc:
+        print(f"Error: Failed to load direct image slides: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     _run_svg_quality_gate(
         project_path,
         expected_format=canvas_format,
         verbose=verbose,
+        auto_repair_layout=not args.no_auto_repair_layout,
     )
 
     # svg_files is per-product (native vs legacy may now read different
@@ -507,6 +623,7 @@ Recorded narration:
         narration_audio=narration_audio,
         use_narration_timings=use_narration_timings,
         narration_padding=args.narration_padding,
+        direct_image_slides=direct_image_slides,
     )
 
     success = True

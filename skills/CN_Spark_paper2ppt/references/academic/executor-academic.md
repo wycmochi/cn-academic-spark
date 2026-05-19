@@ -73,8 +73,12 @@ Any title, body text, table cell, or citation containing Chinese plus numbers, L
 - If the user PPTX template defines a page-number slot, do not move the generated page number to another location.
 - Exactly one visible page number is allowed per slide. A duplicated number such as two `06` labels is a blocking error.
 - Logo: use the template-provided logo / protected region when available; otherwise use top right around 40 x 40 px with `<image href="logos/school_logo.png">`.
-- Bottom banner: use the page's `bottom_banner_text`; keep it short and claim-like.
+- Bottom banner: use the page's `bottom_banner_text`; keep it short and claim-like. Treat the banner, citation footer, and page number as a single protected bottom region that body content may not enter.
 - None of these may overlap each other.
+
+### 3.4 Cover Metadata Only
+
+The cover is an identity page, not a content page. It may contain the paper/opening topic title, report type, presenter/defense candidate, advisor, institution, date, author list, journal/source, and DOI. It must not contain source figures, formulas, methodology diagrams, route diagrams, result charts, conclusion cards, or teaser summaries; those begin on body slides.
 
 ## 4. Academic Layout Skeletons
 
@@ -135,12 +139,14 @@ If `bottom_banner_text` or `citations` are missing, infer them from the page pro
 ## 6. Forbidden In Academic Decks
 
 - Flattening complex route diagrams into unreadable screenshots when editable SVG is available.
+- Rasterizing a whole slide into a single `<image id="slide-raster-image">`; all normal slides must remain editable PPT objects after native export.
 - Citing a claim without a footer marker or reference-page entry.
 - Mixing Chinese and Latin text under one font family.
 - Using Times New Roman for Chinese journal names.
 - Putting more than six ungrouped bullets on a normal content slide; if content is richer, group it into columns, cards, a table, or a second slide.
 - Using decorative shadows, 3D effects, emoji, or ornamental gradients.
 - Leaving speaker notes blank.
+- Putting source figures, formulas, route diagrams, result visuals, or concrete research-content summaries on the cover slide.
 - Using vague section-label titles such as "Methods" for body pages. Use claim-based titles.
 
 ## 7. Per-Page Checklist
@@ -153,9 +159,9 @@ Summary and thank-you / Q&A must be separate slides. Do not combine conclusion b
 - [ ] Every citation marker resolves to `citation_footer` or the reference page.
 - [ ] Mixed CJK / Latin / numeric text is segmented by `<tspan>`.
 - [ ] Color follows the whole-deck strategy; key text is bold brick red only where justified.
-- [ ] Complex TechnicalRoute pages come from Step 5.5 rather than local hand drawing.
+- [ ] Complex TechnicalRoute / Research Workflow / 技术路线 pages come from Step 5.5 rather than local hand drawing, with consecutive editable Version A and AI Version B slides.
 - [ ] Non-exempt slides include a meaningful image, chart, formula, or complex table screenshot.
 - [ ] Formula pages embed formula title, equation, and variable explanations as one PNG with `data-formula-block-png="true"`; no duplicate SVG text boxes reconstruct the same content; at most five formula blocks per slide; adjacent formula blocks use gray 1.5pt dashed separators; formula/text/separator boxes do not overlap.
-- [ ] User-template pages use `editableContentRegion` and do not overlap logo, school name, footer, or page-number protected regions.
+- [ ] User-template pages use `editableContentRegion`; all body tables/cards/images/text boxes stay inside the writable region and do not overlap logo, school name, citation/footer, bottom banner, or page-number protected regions.
 - [ ] Each slide has exactly one page number, citation/footer text is anchored at the bottom, and first/final pages have no unintended large image/shape stack.
-- [ ] `scripts/svg_quality_checker.py` passes on both `svg_output/` and `svg_final/` before PPTX export.
+- [ ] `scripts/svg_quality_checker.py` passes before PPTX export, with no full-slide raster image SVG pages. TechnicalRoute Version B appears as a direct PPTX picture slide via `svg_output/_direct_image_slides.json`.

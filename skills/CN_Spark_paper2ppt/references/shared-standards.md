@@ -304,15 +304,15 @@ python3 scripts/notes_to_docx.py <project_path>
 # 3. SVG post-processing (icon embedding, image crop/embed, text flattening, rounded rect to path)
 python3 scripts/finalize_svg.py <project_path>
 
-# 4. Export PPTX (auto source split; speaker notes stay in DOCX)
+# 4. Export PPTX (native editable output; speaker notes stay in DOCX)
 python3 scripts/svg_to_pptx.py <project_path>
 # Output:
-#   Native source: main native pptx reads `svg_output/`
-#   Legacy source: legacy/preview pptx reads `svg_final/`
-#   exports/<project_name>_<timestamp>.pptx           鈫?main native pptx
-#   exports/<project_name>_speaker_notes.docx         鈫?speaker notes by slide
-#   backup/<timestamp>/<project_name>_svg.pptx        鈫?SVG snapshot
-#   backup/<timestamp>/svg_output/                    鈫?Executor SVG source backup
+#   Native source: main editable pptx reads `svg_output/`
+#   exports/<project_name>_<timestamp>.pptx           -> main native editable pptx
+#   exports/<project_name>_speaker_notes.docx         -> speaker notes by slide
+# Optional diagnostic snapshot only:
+#   python3 scripts/svg_to_pptx.py <project_path> --only legacy --allow-legacy-image-pptx
+#   Legacy source: diagnostic SVG-image pptx reads `svg_final/`
 ```
 
 **Optional animation flags** (only when the user asks):
@@ -341,12 +341,12 @@ Full reference: [`animations.md`](animations.md).
 
 **Prohibited**:
 - NEVER use `cp` as a substitute for `finalize_svg.py`
-- NEVER force `-s output` for the legacy/preview pptx (PowerPoint's internal SVG parser drops icons and rounded corners). Default auto-split already gives native the high-fidelity source it needs without affecting legacy.
-- NEVER use `--only` (it suppresses one of the two output files)
+- NEVER use `--only legacy` without `--allow-legacy-image-pptx`; the legacy product is image-only and is diagnostic only.
+- NEVER rasterize normal slides into `<image id="slide-raster-image">` to make PowerPoint open. Fix the editable SVG layout instead.
 
-> Source-directory split: by default `svg_to_pptx.py` reads `svg_output/` for the native pptx (preserves icon `<use>`, image `preserveAspectRatio` 鈫?`srcRect`, rounded rect `rx/ry` 鈫?`prstGeom roundRect`) and `svg_final/` for the legacy/preview pptx (PowerPoint's internal SVG parser needs the flattened form). Pass `-s output` or `-s final` only when you specifically want both products to read from a single source.
+> Source-directory split: by default `svg_to_pptx.py` reads `svg_output/` for the native editable pptx (preserves icon `<use>`, image `preserveAspectRatio` -> `srcRect`, rounded rect `rx/ry` -> `prstGeom roundRect`). `svg_final/` is read only for explicit legacy diagnostic export because PowerPoint's internal SVG parser needs the flattened form.
 
-Guardrail: if `--only native -s final` is requested, the exporter falls back to `svg_output/` to avoid pathified shapes and excessive `<a:custGeom>`.
+Guardrail: if `--only native -s final` is requested, the exporter falls back to `svg_output/` to avoid pathified shapes and excessive `<a:custGeom>`. If `--only legacy` is requested without `--allow-legacy-image-pptx`, the exporter fails because it would create image-only slides.
 
 **Re-run rule**: Any change to `svg_output/` after post-processing requires re-running Steps 2-3. Step 1 only re-runs if `notes/total.md` changed.
 

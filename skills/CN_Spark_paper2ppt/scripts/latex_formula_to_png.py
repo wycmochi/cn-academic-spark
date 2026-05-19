@@ -285,12 +285,14 @@ def render_formula_block(block: dict, output_path: Path, *, dpi: int, font_size:
     formula_y = int(block.get("formula_y") or (10 if compact else 18))
     formula_h = int(block.get("formula_height") or (52 if compact else 96))
     body_x = int(block.get("body_x") or (margin_x if compact else 74))
-    row_gap = int(block.get("row_gap") or (22 if compact else 42))
+    row_gap = int(block.get("row_gap") or (26 if compact else 42))
     formula_gap = int(block.get("formula_gap") or (22 if compact else 30))
     min_formula_width = int(block.get("min_formula_width") or (440 if compact else 520))
 
-    body_font_size = int(block.get("body_font_size") or (16 if compact else 28))
-    title_font_size = int(block.get("title_font_size") or body_font_size)
+    min_explain_font = int(block.get("min_explain_font_size") or (18 if compact else 28))
+    body_font_size = max(min_explain_font, int(block.get("body_font_size") or (18 if compact else 28)))
+    title_font_size = max(body_font_size, int(block.get("title_font_size") or body_font_size))
+    row_gap = max(row_gap, int(body_font_size * 1.45))
     title_font = _font(ImageFont, title_font_size, bold=False, font_path=block.get("font_path"))
     body_font = _font(ImageFont, body_font_size, bold=False, font_path=block.get("font_path"))
 

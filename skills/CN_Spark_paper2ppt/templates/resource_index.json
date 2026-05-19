@@ -53,7 +53,7 @@
       "selectionStage": "Formula page planning",
       "downstream": [
         "scripts/latex_formula_to_png.py",
-        "images/formula_block_*.png"
+        "images/formulas/formula_block_*.png"
       ]
     },
     {

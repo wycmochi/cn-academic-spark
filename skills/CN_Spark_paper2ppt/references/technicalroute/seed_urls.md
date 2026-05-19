@@ -8,8 +8,7 @@ Use this file before building `style_refs` for Version B AI reference generation
 ## Reference Priority
 
 Use this order:
-1. Internal `templates/technicalroute/Custom_gallery/` raster anchors.
-2. Academic-website and relevant-literature raster references: DOI-linked journal or publisher pages, official lab / university / project pages, paper supplementary material, reputable academic sources, open course materials, documentation pages, and institutional repositories, only when they provide flowchart / framework / workflow / route-diagram / explanatory-legend style references.
+1. Academic-website and relevant-literature raster references: DOI-linked journal or publisher pages, official lab / university / project pages, paper supplementary material, reputable academic sources, open course materials, documentation pages, and institutional repositories, only when they provide flowchart / framework / workflow / route-diagram / explanatory-legend style references.
 3. User-provided relevant reference images, when the user uploads at least three structure-similar images.
 4. Atlas-only neutral academic route style when no external or user references are available.
 
@@ -19,7 +18,7 @@ Do not invent URLs. Do not claim that search succeeded when it did not. Do not t
 
 The concrete search URLs, priorities, login flags, minimum reference count, and image-filter hints live only in `references/technicalroute/seed_sites.json`. When the user or maintainer changes that JSON, the search behavior follows the JSON without editing this Markdown file. Agents must not paste a separate website list into `prompt_ai.md`, `spec_lock.md`, `ppt_outline_cn.md`, or any generated project notes.
 
-Valid external style references are local raster files downloaded or screenshotted from the search plan emitted by `literature_search.py emit-plan`, then recorded with `literature_search.py record` into `<route_workdir>/style_refs/manifest.json`.
+Valid Version B style references are local raster files downloaded from the search plan emitted by `literature_search.py emit-plan`, then recorded with `literature_search.py record` into `<route_workdir>/style_refs/manifest.json`. Custom_gallery is a fallback only when this manifest has zero usable raster references and the completed seed-site search is explicitly proven with `--search-completed` or `style_refs/search_completed.json`.
 
 ## Branch Selection
 
@@ -43,7 +42,7 @@ Assess the collected references:
 python3 scripts/technicalroute/literature_search.py assess --out <route_workdir>/style_refs/
 ```
 
-If `assess` recommends `literature`, continue to `generate_route_image.py prompt --reference-mode literature`. If it recommends `atlas_only`, follow `handling-no-references.md`.
+If accepted raster references exist, continue to `generate_route_image.py prompt --reference-mode literature` and then `prepare-ai-refs` normally. If the completed search produced zero usable figures, run `prepare-ai-refs --allow-gallery-fallback-after-search --search-completed` so `route_ai_refs.json` records `gallery_only_fallback`, `gallery_fallback_after_search: true`, and `seed_search_completed: true`.
 
 ### Fully Offline User-Reference Branch
 
@@ -69,8 +68,8 @@ python3 scripts/technicalroute/literature_search.py assess --out <route_workdir>
 python3 scripts/technicalroute/generate_route_image.py prompt --archetype <thinking|method|workflow> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode atlas_only --out <route_workdir>/prompt_ai.md
 ```
 
-Atlas-only means:
-- use only raster anchors selected from `templates/technicalroute/Custom_gallery/gallery_index.json` as fallback style guidance; do not use template SVGs, PPTX editable pages, or Version A screenshots as AI references;
+Atlas-only / gallery-only fallback means:
+- use only raster anchors selected from `templates/technicalroute/Custom_gallery/gallery_index.json` as fallback style guidance after a completed zero-result seed-site search; do not use template SVGs, PPTX editable pages, PPT exports, or Version A screenshots as AI references;
 - do not claim external literature reference support;
 - keep article-derived `content.yaml` as the only semantic source.
 
@@ -116,7 +115,7 @@ This file is Step 5.5 item 3 in the main workflow:
 1. Write `contract.md`.
 2. Write `content.yaml`.
 3. Choose reference mode using this file.
-4. Inspect `Custom_gallery` and selected template atlas.
+4. Inspect `Custom_gallery/gallery_index.json` only if `prepare-ai-refs` enters `gallery_only_fallback`; Version B must never inspect the editable Version A template or PPT output as a reference source.
 5. Generate Version A using `image-templatedraw.md`.
 6. Generate Version B using `image-aigenerate.md`.
 7. Audit and insert both pages.

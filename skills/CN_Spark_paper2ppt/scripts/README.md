@@ -106,7 +106,7 @@ python3 scripts/update_repo.py --skip-pip
 - Keep one user-facing entry point per workflow: either a top-level script or a workflow package `cli.py`
 - Move provider-specific or helper internals into subdirectories
 - Prefer the unified entry points `project_manager.py`, `finalize_svg.py`, and `image_gen.py`
-- Prefer `svg_final/` over `svg_output/` when exporting
+- Prefer `svg_output/` for native editable PPTX export; use `svg_final/` only for explicit legacy SVG-image diagnostics
 - Keep the default `finalize_svg.py` placeholder prompt cleanup enabled when exporting decks built from user PPTX templates
 
 ## Related Docs

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import posixpath
 import stat
 import subprocess
@@ -20,6 +21,7 @@ NOTES_MASTER_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relati
 NOTES_SLIDE_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide"
 MAX_NATIVE_CUSTGEOM = 60
 MAX_TRANSITIONS = 0
+MAX_IMAGE_ONLY_SLIDE_RATIO = 0.10
 
 
 @dataclass
@@ -124,6 +126,7 @@ def validate_pptx_openability(path: Path) -> PptxOpenabilityReport:
 
             if "ppt/presentation.xml" in names:
                 errors.extend(_validate_native_drawingml_stability(zf, names))
+                errors.extend(_validate_not_rasterized_deck(zf, names))
 
     except zipfile.BadZipFile as exc:
         errors.append(f"Output is not a valid PPTX zip package: {exc}")
@@ -181,6 +184,46 @@ def _validate_native_drawingml_stability(zf: zipfile.ZipFile, names: set[str]) -
         )
 
     return errors
+
+
+def _slide_sort_key(name: str) -> tuple[int, str]:
+    m = re.search(r"slide(\d+)\.xml$", name)
+    return (int(m.group(1)) if m else 10**9, name)
+
+
+def _validate_not_rasterized_deck(zf: zipfile.ZipFile, names: set[str]) -> list[str]:
+    """Catch native exports whose slides are mostly single picture objects."""
+    slides = sorted(
+        (
+            name for name in names
+            if name.startswith("ppt/slides/slide") and name.endswith(".xml")
+        ),
+        key=_slide_sort_key,
+    )
+    if not slides:
+        return []
+
+    image_only: list[str] = []
+    for slide_name in slides:
+        xml = _read_xml_part(zf, slide_name)
+        pic_count = len(re.findall(r"<p:pic(?:\s|>)", xml))
+        shape_count = len(re.findall(r"<p:sp(?:\s|>)", xml))
+        text_count = len(re.findall(r"<a:t(?:\s|>)", xml))
+        graphic_frame_count = len(re.findall(r"<p:graphicFrame(?:\s|>)", xml))
+        if pic_count == 1 and shape_count == 0 and text_count == 0 and graphic_frame_count == 0:
+            image_only.append(slide_name)
+
+    allowed = max(1, int(len(slides) * MAX_IMAGE_ONLY_SLIDE_RATIO))
+    if len(image_only) <= allowed:
+        return []
+
+    sample = ", ".join(image_only[:8])
+    return [
+        f"PPTX appears rasterized: {len(image_only)}/{len(slides)} slides contain only "
+        "one picture and no editable DrawingML text/shapes. Export from editable "
+        "svg_output, not slide-raster-image SVGs or legacy SVG-image mode. "
+        f"Sample slides: {sample}."
+    ]
 
 
 def _source_part_for_rels(rels_name: str) -> PurePosixPath:

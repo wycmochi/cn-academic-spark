@@ -216,7 +216,7 @@ Academic image priority:
 | `fig_03_method.png` | `...` | `...` | Method evidence | Source figure | user/source | Existing | `[Author, Year]` |
 | `formula_block_01.png` | `...` | `...` | Core equation with interpretation | Formula block PNG | script | Pending | Source equation |
 | `route_template_01.svg` | `1280x720` | `1.78` | TechnicalRoute A page | Editable SVG | internal | Pending | Source-grounded |
-| `route_ai_01.png` | `1280x720` | `1.78` | TechnicalRoute B page | AI route image | ai | Pending | Custom_gallery + source |
+| `route_ai_01.png` | `>=4400x2475` | `1.78` | TechnicalRoute B direct PPTX image page | AI route image | ai via `route_ai_refs.json` | Pending | academic-search refs first; Custom_gallery fallback only after completed zero-result search |
 
 High-priority visual coverage rule:
 - Except TechnicalRoute pages, summary pages, and planning / implication pages, every slide must contain at least one meaningful image, source figure, complex table screenshot, chart, or mathematical formula.
@@ -229,6 +229,8 @@ Write pages grouped by numbered modules. Body slide titles must follow:
 ```text
 <module_number> <module_title>: <slide_subtitle_or_evidence_conclusion>
 ```
+
+Cover roster entries must be metadata-only: title/topic, report type, presenter, advisor, institution, date, and paper/source/DOI only. Source figures, formulas, route diagrams, result charts, and content teaser cards belong to body pages. The paper/topic title is one semantic title group: if it spans multiple visual lines, keep the same title family/fill/weight and use one `data-title-group`; do not treat a subtitle phrase from the source title as a separate differently styled heading.
 
 For every page, include:
 - `page_id`
@@ -263,9 +265,14 @@ Example:
   - Limitation or caveat.
 ```
 
-TechnicalRoute pages must appear as two consecutive pages:
-- `<module_number> Research Route: Editable Template Version`
-- `<module_number> Research Route: AI Reference Version`
+TechnicalRoute pages must appear as two consecutive outputs:
+- `<module_number> Research Route: Editable Template Version` as an editable SVG page.
+- `<module_number> Research Route: AI Reference Version` as a direct PPTX full-slide PNG entry in `svg_output/_direct_image_slides.json`; do not create an SVG page for Version B.
+
+Source figure/table placement contract:
+- Use `preserveAspectRatio="xMidYMid meet"` for every paper-extracted figure or table screenshot.
+- When a page contains multiple source figures/tables, reserve equal-sized or near-equal frames unless the design spec explicitly marks one item as the dominant visual.
+- Do not stretch, crop, or non-uniformly scale paper figures; adjust the surrounding frame, caption, and explanatory text instead.
 
 ## X. Speaker Notes Requirements
 

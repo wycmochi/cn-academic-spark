@@ -204,7 +204,7 @@ Each term must remain unchanged in prompts and visible labels.
 - refs_required_when_declared: true
 - allow_no_ref_fallback: false
 
-Version B must be generated from article content plus exactly two reference source classes recorded in `style_refs/route_ai_refs.json`: discipline-matched Custom_gallery raster anchors and literature/search raster route figures listed in `style_refs/manifest.json` after collection from a `seed_sites.json`-driven search plan. It must not be a screenshot of Version A. `run-ai-variant` must pass `--refs-plan <route_workdir>/style_refs/route_ai_refs.json` and `--out-svg <project_path>/svg_output/<NN>_route_ai.svg` so the generated image is embedded into the deck immediately.
+Version B must be generated from article content plus one mutually exclusive reference class recorded in `style_refs/route_ai_refs.json`: `literature_only` manifest raster route figures listed in `style_refs/manifest.json` after collection from a `seed_sites.json`-driven search plan, or `gallery_only_fallback` discipline-matched Custom_gallery raster anchors only when the manifest has zero usable refs. It must not mix the two classes and must not be a screenshot of Version A. `run-ai-variant` must pass `--refs-plan <route_workdir>/style_refs/route_ai_refs.json` and write `<project_path>/svg_output/_direct_image_slides.json` with `--direct-slide-manifest <project_path>/svg_output/_direct_image_slides.json --after-svg-stem <NN>_route_template`; the PPTX exporter then inserts the generated PNG as a direct picture slide without an SVG wrapper.
 
 ## embedding
 
@@ -214,8 +214,8 @@ Version B must be generated from article content plus exactly two reference sour
 - template_version_visual_requirement: technicalroute
 - ai_reference_version_visual_requirement: technicalroute
 - template_slide_svg_path: svg_output/08_route_template.svg
-- ai_slide_svg_path: svg_output/09_route_ai.svg
-- ai_slide_must_embed_png_data_uri: true
+- ai_direct_slide_manifest: svg_output/_direct_image_slides.json
+- ai_slide_must_be_direct_pptx_picture: true
 - citation_footer: <inherited>
 - bottom_banner_text: <inherited>
 
@@ -236,5 +236,5 @@ Version B must be generated from article content plus exactly two reference sour
 - assemble: python3 scripts/technicalroute/generate_route_image.py assemble --spec-lock <route_workdir>/spec_lock.md --content <route_workdir>/content.yaml --out <route_workdir>/output/route_template_01.svg
 - prompt: python3 scripts/technicalroute/generate_route_image.py prompt --archetype <archetype> --content <route_workdir>/content.yaml --style <route_workdir>/style_refs/style_profile.md --reference-mode <literature|atlas_only> --out <route_workdir>/prompt_ai.md
 - prepare_ai_refs: python3 scripts/technicalroute/literature_search.py prepare-ai-refs --topic "<paper title / keywords>" --discipline <discipline> --archetype <thinking|method|workflow> --out <route_workdir>/style_refs
-- run_ai_variant: python3 scripts/technicalroute/generate_route_image.py run-ai-variant --prompt <route_workdir>/prompt_ai.md --backend openai --model gpt-image-2 --aspect_ratio 16:9 --image_size 2K --filename route_ai_01 --out <route_workdir>/output --refs-plan <route_workdir>/style_refs/route_ai_refs.json --out-svg <project_path>/svg_output/09_route_ai.svg --title "3 Research Route: AI Reference Version" --subtitle "Generated from article content plus gallery/style anchors" --caption "AI reference route diagram; semantic content follows the source material" --page-number 9
+- run_ai_variant: python3 scripts/technicalroute/generate_route_image.py run-ai-variant --prompt <route_workdir>/prompt_ai.md --backend openai --model gpt-image-2 --aspect_ratio 16:9 --image_size 4K --filename route_ai_01 --out <route_workdir>/output --refs-plan <route_workdir>/style_refs/route_ai_refs.json --direct-slide-manifest <project_path>/svg_output/_direct_image_slides.json --after-svg-stem 08_route_template
 - audit: python3 scripts/technicalroute/generate_route_image.py audit --image <route_workdir>/output/route_ai_01.png --content <route_workdir>/content.yaml --contract <route_workdir>/contract.md --out <route_workdir>/audit_report.md

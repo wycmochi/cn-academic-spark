@@ -16,6 +16,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 import re
+import struct
 import base64
 import json
 import math
@@ -255,13 +256,19 @@ class SVGQualityChecker:
                 # 4. Check width/height consistency with viewBox
                 self._check_dimensions(content, result)
 
+                # 4b. Block full-slide raster pages before native PPTX export.
+                self._check_full_slide_raster_page(content, svg_path, result)
+
+                # 4c. Check slide canvas bounds and reserved footer/bottom regions.
+                self._check_canvas_bounds_and_footer_protection(content, svg_path, result)
+
                 # 5. Check text wrapping methods
                 self._check_text_elements(content, result)
 
                 # 5b. Enforce minimum readable font size for PPT body text.
                 self._check_minimum_body_font_size(content, result)
 
-                # 6. Check image references (file existence and resolution)
+                # 6. Check image references (file existence, resolution, fit)
                 self._check_image_references(content, svg_path, result)
 
                 # 7. Check formula pages use rendered PNG formula images.
@@ -663,8 +670,7 @@ class SVGQualityChecker:
             )).lower()
             if any(token in attrs for token in (
                 "page-number", "pagenum", "sldnum", "footer", "citation",
-                "reference", "logo", "school", "title", "subtitle",
-                "header", "section",
+                "reference", "logo", "school", "header",
             )):
                 return True
             x, y, w, h = box
@@ -720,7 +726,9 @@ class SVGQualityChecker:
             if is_background:
                 continue
             elem_id = elem.attrib.get("id", "").lower()
-            if any(token in elem_id for token in ("background", "bg", "footer", "header", "logo", "page-number")):
+            if any(token in elem_id for token in ("footer", "logo", "page-number")):
+                continue
+            if "header" in elem_id and (y <= canvas_h * 0.18 or h <= 24):
                 continue
             fill = (elem.attrib.get("fill") or "").strip().lower()
             stroke = (elem.attrib.get("stroke") or "").strip().lower()
@@ -748,6 +756,27 @@ class SVGQualityChecker:
                 "box": box,
                 "declared": _declared_box(node) is not None,
                 "layout": _is_layout_text(node, plain, box),
+            })
+
+
+        image_boxes: list[dict[str, object]] = []
+        for node in root.iter():
+            if node.tag != f"{svg_ns}image":
+                continue
+            x = _num(node, "x")
+            y = _num(node, "y")
+            w = _num(node, "width")
+            h = _num(node, "height")
+            if x is None or y is None or w is None or h is None or w <= 0 or h <= 0:
+                continue
+            attrs = " ".join(str(node.attrib.get(k, "")) for k in (
+                "id", "class", "data-role", "data-formula-png", "data-ai-image-source",
+            )).lower()
+            image_boxes.append({
+                "node": node,
+                "box": (x, y, w, h),
+                "layout": any(token in attrs for token in ("background", "bg", "watermark")),
+                "formula": "data-formula-png" in attrs,
             })
 
         # Explicit box contract: either all four attrs are present, or none.
@@ -920,6 +949,30 @@ class SVGQualityChecker:
                     "set data-box-* from the inset shape frame, not from split text coordinates."
                 )
 
+        # Text-to-image overlap guard. Source figures and formula PNGs must not
+        # collide with editable explanatory text boxes; otherwise PowerPoint
+        # selection and reading order become chaotic.
+        for text_item in text_boxes:
+            if text_item["layout"]:
+                continue
+            text_box = text_item["box"]
+            assert isinstance(text_box, tuple)
+            text_sample = str(text_item["text"])
+            for image_item in image_boxes:
+                if image_item["layout"]:
+                    continue
+                image_box = image_item["box"]
+                assert isinstance(image_box, tuple)
+                ratio = self._rect_overlap_ratio(text_box, image_box)
+                if ratio <= 0.04:
+                    continue
+                result['errors'].append(
+                    "Detected text overlapping an image region. Put source figures/formula PNGs "
+                    "and explanatory text into separate non-overlapping slots. "
+                    f"Overlap ratio {ratio:.2f}; text sample: {text_sample[:28]!r}"
+                )
+                break
+
         # Text-to-text overlap guard. Ignore intentional tiny footer/page
         # labels and explicitly marked inline/tspan fragments; content boxes
         # should never overlap in the PPT body region.
@@ -972,6 +1025,8 @@ class SVGQualityChecker:
             for idx in range(len(row) - 1):
                 left_x, left_text = row[idx]
                 right_x, right_text = row[idx + 1]
+                if right_x - left_x > 96:
+                    continue
                 joined_pair = left_text + right_text
                 same_sentence_split = (
                     right_x > left_x
@@ -1051,13 +1106,263 @@ class SVGQualityChecker:
                     f"Body text font-size {fs:g}px is below 12px. Only citation/reference footers and page numbers may be smaller."
                 )
 
+    def _check_full_slide_raster_page(self, content: str, svg_path: Path, result: Dict) -> None:
+        """Reject pages authored as one full-slide bitmap.
+
+        Native PPTX export can only preserve editability if svg_output contains
+        text/shapes. A slide-level <image> covering the full canvas produces a
+        non-editable picture slide even when the native exporter is used.
+        TechnicalRoute Version B is also forbidden in SVG form: it must be
+        inserted through svg_output/_direct_image_slides.json so the final PPTX
+        gets a direct full-slide picture page rather than an SVG wrapper.
+        """
+        try:
+            root = ET.fromstring(content)
+        except ET.ParseError:
+            return
+        width, height = self._svg_viewbox_size(root)
+        if width <= 0 or height <= 0:
+            return
+        slide_area = width * height
+        edge_tol_x = max(8.0, width * 0.02)
+        edge_tol_y = max(8.0, height * 0.02)
+        content_lower = content.lower()
+        name_lower = svg_path.name.lower()
+        offenders: list[str] = []
+
+        for node in root.iter():
+            tag = node.tag.split('}', 1)[-1] if '}' in node.tag else node.tag
+            if tag != 'image':
+                continue
+            x = self._attr_float(node, 'x')
+            y = self._attr_float(node, 'y')
+            w = self._attr_float(node, 'width')
+            h = self._attr_float(node, 'height')
+            if w <= 0 or h <= 0:
+                continue
+            area_ratio = (w * h) / slide_area
+            covers_canvas = (
+                area_ratio >= 0.88
+                and x <= edge_tol_x
+                and y <= edge_tol_y
+                and x + w >= width - edge_tol_x
+                and y + h >= height - edge_tol_y
+            )
+            if not covers_canvas:
+                continue
+            attrs = " ".join(f"{k}={v}" for k, v in node.attrib.items()).lower()
+            is_route_ai = (
+                'technicalroute-ai-reference-image' in attrs
+                or node.attrib.get('data-route-version', '').lower() == 'b'
+                or node.attrib.get('data-route-source', '').lower() == 'ai-reference'
+                or ('route_ai' in name_lower and 'technicalroute-ai-reference-image' in content_lower)
+            )
+            if is_route_ai:
+                elem_id = node.attrib.get('id') or node.attrib.get('class') or 'technicalroute-ai-reference-image'
+                result['errors'].append(
+                    "TechnicalRoute AI image must not be wrapped inside an SVG page: "
+                    f"{elem_id} covers {area_ratio:.0%} of the slide. Generate the PNG from "
+                    "academic-search/gallery references and write it to "
+                    "svg_output/_direct_image_slides.json for direct PPTX insertion."
+                )
+                continue
+            elem_id = node.attrib.get('id') or node.attrib.get('class') or 'image'
+            offenders.append(f"{elem_id} covers {area_ratio:.0%} of the slide")
+
+        if offenders:
+            result['errors'].append(
+                "Full-slide raster image detected: "
+                + "; ".join(offenders[:3])
+                + ". This would export as a non-editable PPT picture. Regenerate "
+                "svg_output with editable SVG text/shapes. TechnicalRoute Version B "
+                "must use svg_output/_direct_image_slides.json, not an SVG wrapper."
+            )
+
+    def _check_canvas_bounds_and_footer_protection(self, content: str, svg_path: Path, result: Dict) -> None:
+        """Block body content that leaves the canvas or enters footer/bottom protected regions."""
+        try:
+            root = ET.fromstring(content)
+        except ET.ParseError:
+            return
+        if "technicalroute-ai-reference-image" in content.lower():
+            return
+
+        width, height = self._svg_viewbox_size(root)
+        if width <= 0 or height <= 0:
+            return
+        name_lower = svg_path.name.lower()
+        anchor_page = any(token in name_lower for token in (
+            "cover", "title", "thank", "thanks", "ending", "closing", "qna", "qa"
+        ))
+
+        def local(node: ET.Element) -> str:
+            return node.tag.rsplit('}', 1)[-1] if '}' in node.tag else node.tag
+
+        def num_opt(node: ET.Element, name: str) -> float | None:
+            raw = node.attrib.get(name)
+            if raw is None:
+                return None
+            m = re.match(r"\s*([-+]?(?:\d*\.\d+|\d+\.?))", raw)
+            if not m:
+                return None
+            try:
+                return float(m.group(1))
+            except ValueError:
+                return None
+
+        def attr_blob(node: ET.Element) -> str:
+            return " ".join(str(node.attrib.get(k, "")) for k in (
+                "id", "class", "data-role", "data-page-number", "data-footer",
+                "data-citation", "aria-label",
+            )).lower()
+
+        def text_box(node: ET.Element) -> tuple[float, float, float, float] | None:
+            box_raw = [
+                node.attrib.get("data-box-x") or node.attrib.get("data-textbox-x"),
+                node.attrib.get("data-box-y") or node.attrib.get("data-textbox-y"),
+                node.attrib.get("data-box-width") or node.attrib.get("data-textbox-width"),
+                node.attrib.get("data-box-height") or node.attrib.get("data-textbox-height"),
+            ]
+            if all(value is not None for value in box_raw):
+                try:
+                    x, y, w, h = (float(value) for value in box_raw)  # type: ignore[arg-type]
+                except (TypeError, ValueError):
+                    return None
+                return (x, y, w, h) if w > 0 and h > 0 else None
+            plain = html.unescape("".join(node.itertext())).strip()
+            if not plain:
+                return None
+            x = num_opt(node, "x")
+            y = num_opt(node, "y")
+            if x is None or y is None:
+                return None
+            fs = num_opt(node, "font-size") or 16.0
+            line_count = max(1, plain.count("\n") + 1)
+            width_est = 0.0
+            for ch in plain.replace("\n", ""):
+                if ch.isspace():
+                    width_est += fs * 0.35
+                elif ord(ch) > 255:
+                    width_est += fs * 1.02
+                else:
+                    width_est += fs * 0.56
+            return (x, y - fs, max(1.0, width_est), max(fs * 1.25, line_count * fs * 1.25))
+
+        def rect_box(node: ET.Element) -> tuple[float, float, float, float] | None:
+            x = num_opt(node, "x") or 0.0
+            y = num_opt(node, "y") or 0.0
+            w = num_opt(node, "width") or 0.0
+            h = num_opt(node, "height") or 0.0
+            if w <= 0 or h <= 0:
+                return None
+            return x, y, w, h
+
+        def is_full_background(box: tuple[float, float, float, float]) -> bool:
+            x, y, w, h = box
+            return x <= 1 and y <= 1 and w >= width - 2 and h >= height - 2
+
+        def is_footer_like(node: ET.Element, box: tuple[float, float, float, float]) -> bool:
+            blob = attr_blob(node)
+            y = box[1]
+            footer_tokens = (
+                "footer", "bottom-banner", "bottom_banner", "page-number", "pagenum",
+                "sldnum", "slide-number", "citation-footer", "footer-citation",
+            )
+            if any(token in blob for token in footer_tokens):
+                return True
+            if any(token in blob for token in ("citation", "reference", "source")) and y >= height * 0.78:
+                return True
+            return y >= height * 0.90 and box[3] <= 44
+
+        def is_header_chrome(node: ET.Element, box: tuple[float, float, float, float]) -> bool:
+            blob = attr_blob(node)
+            return y_top(box) <= height * 0.18 and any(token in blob for token in ("header", "title", "school", "logo"))
+
+        def y_top(box: tuple[float, float, float, float]) -> float:
+            return box[1]
+
+        footer_boxes: list[tuple[str, tuple[float, float, float, float]]] = []
+        body_boxes: list[tuple[str, tuple[float, float, float, float]]] = []
+
+        for node in root.iter():
+            tag = local(node)
+            box: tuple[float, float, float, float] | None = None
+            if tag in {"rect", "image"}:
+                box = rect_box(node)
+            elif tag == "text":
+                box = text_box(node)
+            if box is None:
+                continue
+            if box[2] * box[3] < 8:
+                continue
+            name = node.attrib.get("id") or node.attrib.get("class") or tag
+            if is_full_background(box):
+                continue
+            if is_footer_like(node, box):
+                footer_boxes.append((name, box))
+                continue
+            if is_header_chrome(node, box):
+                continue
+            body_boxes.append((name, box))
+
+        tol = 1.5
+        overflow_samples: list[str] = []
+        for name, box in body_boxes:
+            x, y, w, h = box
+            if x < -tol or y < -tol or x + w > width + tol or y + h > height + tol:
+                overflow_samples.append(f"{name} at ({x:.1f},{y:.1f},{w:.1f},{h:.1f})")
+        if overflow_samples:
+            result['errors'].append(
+                "Slide canvas bounds violation: body element extends outside the SVG viewBox. "
+                "Compress/split the content before export. Offenders: "
+                + "; ".join(overflow_samples[:5])
+            )
+
+        if anchor_page or not footer_boxes:
+            return
+        protected_top = min(box[1] for _name, box in footer_boxes) - 4.0
+        footer_samples: list[str] = []
+        for name, box in body_boxes:
+            x, y, w, h = box
+            if y + h <= protected_top:
+                continue
+            overlaps_footer = any(self._rect_overlap_ratio(box, footer_box) > 0.01 for _fname, footer_box in footer_boxes)
+            if overlaps_footer or y + h > protected_top:
+                footer_samples.append(f"{name} at y={y:.1f}, h={h:.1f}")
+        if footer_samples:
+            result['errors'].append(
+                "Footer protected-region violation: body content enters or overlaps the reserved "
+                "citation/footer/bottom-banner/page-number area. Split the table/card group, "
+                "reduce row gaps, or move content upward inside editableContentRegion. Offenders: "
+                + "; ".join(footer_samples[:5])
+            )
+
+
     def _check_image_references(self, content: str, svg_path: Path, result: Dict):
-        """Check image file existence and resolution vs display size."""
+        """Check image file existence, resolution, proportional fit, and visual balance."""
         # Find all <image ...> elements (capture the full tag)
         img_tag_pattern = re.compile(r'<image\b([^>]*)/?>', re.IGNORECASE)
 
         svg_dir = svg_path.parent
         checked = set()
+        source_images: list[tuple[str, float, float, float, float, str]] = []
+
+        def _attr_value(attrs: str, name: str) -> str:
+            match = re.search(rf'\b{name}\s*=\s*["\']([^"\']+)["\']', attrs, flags=re.IGNORECASE)
+            return match.group(1) if match else ""
+
+        def _is_source_figure(attrs: str, href: str, display_w: float, display_h: float) -> bool:
+            marker = (attrs + " " + href).lower()
+            if display_w * display_h < 12_000:
+                return False
+            non_source_tokens = (
+                "background", "watermark", "logo", "seal", "school",
+                "icon", "marker", "avatar", "decor", "decoration",
+                "data-formula", "formula_block", "formula-png",
+                "technicalroute-ai-reference-image", "route_ai", "route-ai",
+                "data-route-version", "data-route-source",
+            )
+            return not any(token in marker for token in non_source_tokens)
 
         for tag_match in img_tag_pattern.finditer(content):
             attrs = tag_match.group(1)
@@ -1105,6 +1410,22 @@ class SVGQualityChecker:
             except (ValueError, TypeError):
                 continue
 
+            if _is_source_figure(attrs, href, display_w, display_h):
+                preserve = _attr_value(attrs, "preserveAspectRatio")
+                if not preserve:
+                    result['errors'].append(
+                        f"Source figure/table image {href} is missing preserveAspectRatio. "
+                        "Use preserveAspectRatio=\"xMidYMid meet\" and crop/pad with the frame, "
+                        "never stretch the paper material."
+                    )
+                elif "meet" not in preserve.lower():
+                    result['errors'].append(
+                        f"Source figure/table image {href} uses preserveAspectRatio={preserve!r}. "
+                        "Paper figures and tables must be scaled proportionally with "
+                        "preserveAspectRatio=\"xMidYMid meet\"."
+                    )
+                source_images.append((href, display_w, display_h, display_w * display_h, 0.0, attrs.lower()))
+
             try:
                 from PIL import Image as PILImage
                 with PILImage.open(img_path) as img:
@@ -1123,6 +1444,27 @@ class SVGQualityChecker:
                 pass  # PIL not available, skip resolution check
             except Exception:
                 pass  # Image unreadable, skip resolution check
+
+        comparable = [
+            item for item in source_images
+            if 'data-image-size-exempt="true"' not in item[5]
+            and "data-image-size-exempt='true'" not in item[5]
+        ]
+        if len(comparable) >= 2:
+            areas = [max(1.0, item[3]) for item in comparable]
+            widths = [max(1.0, item[1]) for item in comparable]
+            heights = [max(1.0, item[2]) for item in comparable]
+            area_ratio = max(areas) / min(areas)
+            width_ratio = max(widths) / min(widths)
+            height_ratio = max(heights) / min(heights)
+            if area_ratio > 1.80 or width_ratio > 1.75 or height_ratio > 1.75:
+                samples = ", ".join(item[0] for item in comparable[:4])
+                result['errors'].append(
+                    "Multiple paper figure/table images on one slide have inconsistent display boxes "
+                    f"(area ratio {area_ratio:.2f}, width ratio {width_ratio:.2f}, height ratio {height_ratio:.2f}). "
+                    "Use equal-sized frames where possible and fit each image proportionally inside its frame. "
+                    f"Images: {samples}"
+                )
 
     def _check_formula_png_contract(self, content: str, result: Dict):
         """Ensure displayed formulas use rendered PNG blocks, not SVG text boxes."""
@@ -1677,9 +2019,13 @@ class SVGQualityChecker:
         if not svg_files:
             return
         self._check_native_svg_source_safety(dir_path, svg_files)
+        self._check_technicalroute_requirement_declared(dir_path, svg_files)
         self._check_technicalroute_dual_output(svg_files)
+        self._check_technicalroute_ai_svg_wrapper_forbidden(svg_files)
         self._check_ai_image_assets_inserted(dir_path, svg_files)
         self._check_unique_page_numbers(svg_files)
+        self._check_cover_metadata_only(svg_files)
+        self._check_cover_title_semantic_contract(svg_files)
         self._check_anchor_page_stacking(svg_files)
         self._check_summary_thanks_separation(svg_files)
 
@@ -1778,11 +2124,71 @@ class SVGQualityChecker:
         min_area = min(max(0.0, aw) * max(0.0, ah), max(0.0, bw) * max(0.0, bh))
         return overlap / min_area if min_area else 0.0
 
+    @staticmethod
+    def _png_size_from_bytes(image_bytes: bytes) -> tuple[int, int] | None:
+        if not image_bytes.startswith(b"\x89PNG\r\n\x1a\n") or len(image_bytes) < 24:
+            return None
+        try:
+            return struct.unpack(">II", image_bytes[16:24])
+        except struct.error:
+            return None
+
+
+    def _direct_image_slide_entries(self, project_root: Path) -> list[dict]:
+        manifests = [
+            project_root / "svg_output" / "_direct_image_slides.json",
+            project_root / "_direct_image_slides.json",
+            project_root / "technicalroute" / "_direct_image_slides.json",
+        ]
+        entries: list[dict] = []
+        for manifest in manifests:
+            if not manifest.is_file():
+                continue
+            try:
+                data = json.loads(manifest.read_text(encoding="utf-8-sig"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            raw = data.get("slides", data) if isinstance(data, dict) else data
+            if not isinstance(raw, list):
+                continue
+            for item in raw:
+                if not isinstance(item, dict):
+                    continue
+                image_value = item.get("image_path") or item.get("path")
+                if not image_value:
+                    continue
+                image_path = Path(str(image_value)).expanduser()
+                if not image_path.is_absolute():
+                    image_path = (manifest.parent / image_path).resolve()
+                entry = dict(item)
+                entry["image_path"] = str(image_path)
+                entry["_manifest_path"] = str(manifest)
+                entries.append(entry)
+            break
+        return entries
+
+    def _direct_route_ai_entries(self, project_root: Path) -> list[dict]:
+        entries = []
+        for entry in self._direct_image_slide_entries(project_root):
+            blob = " ".join(str(entry.get(k, "")) for k in ("kind", "role", "image_path")).lower()
+            if "technicalroute_ai" in blob or "route_ai" in blob:
+                entries.append(entry)
+        return entries
+
+    def _direct_route_ai_ok(self, project_root: Path) -> bool:
+        return any(Path(entry["image_path"]).is_file() for entry in self._direct_route_ai_entries(project_root))
+
+    @staticmethod
+    def _route_ai_required_pixels(canvas_w: float, canvas_h: float) -> tuple[int, int]:
+        if abs((canvas_w / max(canvas_h, 1.0)) - (4.0 / 3.0)) < 0.04:
+            return 3300, 2475
+        return 4400, 2475
+
     def _check_ai_image_assets_inserted(self, dir_path: Path, svg_files: List[Path]) -> None:
         """Generated AI image files listed in project specs must appear in SVG pages."""
         project_root = self._project_root_from_dir(dir_path)
         spec_text = ""
-        candidates = [project_root / 'spec_lock.md', project_root / 'design_spec.md']
+        candidates = [project_root / 'spec_lock.md', project_root / 'design_spec.md', project_root / 'ppt_outline_cn.md']
         tech_root = project_root / 'technicalroute'
         if tech_root.exists():
             for candidate in tech_root.rglob('*'):
@@ -1830,10 +2236,13 @@ class SVGQualityChecker:
 
         combined_svg = "\n".join(svg.read_text(encoding='utf-8', errors='replace') for svg in svg_files if svg.exists())
         combined_lower = combined_svg.lower()
+        direct_route_entries = self._direct_route_ai_entries(project_root)
+        direct_route_paths = {Path(entry['image_path']).name.lower() for entry in direct_route_entries}
         has_embedded_route_slide = (
             'id="technicalroute-ai-reference-image"' in combined_lower
             or "id='technicalroute-ai-reference-image'" in combined_lower
         ) and 'data:image/png;base64,' in combined_lower
+        has_direct_route_slide = any(Path(entry['image_path']).is_file() for entry in direct_route_entries)
         for raw_path in sorted(expected):
             normalized = raw_path.replace("\\", "/").strip()
             basename = Path(normalized).name
@@ -1853,16 +2262,18 @@ class SVGQualityChecker:
                     ))
                     continue
             is_route_ai = 'route_ai' in basename.lower() or 'route_ai_image_path' in raw_path.lower()
-            if is_route_ai and not has_embedded_route_slide:
+            if is_route_ai and not (has_embedded_route_slide or has_direct_route_slide):
                 self._project_issues.append((
                     'error',
                     'technicalroute_ai_slide_missing',
-                    f"{basename}: route_ai_image_path exists, but no SVG page embeds it as "
-                    "<image id=\"technicalroute-ai-reference-image\" href=\"data:image/png;base64,...\">. "
-                    "Run generate_route_image.py create-ai-slide and insert it as the next slide after Version A."
+                    f"{basename}: route_ai_image_path exists, but no direct PPTX image slide manifest "
+                    "or legacy SVG wrapper embeds it. Run generate_route_image.py run-ai-variant --refs-plan ... "
+                    "so it writes svg_output/_direct_image_slides.json and the PPTX exporter inserts the PNG directly."
                 ))
                 continue
             stem = Path(basename).stem.lower()
+            if basename.lower() in direct_route_paths:
+                continue
             if (
                 basename.lower() not in combined_lower
                 and normalized.lower() not in combined_lower
@@ -1875,8 +2286,8 @@ class SVGQualityChecker:
                     'error',
                     'ai_image_not_inserted',
                     f"{basename}: AI-generated image exists and is listed in spec/design files, "
-                    "but no SVG page references it. Insert it with <image ...> or an embedded data URI "
-                    "tagged with data-ai-image-source."
+                    "but neither an SVG page nor _direct_image_slides.json references it. Insert it with "
+                    "the direct PPTX picture manifest or an embedded data URI tagged with data-ai-image-source."
                 ))
 
     def _check_unique_page_numbers(self, svg_files: List[Path]) -> None:
@@ -1914,6 +2325,173 @@ class SVGQualityChecker:
                     'duplicate_page_number',
                     f"{svg_file.name}: detected multiple page-number candidates ({', '.join(candidates[:4])}). "
                     "Keep exactly one page number; in user-template mode use the slide/layout/master sldNum slot."
+                ))
+
+    def _check_cover_metadata_only(self, svg_files: List[Path]) -> None:
+        """Cover pages should show metadata only, not source figures/results."""
+        if not svg_files:
+            return
+        svg_file = svg_files[0]
+        content, _visible_text = self._read_svg_text_for_project_check(svg_file)
+        cover_name = svg_file.name.lower()
+        content_lower = content.lower()
+        if (
+            'route_ai' in cover_name
+            or 'technicalroute-ai-reference-image' in content_lower
+            or 'data-route-version="b"' in content_lower
+            or "data-route-version='b'" in content_lower
+        ):
+            return
+        try:
+            root = ET.fromstring(content)
+        except ET.ParseError:
+            return
+        svg_ns = "{http://www.w3.org/2000/svg}"
+        width, height = self._svg_viewbox_size(root)
+        slide_area = max(1.0, width * height)
+        for node in root.iter():
+            if node.tag != f"{svg_ns}image":
+                continue
+            box = (
+                self._attr_float(node, 'x'),
+                self._attr_float(node, 'y'),
+                self._attr_float(node, 'width'),
+                self._attr_float(node, 'height'),
+            )
+            area_ratio = max(0.0, box[2]) * max(0.0, box[3]) / slide_area
+            attrs = " ".join(str(node.attrib.get(k, "")) for k in ('id', 'class', 'data-role', 'data-image-role')).lower()
+            is_logo = any(token in attrs for token in ('logo', 'seal', 'school'))
+            is_marked_background = any(token in attrs for token in ('background', 'cover-bg', 'texture', 'watermark'))
+            full_bleed = box[0] <= 5 and box[1] <= 5 and box[2] >= width - 10 and box[3] >= height - 10
+            if is_logo or area_ratio <= 0.025 or (is_marked_background and full_bleed):
+                continue
+            if area_ratio >= 0.06:
+                self._project_issues.append((
+                    'error',
+                    'cover_contains_research_visual',
+                    f"{svg_file.name}: cover slide contains a large non-background image. "
+                    "The cover must be metadata-only: title/topic, presenter, advisor, institution, date, and source/DOI. "
+                    "Move source figures, route diagrams, formulas, and result visuals to body slides."
+                ))
+                return
+
+    def _check_cover_title_semantic_contract(self, svg_files: List[Path]) -> None:
+        """Keep the cover's paper/topic title as one coherent semantic group.
+
+        The cover may contain report type, author/advisor/date/source metadata,
+        but it must not split one source title into differently styled title
+        fragments. This catches outputs where the English title is broken into
+        a large serif block plus a second blue subtitle-like block, making the
+        meaning look like two unrelated headings.
+        """
+        if not svg_files:
+            return
+        svg_file = svg_files[0]
+        content, _visible_text = self._read_svg_text_for_project_check(svg_file)
+        content_lower = content.lower()
+        if (
+            'route_ai' in svg_file.name.lower()
+            or 'technicalroute-ai-reference-image' in content_lower
+            or 'data-route-version="b"' in content_lower
+            or "data-route-version='b'" in content_lower
+        ):
+            return
+        try:
+            root = ET.fromstring(content)
+        except ET.ParseError:
+            return
+        width, height = self._svg_viewbox_size(root)
+        if width <= 0 or height <= 0:
+            return
+
+        metadata_terms = (
+            "论文作者", "作者", "期刊", "doi", "汇报", "报告", "答辩", "指导老师",
+            "导师", "学院", "学校", "课题组", "日期", "时间", "生成日期",
+            "journal", "author", "advisor", "supervisor", "presenter", "date",
+            "doi:", "source", "重点", "outline", "agenda",
+        )
+
+        def _local(node: ET.Element) -> str:
+            return node.tag.rsplit('}', 1)[-1] if '}' in node.tag else node.tag
+
+        def _norm_font(value: str) -> str:
+            first = value.split(",", 1)[0].strip().strip("'\"").lower()
+            return first or "unknown"
+
+        title_nodes: list[dict] = []
+        for node in root.iter():
+            if _local(node) != "text":
+                continue
+            text = " ".join("".join(node.itertext()).split())
+            if not text:
+                continue
+            text_lower = text.lower()
+            marker = " ".join(str(node.attrib.get(k, "")) for k in (
+                "id", "class", "data-role", "aria-label"
+            )).lower()
+            if any(term in text_lower or term in text for term in metadata_terms):
+                continue
+            if any(term in marker for term in ("footer", "page-number", "pagenum", "logo", "header")):
+                continue
+            x = self._attr_float(node, "x")
+            y = self._attr_float(node, "y")
+            fs = self._attr_float(node, "font-size", 0.0)
+            if fs < 26:
+                continue
+            if y < height * 0.18 or y > height * 0.62 or x > width * 0.86:
+                continue
+            title_nodes.append({
+                "text": text,
+                "font": _norm_font(node.attrib.get("font-family", "")),
+                "fill": (node.attrib.get("fill") or "").strip().lower() or "default",
+                "weight": (node.attrib.get("font-weight") or "").strip().lower() or "normal",
+                "group": (node.attrib.get("data-title-group") or node.attrib.get("data-semantic-group") or "").strip(),
+            })
+
+        if len(title_nodes) <= 1:
+            return
+        groups = {item["group"] for item in title_nodes if item["group"]}
+        fonts = {item["font"] for item in title_nodes}
+        fills = {item["fill"] for item in title_nodes}
+        weights = {item["weight"] for item in title_nodes}
+        if len(groups) == 1 and len(fonts) == 1 and len(fills) == 1:
+            return
+        if len(fonts) > 1 or len(fills) > 1 or len(weights) > 1 or len(groups) != 1:
+            samples = " | ".join(item["text"][:42] for item in title_nodes[:3])
+            self._project_issues.append((
+                "error",
+                "cover_title_semantic_split",
+                f"{svg_file.name}: cover title appears split into differently styled semantic fragments ({samples}). "
+                "Keep the source paper/topic title in one bounded title group/text box, or mark all title lines "
+                "with the same data-title-group and identical font family, fill, and weight. Report type, presenter, "
+                "advisor, date, source, and DOI should be metadata below the title, not a second title fragment."
+            ))
+
+    def _check_technicalroute_ai_svg_wrapper_forbidden(self, svg_files: List[Path]) -> None:
+        """Forbid legacy SVG wrappers for AI route images.
+
+        Version B must remain independent from the editable route SVG and be
+        written as a direct PPTX image slide manifest. If an SVG page contains
+        the AI image id/route B markers, it is already too late: the generator
+        has routed through the old SVG/PPT-style path.
+        """
+        for svg_file in svg_files:
+            content, _visible_text = self._read_svg_text_for_project_check(svg_file)
+            lower = content.lower()
+            if any(token in lower for token in (
+                "technicalroute-ai-reference-image",
+                "data-route-version=\"b\"",
+                "data-route-version='b'",
+                "data-route-source=\"ai-reference\"",
+                "data-route-source='ai-reference'",
+            )):
+                self._project_issues.append((
+                    "error",
+                    "technicalroute_ai_svg_wrapper_forbidden",
+                    f"{svg_file.name}: TechnicalRoute AI image is wrapped in SVG. "
+                    "Cut this legacy path completely: generate the route PNG from route_ai_refs.json only, "
+                    "then insert it via svg_output/_direct_image_slides.json as a direct PPTX picture page. "
+                    "Do not convert or embed the AI result into SVG."
                 ))
 
     def _check_anchor_page_stacking(self, svg_files: List[Path]) -> None:
@@ -1979,8 +2557,128 @@ class SVGQualityChecker:
                             "Remove the empty frame or use an intentional text overlay marked as overlay/scrim."
                         ))
 
+    def _check_technicalroute_requirement_declared(self, dir_path: Path, svg_files: List[Path]) -> None:
+        """If the deck declares a route/workflow page, require TechnicalRoute A/B outputs.
+
+        Executor mistakes often create a local hand-drawn "Research Workflow"
+        slide and skip Step 5.5 entirely. That produces no route workdir, no
+        route_ai_refs.json, and no Version B image. This project-level gate
+        reads the generated outline/notes plus non-AI SVG text and blocks that
+        silent downgrade.
+        """
+        project_root = self._project_root_from_dir(dir_path)
+        candidates = [
+            project_root / "design_spec.md",
+            project_root / "spec_lock.md",
+            project_root / "ppt_outline_cn.md",
+            project_root / "notes" / "total.md",
+        ]
+        notes_dir = project_root / "notes"
+        if notes_dir.exists():
+            candidates.extend(sorted(notes_dir.glob("*.md")))
+
+        text_chunks: list[str] = []
+        for candidate in candidates:
+            if candidate.exists() and candidate.is_file() and candidate.stat().st_size <= 1_000_000:
+                try:
+                    text_chunks.append(candidate.read_text(encoding="utf-8", errors="replace"))
+                except OSError:
+                    pass
+
+        for svg_file in svg_files:
+            content, visible_text = self._read_svg_text_for_project_check(svg_file)
+            lower = content.lower()
+            is_ai_page = any(token in lower for token in (
+                "technicalroute-ai-reference-image",
+                "route_ai",
+                "data-route-version=\"b\"",
+                "data-route-version='b'",
+                "data-route-source=\"ai-reference\"",
+                "data-route-source='ai-reference'",
+            ))
+            if not is_ai_page:
+                text_chunks.append(visible_text)
+
+        combined = "\n".join(text_chunks)
+        combined_lower = combined.lower()
+        trigger_terms = [
+            "technical_route",
+            "research_framework",
+            "thinking_map",
+            "whole_paper_workflow",
+            "concept_framework",
+            "embed_technicalroute",
+            "technical route",
+            "research workflow",
+            "method workflow",
+            "paper workflow",
+            "full-paper workflow",
+            "full paper workflow",
+            "workflow",
+            "pipeline",
+            "技术路线",
+            "技术路线页",
+            "全文技术路线",
+            "研究路线",
+            "研究框架",
+            "方法流程",
+            "论文流程",
+            "全文方法链条",
+            "流程图",
+        ]
+        matched = next((term for term in trigger_terms if term in combined_lower or term in combined), "")
+        if not matched:
+            return
+
+        combined_svg = "\n".join(
+            svg.read_text(encoding="utf-8", errors="replace")
+            for svg in svg_files
+            if svg.exists()
+        )
+        lower_svg = combined_svg.lower()
+        has_version_a = any(token in lower_svg for token in (
+            "technicalroute-template",
+            "route_template",
+            "data-route-version=\"a\"",
+            "data-route-version='a'",
+            "editable template version",
+        ))
+        has_version_b = any(token in lower_svg for token in (
+            "technicalroute-ai-reference-image",
+            "route_ai",
+            "data-route-version=\"b\"",
+            "data-route-version='b'",
+            "data-route-source=\"ai-reference\"",
+            "data-route-source='ai-reference'",
+        )) or self._direct_route_ai_ok(project_root)
+        if has_version_a and has_version_b:
+            return
+
+        route_plan_exists = any((project_root / name).exists() for name in ("technicalroute", "route_workflow"))
+        detail = "missing Version A editable route page and Version B AI reference page"
+        if has_version_a and not has_version_b:
+            detail = "missing Version B AI reference page"
+        elif has_version_b and not has_version_a:
+            detail = "missing Version A editable route page"
+        elif not route_plan_exists:
+            detail += "; no technicalroute/ or route_workflow/ workdir was created"
+
+        self._project_issues.append((
+            "error",
+            "technicalroute_requirement_unfulfilled",
+            f"Project declares a TechnicalRoute/workflow requirement ({matched!r}) but {detail}. "
+            "A local hand-drawn workflow slide is not a substitute. Run Step 5.5: "
+            "generate_route_image.py assemble for Version A, literature_search.py prepare-ai-refs, "
+            "then generate_route_image.py run-ai-variant --refs-plan ... so the AI image is generated "
+            "and written to svg_output/_direct_image_slides.json for direct PPTX insertion."
+        ))
+
     def _check_technicalroute_dual_output(self, svg_files: List[Path]) -> None:
-        """Require every TechnicalRoute editable page to have a consecutive AI page."""
+        """Require every TechnicalRoute editable page to have a Version B AI picture page."""
+        project_root = self._project_root_from_dir(svg_files[0].parent) if svg_files else Path.cwd()
+        direct_ai_entries = self._direct_route_ai_entries(project_root)
+        direct_ai_ok = any(Path(entry['image_path']).is_file() for entry in direct_ai_entries)
+        direct_ai_after = {str(entry.get('after_svg_stem') or entry.get('after_stem') or '').strip() for entry in direct_ai_entries}
         infos: list[dict] = []
         for idx, svg_file in enumerate(svg_files):
             content, visible_text = self._read_svg_text_for_project_check(svg_file)
@@ -2004,6 +2702,11 @@ class SVGQualityChecker:
                 'whole_paper_workflow',
                 'full-paper route',
                 'full paper route',
+                'technical route',
+                'research workflow',
+                'method workflow',
+                'paper workflow',
+                'workflow',
                 '技术路线',
                 '技術路線',
                 '全文技术路线',
@@ -2020,7 +2723,22 @@ class SVGQualityChecker:
                 'data-route-source="ai-reference"',
                 "data-route-source='ai-reference'",
             ))
-            is_template = (explicit_template or route_page_marker) and not is_ai
+            index_like_page = any(token in name_lower or token in text_lower for token in (
+                'agenda', 'toc', 'contents', '目录', '報告結構', '报告结构'
+            ))
+            route_filename_hint = any(token in name_lower for token in (
+                'route', 'technical', 'workflow', 'framework', 'pipeline'
+            ))
+            workflow_like_template = (
+                route_filename_hint
+                and not index_like_page
+                and any(token in name_lower for token in ('workflow', 'pipeline', 'technical'))
+            )
+            is_template = (
+                explicit_template
+                or (route_page_marker and route_filename_hint and not index_like_page)
+                or workflow_like_template
+            ) and not is_ai
             template_and_ai_on_same_slide = explicit_template and is_ai
             if template_and_ai_on_same_slide:
                 self._project_issues.append((
@@ -2044,14 +2762,35 @@ class SVGQualityChecker:
         ai_infos = [info for info in infos if info['is_ai']]
         if not template_infos and not ai_infos:
             return
-        if template_infos and not ai_infos:
+        if template_infos and not ai_infos and not direct_ai_ok:
             self._project_issues.append((
                 'error',
                 'technicalroute_missing_ai_page',
-                "TechnicalRoute editable template page exists, but no Version B AI reference slide was found. "
-                "Run generate_route_image.py run-ai-variant, verify route_ai_image_path, then run create-ai-slide."
+                "TechnicalRoute editable template page exists, but no Version B AI reference picture page was found. "
+                "Run literature_search.py prepare-ai-refs, then generate_route_image.py run-ai-variant --refs-plan ... so the AI image is generated and written to svg_output/_direct_image_slides.json for PPTX insertion."
             ))
             return
+        if template_infos and direct_ai_ok:
+            direct_names = {Path(entry['image_path']).name for entry in direct_ai_entries}
+            for entry in direct_ai_entries:
+                image_path = Path(entry['image_path'])
+                if not image_path.is_file():
+                    self._project_issues.append(('error', 'technicalroute_ai_direct_image_missing', f"{image_path.name}: direct AI picture slide image is missing on disk."))
+                    continue
+                try:
+                    image_bytes = image_path.read_bytes()
+                except OSError:
+                    continue
+                size = self._png_size_from_bytes(image_bytes) if image_path.suffix.lower() == '.png' else None
+                required_w, required_h = self._route_ai_required_pixels(1280.0, 720.0)
+                if size is None or size[0] < required_w or size[1] < required_h:
+                    actual = 'unknown' if size is None else f"{size[0]}x{size[1]}"
+                    self._project_issues.append(('error', 'technicalroute_ai_low_resolution', f"{image_path.name}: Version B route image is {actual}; must be at least {required_w}x{required_h} pixels for >=330ppi full-slide insertion."))
+            for template in template_infos:
+                if direct_ai_after and template['file'].stem not in direct_ai_after:
+                    self._project_issues.append(('error', 'technicalroute_not_consecutive', f"{template['file'].name}: direct AI picture manifest should set after_svg_stem to this Version A slide stem."))
+            if not ai_infos:
+                return
 
         for ai in ai_infos:
             image_tag = re.search(
@@ -2092,6 +2831,60 @@ class SVGQualityChecker:
                     'technicalroute_ai_invalid_png_data',
                     f"{ai['file'].name}: Version B route slide data URI is not PNG bytes."
                 ))
+                continue
+            extra_shapes = re.search(
+                r'<(?:text|rect|path|line|polyline|polygon|circle|ellipse)\b',
+                ai['content'],
+                flags=re.IGNORECASE,
+            )
+            if extra_shapes:
+                self._project_issues.append((
+                    'error',
+                    'technicalroute_ai_not_direct_image_page',
+                    f"{ai['file'].name}: Version B route slide must be a direct full-slide image page only; "
+                    "do not add a global layout, title, caption, footer, or SVG template around it."
+                ))
+            try:
+                root = ET.fromstring(ai['content'])
+                canvas_w, canvas_h = self._svg_viewbox_size(root)
+            except ET.ParseError:
+                canvas_w, canvas_h = 1280.0, 720.0
+            image_box = None
+            if image_tag:
+                tag_text = image_tag.group(0)
+                def _tag_float(name: str, default: float = 0.0) -> float:
+                    match = re.search(rf'\b{name}\s*=\s*["\']([^"\']+)["\']', tag_text, flags=re.IGNORECASE)
+                    if not match:
+                        return default
+                    try:
+                        return float(match.group(1))
+                    except ValueError:
+                        return default
+                image_box = (
+                    _tag_float('x'),
+                    _tag_float('y'),
+                    _tag_float('width'),
+                    _tag_float('height'),
+                )
+            if image_box:
+                x, y, w, h = image_box
+                if x > 1.0 or y > 1.0 or w < canvas_w - 1.0 or h < canvas_h - 1.0:
+                    self._project_issues.append((
+                        'error',
+                        'technicalroute_ai_not_direct_full_slide_image',
+                        f"{ai['file'].name}: Version B route image must cover the full slide canvas "
+                        f"(expected 0,0,{canvas_w:g},{canvas_h:g})."
+                    ))
+            size = self._png_size_from_bytes(image_bytes)
+            required_w, required_h = self._route_ai_required_pixels(canvas_w, canvas_h)
+            if size is None or size[0] < required_w or size[1] < required_h:
+                actual = "unknown" if size is None else f"{size[0]}x{size[1]}"
+                self._project_issues.append((
+                    'error',
+                    'technicalroute_ai_low_resolution',
+                    f"{ai['file'].name}: Version B route image is {actual}; "
+                    f"must be at least {required_w}x{required_h} pixels for >=330ppi full-slide insertion."
+                ))
 
         ai_indices = {ai['idx'] for ai in ai_infos}
         for template in template_infos:
@@ -2099,7 +2892,7 @@ class SVGQualityChecker:
                 self._project_issues.append((
                     'error',
                     'technicalroute_not_consecutive',
-                    f"{template['file'].name}: TechnicalRoute Version B AI reference slide must be the next SVG page."
+                    f"{template['file'].name}: TechnicalRoute Version B AI reference slide must be the next SVG page, or a direct PPTX image slide manifest must set after_svg_stem to this Version A slide."
                 ))
 
     def _check_summary_thanks_separation(self, svg_files: List[Path]) -> None:
