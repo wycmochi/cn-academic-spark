@@ -38,6 +38,8 @@ import os
 import sys
 import shutil
 import argparse
+import re
+import subprocess
 from pathlib import Path
 
 # Import finalize helpers from the internal package.
@@ -67,6 +69,69 @@ def safe_print(text: str) -> None:
         for source, target in replacements.items():
             text = text.replace(source, target)
         print(text)
+
+
+_TECHNICALROUTE_TRIGGER_RE = re.compile(
+    r"technicalroute|technical_route|embed_technicalroute|route_ai|技术路线|全文技术路线|全文方法链条|研究框架",
+    re.IGNORECASE,
+)
+
+
+def _project_declares_technicalroute(project_dir: Path) -> bool:
+    if (project_dir / "technicalroute").is_dir() or (project_dir / "route_workflow").is_dir():
+        return True
+    candidates = [
+        project_dir / "design_spec.md",
+        project_dir / "spec_lock.md",
+        project_dir / "ppt_outline_cn.md",
+        project_dir / "content.yaml",
+        project_dir / "svg_output" / "_direct_image_slides.json",
+    ]
+    notes_dir = project_dir / "notes"
+    if notes_dir.is_dir():
+        candidates.extend(sorted(notes_dir.glob("*.md"))[:30])
+    svg_output = project_dir / "svg_output"
+    if svg_output.is_dir():
+        candidates.extend(sorted(svg_output.glob("*.svg"))[:60])
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            text = candidate.read_text(encoding="utf-8-sig", errors="replace")
+        except OSError:
+            continue
+        if _TECHNICALROUTE_TRIGGER_RE.search(text):
+            return True
+    return False
+
+
+def _run_technicalroute_stage_gate(project_dir: Path, quiet: bool = False) -> bool:
+    if not _project_declares_technicalroute(project_dir):
+        return True
+    gate_script = Path(__file__).parent / "technicalroute" / "generate_route_image.py"
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(gate_script),
+            "gate",
+            "--project",
+            str(project_dir),
+        ],
+        cwd=str(Path(__file__).parent.parent),
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if proc.returncode != 0:
+        safe_print("[ERROR] TechnicalRoute stage gate failed; finalize_svg will not continue.")
+        if proc.stdout:
+            safe_print(proc.stdout.rstrip())
+        return False
+    if not quiet:
+        safe_print("[OK] TechnicalRoute stage gate passed")
+    return True
 
 
 def process_flatten_text(svg_file: Path, verbose: bool = False) -> bool:
@@ -153,6 +218,9 @@ def finalize_project(
     if dry_run:
         safe_print("[PREVIEW] Preview mode, no operations will be performed")
         return True
+
+    if not _run_technicalroute_stage_gate(project_dir, quiet=quiet):
+        return False
 
     # Step 1: Copy directory
     if svg_final.exists():

@@ -218,7 +218,7 @@ The generated route AI page is a direct PPTX picture page. Do not wrap Version B
 
 Forbidden AI references: manual `--refs`, mixed literature+gallery plans, SVG files, PPTX/PPT files, editable Version A route pages, screenshots of editable route pages, chart templates, assembled SVGs, exported slide images, and any reference file not listed in `route_ai_refs.json`.
 
-Backend selection follows `.env.example`: set `IMAGE_BACKEND` plus provider-specific keys/model variables in the current environment or `.env`. Do not pass `--backend` or `--model` in normal deck generation; those CLI options are only temporary overrides. Reference-image generation requires a backend whose `generate()` accepts `reference_images` (currently OpenAI-compatible and Gemini backends in this skill). If the configured backend cannot use references, the run must fail loudly or fall back to the deterministic local PNG rather than silently dropping references.
+Backend selection follows `.env.example`: set `IMAGE_BACKEND` plus provider-specific keys/model variables in the current environment or `.env`. Do not pass `--backend` or `--model` in normal deck generation; those CLI options are only temporary overrides. Reference-image generation requires a backend whose `generate()` accepts `reference_images` (currently OpenAI-compatible and Gemini backends in this skill). If the configured backend cannot use references, the run must fail loudly. It must never silently drop references or replace the AI route page with a deterministic local placeholder in production.
 
 ## Label Reliability Fallback
 
@@ -238,16 +238,23 @@ Required sequence:
 1. Run `prepare-ai-refs` and verify `style_refs/route_ai_refs.json` exists.
 2. Run `run-ai-variant --refs-plan ... --direct-slide-manifest <project>/svg_output/_direct_image_slides.json --after-svg-stem <NN>_route_template` and verify the command prints both `OK: route_ai_image_path = ...` and `OK: route_ai_direct_slide_manifest = ...`.
 3. Confirm the generated image file exists and is not empty.
-4. Run `svg_quality_checker.py` on the project; it must see `_direct_image_slides.json` with a valid `technicalroute_ai` PNG entry.
-5. Run `finalize_svg.py`; it should not touch the direct AI PNG because Version B is not an SVG page.
-6. Run `svg_quality_checker.py` again before PPTX export; it must still find `_direct_image_slides.json` and the referenced PNG on disk.
+4. Run the immediate TechnicalRoute stage gate:
 
-If the backend is not configured, `run-ai-variant` creates a deterministic local fallback PNG unless `--no-local-fallback` is explicitly set. Do not produce a deck with only Version A.
+```bash
+python3 scripts/technicalroute/generate_route_image.py gate --project <project_path> --route-workdir <route_workdir> --after-svg-stem <NN>_route_template
+```
+
+The gate must pass before any downstream SVG authoring, `finalize_svg.py`, notes export, or PPTX export. It validates Version A SVG, Version B AI PNG, `route_ai_refs.json`, the direct-image manifest, image resolution, and the Version B insertion anchor.
+5. Run `svg_quality_checker.py` on the project; it must see `_direct_image_slides.json` with a valid `technicalroute_ai` PNG entry.
+6. Run `finalize_svg.py`; it should not touch the direct AI PNG because Version B is not an SVG page. The finalize script also runs the TechnicalRoute stage gate when route output is declared.
+7. Run `svg_quality_checker.py` again before PPTX export; it must still find `_direct_image_slides.json` and the referenced PNG on disk.
+
+If the backend is not configured, `run-ai-variant` must fail before PPTX export. Do not produce a deck with only Version A, and do not accept a local placeholder as Version B. `--allow-local-fallback` exists only for isolated diagnostics and is forbidden in production generation.
 
 
 ## Stability Note
 
-`run-ai-variant` should be called with `--direct-slide-manifest` during deck generation, or with an `--out` path under the project so it can infer `<project>/svg_output/_direct_image_slides.json`. The command prints `OK: route_ai_image_path = ...` and `OK: route_ai_direct_slide_manifest = ...`, then the PPTX exporter inserts the direct Version B picture page. If the image backend, credentials, or reference set is unavailable, the command creates a deterministic local fallback PNG from `prompt_ai.md` so the PPT never silently loses the AI-reference route page. Use `--no-local-fallback` only when you prefer a hard failure.
+`run-ai-variant` should be called with `--direct-slide-manifest` during deck generation, or with an `--out` path under the project so it can infer `<project>/svg_output/_direct_image_slides.json`. The command prints `OK: route_ai_image_path = ...` and `OK: route_ai_direct_slide_manifest = ...`, then the PPTX exporter inserts the direct Version B picture page. If the image backend, credentials, or reference set is unavailable, the command must fail and the deck should not be exported until the image agent succeeds.
 
 
 ## Mandatory Reference Bridge

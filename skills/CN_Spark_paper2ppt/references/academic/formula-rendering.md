@@ -51,6 +51,12 @@ Preferred command:
 python3 scripts/latex_formula_to_png.py --block-json <project_path>/notes/formula_01.json --out <project_path>/images/formulas/formula_block_01.png --font-size 30 --dpi 260 --color "#111111"
 ```
 
+This command must create two files together:
+- `images/formulas/formula_block_01.png`
+- `images/formulas/formula_block_01.meta.json`
+
+The sidecar metadata records the source LaTeX, normalized mathtext LaTeX, renderer name, output size, DPI, and `mathtext_validated: true`. A formula PNG without this metadata is treated as untrusted and must not enter the PPTX export.
+
 Single-formula rendering is for diagnostics only. In the final PPT, explanatory formulas must use formula block PNGs:
 
 ```bash
@@ -75,16 +81,20 @@ Rules:
 - Use gray 1.5 pt dashed separators between multiple formula blocks.
 - Formula PNGs, text boxes, and separators must not overlap.
 - Place formula block PNGs under `<project_path>/images/formulas/`.
+- Keep the paired `.meta.json` beside every formula block PNG; do not move or rename only the PNG.
 - Record `usage: formula_block_png` in the `design_spec.md` Image Resource List and in `spec_lock.md images`.
 
 ## QA
 
 Check before export:
 - Every formula page has at least one `<image ... data-formula-block-png="true">` or `images/formulas/formula_block_*.png`.
+- Every formula block PNG has a sibling `.meta.json` with `schema: cn_spark_formula_png_meta_v1`, `renderer: matplotlib.mathtext`, and `mathtext_validated: true`.
+- `normalized_latex` in the metadata must be wrapped in `$...$` and must not contain unsupported raw environments such as `\begin{cases}` or `\end{cases}`.
 - A single formula page has no more than five formula blocks.
 - Formula roles, variable explanations, and `式中：` are not split into SVG text boxes.
+- Any equation-like SVG text on a formula page is a blocking error, even if another formula image exists on the same slide.
 - Formula block PNG files already exist before `finalize_svg.py`.
 - Formula explanation text is in Chinese.
 - Adjacent formula blocks and separators do not overlap.
 
-If mathtext cannot parse a LaTeX command, first simplify it to a matplotlib-supported form. Use a transparent screenshot fallback only after recording the limitation.
+If mathtext cannot parse a LaTeX command, do not export raw LaTeX as visible text. Re-read the source paper, rewrite the formula into supported LaTeX, rerender the PNG, and rerun the quality gate.

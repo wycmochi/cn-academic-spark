@@ -114,6 +114,7 @@ Rules:
 - Delete unused prompt text and unused picture/body placeholders before final export. Visible prompts such as `Click to edit...`, `单击此处...`, or `演讲者/课程名称` are blocking errors.
 - Protect school name, college name, logo, page number, footer marks, and authored master graphics. Title, subtitle, images, formulas, and route diagrams may not overlap these protected regions.
 - Do not split one semantic phrase into multiple stacked text boxes. Use one bounded text element with `<tspan>` line breaks.
+- Body text boxes must never overlap, and the gap between any two body text-box boundaries must be at least 3 pt. If the gap would be smaller, merge adjacent text into one box, enlarge the containing shape, or compress sibling spacing before export.
 - Keep slide content vertically centered inside the actual writable region, not near the top of the page. Use the content region's midpoint as the visual center and reserve the footer region for citation, bottom banner, and page number.
 - Body slides, except cover and ending/Q&A, should fill the writable region rather than leaving one small text island. Target at least 80% width and 75% height usage with source-grounded editable text, tables, charts, formula PNGs, route images, or grouped evidence blocks. If a single column leaves blank space, switch to two or three columns before shrinking text.
 - On the first and final slides, use one dominant visual layer. Do not stack a paper figure over a cover/thanks image, and do not place an empty white shape over a large image unless it is a deliberate text overlay marked as `overlay` or `scrim`.
@@ -163,5 +164,6 @@ Summary and thank-you / Q&A must be separate slides. Do not combine conclusion b
 - [ ] Non-exempt slides include a meaningful image, chart, formula, or complex table screenshot.
 - [ ] Formula pages embed formula title, equation, and variable explanations as one PNG with `data-formula-block-png="true"`; no duplicate SVG text boxes reconstruct the same content; at most five formula blocks per slide; adjacent formula blocks use gray 1.5pt dashed separators; formula/text/separator boxes do not overlap.
 - [ ] User-template pages use `editableContentRegion`; all body tables/cards/images/text boxes stay inside the writable region and do not overlap logo, school name, citation/footer, bottom banner, or page-number protected regions.
+- [ ] Body text boxes have no overlap and keep at least 3 pt spacing from every neighboring text box.
 - [ ] Each slide has exactly one page number, citation/footer text is anchored at the bottom, and first/final pages have no unintended large image/shape stack.
 - [ ] `scripts/svg_quality_checker.py` passes before PPTX export, with no full-slide raster image SVG pages. TechnicalRoute Version B appears as a direct PPTX picture slide via `svg_output/_direct_image_slides.json`.

@@ -105,7 +105,13 @@ Do not continue regenerating indefinitely. The editable template version is the 
 
 ## Blocking Export Gate
 
-Run the deck-level quality gate after Version A/B insertion:
+Run the TechnicalRoute stage gate immediately after Version A/B insertion, before any downstream slide generation/finalization/export:
+
+```bash
+python3 scripts/technicalroute/generate_route_image.py gate --project <project_path> --route-workdir <route_workdir> --after-svg-stem <NN>_route_template
+```
+
+Then run the deck-level quality gates:
 
 ```bash
 python3 scripts/svg_quality_checker.py <project_path>/svg_output
@@ -119,4 +125,4 @@ The gate must fail if any of the following is true:
 - the AI image href is not `data:image/png;base64,...`, has invalid base64, or does not decode to PNG bytes;
 - `run-ai-variant` failed, was skipped, silently dropped usable `style_refs`, or used `Custom_gallery` before the seed-site literature search was completed.
 
-Do not export PPTX until the AI reference image is generated, inserted, finalized, and verified.
+Do not enter the next pipeline phase and do not export PPTX until the AI reference image is generated, inserted, finalized, and verified.

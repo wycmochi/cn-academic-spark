@@ -120,6 +120,7 @@ def _run_svg_quality_gate(
     expected_format: str | None,
     verbose: bool,
     auto_repair_layout: bool = True,
+    report_path: Path | None = None,
 ) -> None:
     if auto_repair_layout:
         _auto_repair_svg_output_layout(project_path, verbose=verbose)
@@ -129,13 +130,36 @@ def _run_svg_quality_gate(
         checker.check_directory(str(project_path), expected_format=expected_format)
         checker.print_summary()
     report = buffer.getvalue()
+    if report_path is not None:
+        status = "FAIL" if checker.summary.get('errors', 0) > 0 else "PASS"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(
+            "\n".join([
+                "# SVG Quality Report",
+                "",
+                f"- Project: `{project_path}`",
+                f"- Status: `{status}`",
+                f"- Errors: {checker.summary.get('errors', 0)}",
+                f"- Warnings: {checker.summary.get('warnings', 0)}",
+                "",
+                "```text",
+                report.rstrip(),
+                "```",
+                "",
+            ]),
+            encoding="utf-8",
+        )
     if checker.summary.get('errors', 0) > 0:
         print("Error: SVG quality gate failed before PPTX export.", file=sys.stderr)
+        if report_path is not None:
+            print(f"Quality report: {report_path}", file=sys.stderr)
         if report:
             print(report, file=sys.stderr)
         sys.exit(1)
     if verbose and checker.summary.get('warnings', 0) > 0:
         print(f"  [warn] SVG quality gate: {checker.summary['warnings']} warning(s)")
+    if verbose and report_path is not None:
+        print(f"  SVG quality report: {report_path}")
 
 
 def _load_direct_image_slides(project_path: Path, manifest_arg: str | None, *, verbose: bool) -> list[dict]:
@@ -418,11 +442,13 @@ Recorded narration:
         native_path = output_base
         stem = output_base.stem
         legacy_path = output_base.parent / f"{stem}_svg{output_base.suffix}"
+        quality_report_path = output_base.parent / f"{stem}_quality_report.md"
     else:
         exports_dir = project_path / "exports"
         exports_dir.mkdir(parents=True, exist_ok=True)
         native_path = exports_dir / f"{project_name}_{timestamp}.pptx"
         legacy_path = exports_dir / f"{project_name}_{timestamp}_svg.pptx"
+        quality_report_path = exports_dir / f"{project_name}_{timestamp}_quality_report.md"
 
         if gen_legacy:
             backup_dir = project_path / "backup" / timestamp
@@ -601,6 +627,7 @@ Recorded narration:
         expected_format=canvas_format,
         verbose=verbose,
         auto_repair_layout=not args.no_auto_repair_layout,
+        report_path=quality_report_path,
     )
 
     # svg_files is per-product (native vs legacy may now read different

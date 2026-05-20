@@ -298,7 +298,7 @@ Must be executed in order 鈥?skipping or adding extra flags is FORBIDDEN:
 # 1. Split speaker notes into per-page note files
 python3 scripts/total_md_split.py <project_path>
 
-# 2. Export standalone speaker-notes DOCX (continuous manuscript, paragraphs separated)
+# 2. Export standalone speaker-notes DOCX (continuous manuscript, each paragraph prefixed with slide page number)
 python3 scripts/notes_to_docx.py <project_path>
 
 # 3. SVG post-processing (icon embedding, image crop/embed, text flattening, rounded rect to path)
@@ -309,7 +309,7 @@ python3 scripts/svg_to_pptx.py <project_path>
 # Output:
 #   Native source: main editable pptx reads `svg_output/`
 #   exports/<project_name>_<timestamp>.pptx           -> main native editable pptx
-#   exports/<project_name>_speaker_notes.docx         -> continuous speaker-notes manuscript
+#   exports/<project_name>_speaker_notes.docx         -> continuous speaker-notes manuscript with slide-number paragraph prefixes
 # Optional diagnostic snapshot only:
 #   python3 scripts/svg_to_pptx.py <project_path> --only legacy --allow-legacy-image-pptx
 #   Legacy source: diagnostic SVG-image pptx reads `svg_final/`

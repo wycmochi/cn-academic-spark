@@ -211,12 +211,19 @@ Mandatory numeric parameter:
 text_box_shape_inset_pt: 5
 text_box_shape_inset_px: 6.67
 text_box_center_tolerance_px: 10
+text_box_min_gap_pt: 3
+text_box_min_gap_px: 4
 ```
 
 Every text box inside a visible shape must be centered in the declared
 `data-shape-*` frame and must keep at least `5pt` (`6.67px` at 96 DPI) between
 the text box boundary and the outer shape boundary. Read this number from
 `spec_lock.md`; do not estimate it ad hoc.
+
+Every pair of body text boxes must also keep at least `3pt` (`4px` at 96 DPI)
+between their outer boundaries. If two text modules would be closer than this,
+merge them into one text box or resize/reflow the surrounding shapes before
+export.
 
 If text does not fit the declared box, reduce wording, add explicit line-break
 `<tspan>` rows, reduce font size within the ramp, or choose a larger slot. Do
@@ -507,7 +514,7 @@ Auto-split `notes/total.md` into per-page files in `notes/`.
 # 1. Split speaker notes
 python3 scripts/total_md_split.py <project_path>
 
-# 2. Export speaker notes as DOCX (continuous manuscript, no slide headings by default)
+# 2. Export speaker notes as DOCX (continuous manuscript, slide-number paragraph prefixes)
 python3 scripts/notes_to_docx.py <project_path>
 
 # 3. SVG post-processing (auto-embed icons, images, etc.)

@@ -62,6 +62,8 @@ TEXT_BOX_SHAPE_INSET_PT = 5.0
 TEXT_BOX_SHAPE_INSET_PX = TEXT_BOX_SHAPE_INSET_PT * POINT_TO_PX
 TEXT_BOX_CENTER_TOLERANCE_PX = 10.0
 TEXT_BOX_OVERLAP_RATIO_LIMIT = 0.03
+TEXT_BOX_MIN_GAP_PT = 3.0
+TEXT_BOX_MIN_GAP_PX = TEXT_BOX_MIN_GAP_PT * POINT_TO_PX
 
 # Ramp envelope for font-size drift detection.
 # From design_spec_reference.md §IV — Font Size Hierarchy: the ramp spans
@@ -272,7 +274,7 @@ class SVGQualityChecker:
                 self._check_image_references(content, svg_path, result)
 
                 # 7. Check formula pages use rendered PNG formula images.
-                self._check_formula_png_contract(content, result)
+                self._check_formula_png_contract(content, result, svg_path)
 
                 # 8. Check unused PPT placeholder prompt residue.
                 self._check_placeholder_prompt_residue(content, result)
@@ -989,18 +991,26 @@ class SVGQualityChecker:
                     continue
                 right_box = right["box"]
                 assert isinstance(right_box, tuple)
-                ratio = self._rect_overlap_ratio(left_box, right_box)
-                if ratio <= TEXT_BOX_OVERLAP_RATIO_LIMIT:
-                    continue
                 right_text = str(right["text"])
                 if not right_text.strip():
                     continue
-                result['errors'].append(
-                    "Detected overlapping text boxes. Keep text modules in separate "
-                    f"non-overlapping data-box frames (overlap ratio {ratio:.2f}). "
-                    f"Samples: {left_text[:24]!r} / {right_text[:24]!r}"
-                )
-                break
+                ratio = self._rect_overlap_ratio(left_box, right_box)
+                if ratio > TEXT_BOX_OVERLAP_RATIO_LIMIT:
+                    result['errors'].append(
+                        "Detected overlapping text boxes. Keep text modules in separate "
+                        f"non-overlapping data-box frames (overlap ratio {ratio:.2f}). "
+                        f"Samples: {left_text[:24]!r} / {right_text[:24]!r}"
+                    )
+                    break
+                gap_px = self._rect_edge_gap(left_box, right_box)
+                if gap_px < TEXT_BOX_MIN_GAP_PX:
+                    result['errors'].append(
+                        "Detected text boxes with insufficient spacing. Keep every pair of "
+                        f"text boxes at least {TEXT_BOX_MIN_GAP_PT:g}pt apart; current gap "
+                        f"is {gap_px / POINT_TO_PX:.2f}pt. "
+                        f"Samples: {left_text[:24]!r} / {right_text[:24]!r}"
+                    )
+                    break
 
         # Stacked fragment guard: many short text nodes on the same baseline are
         # usually a phrase split into separate text boxes. Inline formatting must
@@ -1466,7 +1476,7 @@ class SVGQualityChecker:
                     f"Images: {samples}"
                 )
 
-    def _check_formula_png_contract(self, content: str, result: Dict):
+    def _check_formula_png_contract(self, content: str, result: Dict, svg_path: Path | None = None):
         """Ensure displayed formulas use rendered PNG blocks, not SVG text boxes."""
         content_lower = content.lower()
         formula_page = any(token in content_lower for token in (
@@ -1558,6 +1568,42 @@ class SVGQualityChecker:
                                 f"Formula block image href must point to images/formulas/formula_block_*.png "
                                 f"or an embedded PNG data URI; got {href!r}."
                             )
+                        if href and not href.startswith('data:image/png;base64,') and not re.match(r'^[a-z]+://', href, flags=re.IGNORECASE):
+                            clean_href = html.unescape(href).replace("\\", "/")
+                            image_path = Path(clean_href)
+                            if not image_path.is_absolute() and svg_path is not None:
+                                image_path = (svg_path.parent / image_path).resolve()
+                            meta_path = image_path.with_suffix(".meta.json")
+                            if not meta_path.is_file():
+                                result['errors'].append(
+                                    "Formula block PNG is missing renderer QA metadata. "
+                                    "Rerender the formula from the source paper with "
+                                    "scripts/latex_formula_to_png.py --block-json so the paired "
+                                    f".meta.json confirms mathtext validation. Missing: {meta_path}"
+                                )
+                            else:
+                                try:
+                                    meta = json.loads(meta_path.read_text(encoding="utf-8-sig"))
+                                except Exception as exc:  # noqa: BLE001 - malformed sidecar should block export
+                                    result['errors'].append(
+                                        f"Formula block PNG metadata cannot be read: {meta_path} ({exc})"
+                                    )
+                                else:
+                                    normalized = str(meta.get("normalized_latex") or "")
+                                    if (
+                                        meta.get("schema") != "cn_spark_formula_png_meta_v1"
+                                        or meta.get("renderer") != "matplotlib.mathtext"
+                                        or meta.get("mathtext_validated") is not True
+                                        or not (normalized.startswith("$") and normalized.endswith("$"))
+                                        or r"\begin{cases}" in normalized
+                                        or r"\end{cases}" in normalized
+                                    ):
+                                        result['errors'].append(
+                                            "Formula block PNG metadata does not prove a valid mathtext render. "
+                                            "Regenerate the formula PNG after rereading the paper formula and "
+                                            "normalizing unsupported LaTeX constructs. "
+                                            f"Metadata: {meta_path}"
+                                        )
                         box = (
                             self._attr_float(elem, 'x'),
                             self._attr_float(elem, 'y'),
@@ -1616,7 +1662,7 @@ class SVGQualityChecker:
                 continue
             operator_score = sum(compact.count(ch) for ch in operator_chars)
             latex_score = len(re.findall(
-                r'\\(?:frac|sum|int|prod|sqrt|alpha|beta|gamma|phi|theta|infty|partial|cdot|times|leq|geq|mathbb|mathbf|left|right)',
+                r'\\(?:frac|sum|int|prod|sqrt|alpha|beta|gamma|phi|theta|tau|sigma|mu|lambda|Delta|delta|infty|partial|cdot|times|quad|le|ge|leq|geq|begin|end|cases|mathbb|mathbf|left|right)',
                 compact,
             ))
             script_score = len(re.findall(r'[_^][A-Za-z0-9{]', compact))
@@ -1625,12 +1671,12 @@ class SVGQualityChecker:
             if looks_dense or (latex_score and len(compact) >= 12):
                 suspicious_samples.append(compact[:80])
 
-        if suspicious_samples and not formula_image:
+        if suspicious_samples:
             sample = suspicious_samples[0]
             result['errors'].append(
-                "Detected displayed equation-like SVG text without a formula block PNG. "
-                "Complete formulas, formula titles, and variable explanations must be rendered "
-                "with scripts/latex_formula_to_png.py --block-json and embedded as one PNG. "
+                "Detected displayed equation-like SVG text. Complete formulas, formula titles, "
+                "and variable explanations must be rendered with scripts/latex_formula_to_png.py "
+                "--block-json and embedded as one QA-validated PNG, not editable SVG text. "
                 f"Sample text: {sample!r}"
             )
 
@@ -2127,6 +2173,20 @@ class SVGQualityChecker:
         return overlap / min_area if min_area else 0.0
 
     @staticmethod
+    def _rect_edge_gap(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
+        ax1, ay1, aw, ah = a
+        bx1, by1, bw, bh = b
+        ax2, ay2 = ax1 + aw, ay1 + ah
+        bx2, by2 = bx1 + bw, by1 + bh
+        dx = max(bx1 - ax2, ax1 - bx2, 0.0)
+        dy = max(by1 - ay2, ay1 - by2, 0.0)
+        if dx == 0.0:
+            return dy
+        if dy == 0.0:
+            return dx
+        return math.hypot(dx, dy)
+
+    @staticmethod
     def _png_size_from_bytes(image_bytes: bytes) -> tuple[int, int] | None:
         if not image_bytes.startswith(b"\x89PNG\r\n\x1a\n") or len(image_bytes) < 24:
             return None
@@ -2179,6 +2239,46 @@ class SVGQualityChecker:
 
     def _direct_route_ai_ok(self, project_root: Path) -> bool:
         return any(Path(entry["image_path"]).is_file() for entry in self._direct_route_ai_entries(project_root))
+
+    @staticmethod
+    def _route_ai_backend_prompt_gate_ok(project_root: Path, entry: dict) -> bool:
+        """Confirm Version B came through run-ai-variant's refs-gated prompt.
+
+        A direct PNG page alone is not enough: older builds could create a
+        deterministic local placeholder and still insert it as a picture slide.
+        run-ai-variant writes *_refs_gate.md beside the backend output, carrying
+        the hard source gate that limits image references to seed-site literature
+        rasters or Custom_gallery fallback rasters.
+        """
+        image_path = Path(str(entry.get("image_path") or "")).expanduser()
+        candidates: list[Path] = []
+        if image_path.is_file():
+            candidates.extend(image_path.parent.glob("*_refs_gate.md"))
+        candidates.extend(project_root.glob("technicalroute/**/output/*_refs_gate.md"))
+        candidates.extend(project_root.glob("technicalroute/**/*_refs_gate.md"))
+
+        seen: set[Path] = set()
+        for candidate in candidates:
+            try:
+                resolved = candidate.resolve()
+            except OSError:
+                continue
+            if resolved in seen or not resolved.is_file():
+                continue
+            seen.add(resolved)
+            try:
+                text = resolved.read_text(encoding="utf-8-sig", errors="replace")
+            except OSError:
+                continue
+            if (
+                "[REFERENCE SOURCE GATE - HARD]" in text
+                and "route_ai_refs.json" in text
+                and "Do NOT use Version A" in text
+                and "Custom_gallery" in text
+                and "seed_sites" in text
+            ):
+                return True
+        return False
 
     @staticmethod
     def _is_forbidden_route_ai_ref_path(path: Path) -> bool:
@@ -2259,6 +2359,16 @@ class SVGQualityChecker:
         for plan_path, plan in plans:
             mode = str(plan.get("mode") or "")
             refs = plan.get("refs") or []
+            for entry in direct_entries:
+                if not self._route_ai_backend_prompt_gate_ok(project_root, entry):
+                    self._project_issues.append((
+                        "error",
+                        "technicalroute_ai_backend_prompt_gate_missing",
+                        f"{Path(entry['image_path']).name}: direct TechnicalRoute AI picture slide "
+                        "has no refs-gated backend prompt beside the generated image. Run "
+                        "generate_route_image.py run-ai-variant with --refs-plan; do not create "
+                        "Version B through local fallback, SVG wrapping, or manual image insertion."
+                    ))
             if plan.get("reference_flow") != "academic_search_then_gallery_fallback":
                 self._project_issues.append((
                     "error",
@@ -2313,6 +2423,13 @@ class SVGQualityChecker:
                         "error",
                         "technicalroute_ai_ref_not_raster",
                         f"{plan_path.name}: forbidden AI reference type for {ref_path.name}; only raster images are allowed."
+                    ))
+                    continue
+                if not ref_path.is_file():
+                    self._project_issues.append((
+                        "error",
+                        "technicalroute_ai_ref_missing",
+                        f"{plan_path.name}: AI reference image is missing on disk: {ref_path}"
                     ))
                     continue
                 if self._is_forbidden_route_ai_ref_path(ref_path):

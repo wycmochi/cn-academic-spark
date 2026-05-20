@@ -49,7 +49,7 @@ python3 scripts/svg_to_pptx.py <project_path> --recorded-narration audio
 
 Behavior:
 - Default output:
-  - `exports/<project_name>_speaker_notes.docx` - standalone continuous speaker notes manuscript, paragraphs separated
+  - `exports/<project_name>_speaker_notes.docx` - standalone continuous speaker notes manuscript, each paragraph prefixed with slide page number
   - `exports/<project_name>_<timestamp>.pptx` — main native editable pptx
   - `backup/<timestamp>/<project_name>_svg.pptx` — SVG snapshot for visual reference
   - `backup/<timestamp>/svg_output/` — copy of Executor SVG source, so the pptx can be rebuilt via `finalize_svg → svg_to_pptx` without re-running the LLM

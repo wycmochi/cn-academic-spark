@@ -4,7 +4,9 @@
 The PPTX exporter intentionally avoids embedding notes by default because some
 PowerPoint COM/open flows fail on notes-heavy packages. This script keeps the
 same slide-to-notes mapping internally but writes a continuous speech manuscript:
-slide headings are structural only and are not printed by default.
+slide headings are structural only and are not printed by default. Each emitted
+spoken paragraph is prefixed with its slide number so the manuscript stays
+compact while remaining easy to locate against the deck.
 """
 
 from __future__ import annotations
@@ -91,7 +93,11 @@ def _document_xml(svg_files: list[Path], notes: dict[str, str], *, include_slide
         if include_slide_headings:
             body.append(_p(f"第 {idx} 页：{svg.stem}", style="Heading1"))
         for line in lines:
-            body.append(_p(line) if line else _p(""))
+            if line:
+                prefix = "" if include_slide_headings else f"第 {idx} 页："
+                body.append(_p(f"{prefix}{line}"))
+            else:
+                body.append(_p(""))
         emitted_blocks += 1
     if not body:
         body.append(_p("暂无讲稿内容。"))
@@ -192,7 +198,10 @@ def main() -> int:
     parser.add_argument(
         "--include-slide-headings",
         action="store_true",
-        help="Include slide number/file headings. Default is a continuous manuscript without slide headings.",
+        help=(
+            "Include slide number/file headings. Default is a continuous manuscript "
+            "whose paragraphs are prefixed with slide page numbers."
+        ),
     )
     args = parser.parse_args()
 

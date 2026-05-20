@@ -48,7 +48,7 @@ Hard requirements:
 | `scripts/technicalroute/literature_search.py` | Build the route AI reference plan: seed-site literature rasters first, Custom_gallery nearest-intent raster fallback only after completed zero-result search. |
 | `scripts/svg_quality_checker.py` | Validate SVG compatibility. |
 | `scripts/total_md_split.py` | Split speaker notes by slide. |
-| `scripts/notes_to_docx.py` | Export speaker notes as a standalone continuous DOCX manuscript without slide headings by default. |
+| `scripts/notes_to_docx.py` | Export speaker notes as a standalone continuous DOCX manuscript; default paragraphs are prefixed with slide page numbers. |
 | `scripts/finalize_svg.py` | Remove unused template placeholders, embed icons, align / embed images, flatten text, and normalize SVG. |
 | `scripts/svg_to_pptx.py` | Convert SVG pages to editable DrawingML PPTX. |
 | `scripts/pptx_openability_check.py` | Validate exported PPTX package relationships, notes master parts, content types, and current-user read/open permission. |
@@ -224,6 +224,13 @@ Execution order:
 8. Read `references/technicalroute/image-aigenerate.md`; build `prompt_ai.md` from the article outline / `content.yaml`, then generate Version B with `generate_route_image.py run-ai-variant --refs-plan <route_workdir>/style_refs/route_ai_refs.json`. Let `run-ai-variant` write `<project_path>/svg_output/_direct_image_slides.json` automatically, or pass `--direct-slide-manifest <project_path>/svg_output/_direct_image_slides.json --after-svg-stem <NN>_route_template`, so the generated PNG is inserted by the PPTX exporter as a direct picture slide without any SVG wrapper. `--refs-plan` is the single allowed reference bridge: it must be either `literature_only` with seed-site manifest raster refs, or `gallery_only_fallback` with Custom_gallery raster anchors only when the seed-site search completed, produced no usable refs, and both `gallery_fallback_after_search` and `seed_search_completed` are true. Mixing the two classes, manual `--refs`, SVG, PPTX, and screenshots of Version A are forbidden. Version B is prompt/reference independent from Version A; never feed `route_template_svg_path`, `pipeline_with_stages.svg`, assembled SVGs, PPT exports, or screenshots into the AI image call.
    Backend/model selection follows `.env.example`: set `IMAGE_BACKEND` plus provider-specific keys/model variables in the process environment or `.env`; do not pass `--backend` / `--model` unless the user explicitly needs a temporary override. Keep `--aspect_ratio 16:9 --image_size 4K`; the script then normalizes the PNG to at least 330ppi full-slide target pixels before PPT insertion.
 9. Verify `route_ai_image_path` exists and `<project_path>/svg_output/_direct_image_slides.json` contains a `technicalroute_ai` entry whose `image_path` points to that PNG and whose `after_svg_stem` points to the Version A route template slide. `create-ai-slide --out-svg` is blocked by default and must not be used in production. Normal execution must not wrap Version B in SVG; `scripts/svg_to_pptx.py` reads `_direct_image_slides.json` and inserts the PNG as the next PPTX picture slide directly. Run `references/technicalroute/qa-checklist.md` before export.
+10. Run the mandatory TechnicalRoute stage gate before Step 6 or any downstream `finalize_svg.py` / `svg_to_pptx.py` call:
+
+```bash
+python3 scripts/technicalroute/generate_route_image.py gate --project <project_path> --route-workdir <route_workdir> --after-svg-stem <NN>_route_template
+```
+
+The gate must return `OK: technicalroute_gate = PASS`. If Version A editable SVG, Version B AI PNG, `route_ai_refs.json`, `_direct_image_slides.json`, or the A/B consecutive insertion anchor is missing or invalid, stop immediately and fix Step 5.5. Do not proceed to Step 6, finalize, notes export, or PPTX export with only one TechnicalRoute version.
 
 TechnicalRoute output record:
 ```yaml

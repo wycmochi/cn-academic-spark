@@ -40,6 +40,7 @@ class RenderedFormula:
     output: str
     width_px: int
     height_px: int
+    meta: str = ""
 
 
 def _load_matplotlib():
@@ -68,9 +69,100 @@ def normalize_formula(text: str) -> str:
     formula = formula.strip()
     if not formula:
         raise ValueError("empty formula")
+    formula = sanitize_for_mathtext(formula)
     if not (formula.startswith("$") and formula.endswith("$")):
         formula = f"${formula}$"
     return formula
+
+
+def sanitize_for_mathtext(formula: str) -> str:
+    """Convert common paper LaTeX fragments to matplotlib mathtext syntax.
+
+    The renderer is local-first and intentionally avoids a system LaTeX
+    dependency. Academic papers often contain environments that mathtext does
+    not support, especially ``cases``. Rendering them as plain text is worse
+    than failing, so we rewrite the common forms that can be represented
+    safely and let the parser reject the rest.
+    """
+    formula = str(formula or "").strip()
+    if not formula:
+        return formula
+    if formula.startswith("$") and formula.endswith("$"):
+        formula = formula[1:-1].strip()
+
+    def _flatten_cases(match: re.Match[str]) -> str:
+        body = match.group(1)
+        rows = [row.strip() for row in re.split(r"\\\\", body) if row.strip()]
+        parts: list[str] = []
+        for row in rows:
+            cells = [cell.strip().strip(",") for cell in row.split("&") if cell.strip().strip(",")]
+            if not cells:
+                continue
+            value = cells[0]
+            condition = cells[-1] if len(cells) > 1 else ""
+            parts.append(f"{value}\\;({condition})" if condition else value)
+        return ",\\;".join(parts) if parts else ""
+
+    formula = re.sub(r"\\begin\{cases\}(.*?)\\end\{cases\}", _flatten_cases, formula, flags=re.DOTALL)
+    formula = re.sub(r"\\ge(?![A-Za-z])", r"\\geq", formula)
+    formula = re.sub(r"\\le(?![A-Za-z])", r"\\leq", formula)
+    formula = formula.replace(r"\quad", r"\;")
+    formula = formula.replace(r"\,", r"\;")
+    return formula
+
+
+def validate_mathtext_formula(normalized_formula: str, *, dpi: int) -> None:
+    """Fail fast if matplotlib would render a formula as broken/raw text."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        from matplotlib import mathtext
+
+        parser = mathtext.MathTextParser("agg")
+        parser.parse(normalized_formula, dpi=dpi)
+    except Exception as exc:  # noqa: BLE001 - provide actionable CLI failure
+        raise ValueError(
+            "formula LaTeX is not compatible with matplotlib mathtext after normalization. "
+            "Re-read the source paper, rewrite the formula as supported LaTeX, then rerender. "
+            f"Formula: {normalized_formula}"
+        ) from exc
+
+
+def formula_meta_path(output_path: Path) -> Path:
+    """Return the sidecar metadata path used by the formula QA gate."""
+    return output_path.with_suffix(".meta.json")
+
+
+def write_formula_meta(
+    output_path: Path,
+    *,
+    source_latex: str,
+    normalized_latex: str,
+    width_px: int,
+    height_px: int,
+    dpi: int,
+    font_size: float,
+    mode: str,
+    formula_id: str | None = None,
+) -> Path:
+    meta_path = formula_meta_path(output_path)
+    payload = {
+        "schema": "cn_spark_formula_png_meta_v1",
+        "formula_id": formula_id or output_path.stem,
+        "renderer": "matplotlib.mathtext",
+        "renderer_mode": mode,
+        "mathtext_validated": True,
+        "source_sha1": hashlib.sha1(str(source_latex or "").encode("utf-8")).hexdigest(),
+        "source_latex": str(source_latex or ""),
+        "normalized_latex": normalized_latex,
+        "width_px": width_px,
+        "height_px": height_px,
+        "dpi": dpi,
+        "font_size": font_size,
+    }
+    meta_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return meta_path
 
 
 def split_formula_file(text: str) -> list[str]:
@@ -269,6 +361,8 @@ def render_formula_block(block: dict, output_path: Path, *, dpi: int, font_size:
     latex = str(block.get("latex") or block.get("formula") or "").strip()
     if not latex:
         raise ValueError("block JSON must include latex or formula")
+    normalized_latex = normalize_formula(latex)
+    validate_mathtext_formula(normalized_latex, dpi=dpi)
 
     formula_role = _normalize_formula_role(block.get("formula_role_zh") or block.get("formula_role_cn") or block.get("formula_role") or block.get("role_text") or block.get("title") or "")
     intro_label = _normalize_definition_label(block.get("definition_label") or block.get("intro_label") or "式中：")
@@ -351,7 +445,15 @@ def render_formula_block(block: dict, output_path: Path, *, dpi: int, font_size:
 
     with tempfile.TemporaryDirectory() as tmp:
         formula_path = Path(tmp) / "formula_inner.png"
-        render_formula(latex, formula_path, dpi=dpi, font_size=font_size, color=color, pad_inches=pad_inches)
+        render_formula(
+            latex,
+            formula_path,
+            dpi=dpi,
+            font_size=font_size,
+            color=color,
+            pad_inches=pad_inches,
+            write_meta=False,
+        )
         formula_img = Image.open(formula_path).convert("RGBA")
         formula_img = _fit_image(formula_img, formula_w, formula_h)
         image.alpha_composite(formula_img, (formula_x, formula_y + max(0, (formula_h - formula_img.height) // 2)))
@@ -363,6 +465,17 @@ def render_formula_block(block: dict, output_path: Path, *, dpi: int, font_size:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     image.save(output_path)
+    write_formula_meta(
+        output_path,
+        source_latex=latex,
+        normalized_latex=normalized_latex,
+        width_px=image.size[0],
+        height_px=image.size[1],
+        dpi=dpi,
+        font_size=font_size,
+        mode="formula_block_png",
+        formula_id=str(block.get("formula_id") or output_path.stem),
+    )
     return image.size
 
 
@@ -374,9 +487,12 @@ def render_formula(
     font_size: float,
     color: str,
     pad_inches: float,
+    write_meta: bool = True,
+    formula_id: str | None = None,
 ) -> tuple[int, int]:
     plt, Image = _load_matplotlib()
     normalized = normalize_formula(formula)
+    validate_mathtext_formula(normalized, dpi=dpi)
 
     fig = plt.figure(figsize=(1, 1), dpi=dpi)
     fig.patch.set_alpha(0)
@@ -411,7 +527,21 @@ def render_formula(
     plt.close(fig)
 
     with Image.open(output_path) as img:
-        return img.size
+        size = img.size
+
+    if write_meta:
+        write_formula_meta(
+            output_path,
+            source_latex=formula,
+            normalized_latex=normalized,
+            width_px=size[0],
+            height_px=size[1],
+            dpi=dpi,
+            font_size=font_size,
+            mode="single_formula_png",
+            formula_id=formula_id,
+        )
+    return size
 
 
 def parse_args() -> argparse.Namespace:
@@ -481,6 +611,7 @@ def main() -> int:
                         "output": str(out_path),
                         "width_px": width,
                         "height_px": height,
+                        "meta": str(formula_meta_path(out_path)),
                         "usage": "formula_block_png",
                     }
                 ], ensure_ascii=False, indent=2) + "\n",
@@ -508,17 +639,18 @@ def main() -> int:
                 assert out_dir is not None
                 out_path = out_dir / stable_name(args.prefix, normalized, index)
             width, height = render_formula(
-                normalized,
+                formula,
                 out_path,
                 dpi=args.dpi,
                 font_size=args.font_size,
                 color=args.color,
                 pad_inches=args.pad_inches,
+                formula_id=f"{args.prefix}_{index:02d}",
             )
         except Exception as exc:
             print(f"Error rendering formula {index}: {exc}", file=sys.stderr)
             return 1
-        rendered.append(RenderedFormula(index, normalized, str(out_path), width, height))
+        rendered.append(RenderedFormula(index, normalized, str(out_path), width, height, str(formula_meta_path(out_path))))
         print(f"[OK] {index}: {out_path} ({width}x{height})")
 
     if args.manifest:

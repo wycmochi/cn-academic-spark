@@ -13,6 +13,7 @@ import argparse
 import ast
 import base64
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -62,17 +63,19 @@ class IntegrityCheck:
         if not self.skip_smoke:
             checks.extend([
                 self.check_formula_png_route,
-          self.check_technicalroute_ai_slide,
-          self.check_direct_ai_pptx_image_slide,
-          self.check_route_ai_svg_wrapper_blocked,
-          self.check_technicalroute_ai_ref_gate,
+                self.check_technicalroute_ai_slide,
+                self.check_direct_ai_pptx_image_slide,
+                self.check_route_ai_svg_wrapper_blocked,
+                self.check_technicalroute_ai_ref_gate,
                 self.check_no_full_slide_raster_gate,
                 self.check_inferred_textbox_shape_gate,
                 self.check_multiline_tspan_merge_gate,
                 self.check_technicalroute_declared_requirement_gate,
+                self.check_technicalroute_stage_gate_blocks_next_phase,
                 self.check_route_ai_path_quality_gate,
                 self.check_vertical_bounds_quality_gate,
                 self.check_textbox_quality_gate,
+                self.check_export_quality_gate_blocks_invalid_svg,
                 self.check_minimal_pptx_export,
             ])
 
@@ -321,11 +324,12 @@ class IntegrityCheck:
             json.dumps({
                 "formula_id": "formula_block_01",
                 "formula_role": "核心步骤公式",
-                "latex": r"y = \alpha + \beta x",
+                "latex": r"A_{i,\tau}=\sum_j P_j f(C_{ij},\tau),\quad f(C_{ij},\tau)=\begin{cases}1,&C_{ij}<\tau\\0,&C_{ij}\ge \tau\end{cases}",
                 "definition_label": "式中：",
                 "variables": [
-                    {"symbol": "y", "meaning": "因变量"},
-                    {"symbol": "x", "meaning": "解释变量"},
+                    {"symbol": "A_{i,\\tau}", "meaning": "县域 i 在成本阈值 tau 下的人口可达性"},
+                    {"symbol": "P_j", "meaning": "目的地 j 的人口机会规模"},
+                    {"symbol": "C_{ij}", "meaning": "由多模式路径规划得到的 OD 广义阻抗"},
                 ],
                 "width": 1136,
                 "height": 130,
@@ -343,6 +347,15 @@ class IntegrityCheck:
         ])
         if not output.is_file() or output.stat().st_size < 1000:
             raise AssertionError(f"formula PNG was not created correctly: {output}")
+        meta_path = output.with_suffix(".meta.json")
+        if not meta_path.is_file():
+            raise AssertionError("formula PNG metadata sidecar was not created")
+        meta = json.loads(meta_path.read_text(encoding="utf-8-sig"))
+        normalized = str(meta.get("normalized_latex") or "")
+        if meta.get("mathtext_validated") is not True or meta.get("renderer") != "matplotlib.mathtext":
+            raise AssertionError("formula PNG metadata does not record mathtext validation")
+        if r"\begin{cases}" in normalized or r"\end{cases}" in normalized:
+            raise AssertionError("formula sanitizer did not normalize unsupported cases syntax")
         return output.name
 
     def check_technicalroute_ai_slide(self) -> str:
@@ -404,6 +417,13 @@ class IntegrityCheck:
         except ImportError as exc:
             raise AssertionError("Pillow is required for direct AI slide smoke PNG generation") from exc
         Image.new("RGB", (4400, 2475), "#0B3A66").save(route_png)
+        (route_png.parent / "prompt_ai_refs_gate.md").write_text(
+            "[REFERENCE SOURCE GATE - HARD]\n"
+            "Allowed visual reference files come from route_ai_refs.json.\n"
+            "Do NOT use Version A editable SVGs.\n"
+            "Use seed_sites first and Custom_gallery only after zero-result search.\n",
+            encoding="utf-8",
+        )
         gallery_root = (ROOT / "templates/technicalroute/Custom_gallery").resolve()
         gallery_ref = next(
             (p for p in gallery_root.rglob("*") if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}),
@@ -643,6 +663,34 @@ class IntegrityCheck:
         if "allowed source classes" not in rejected_ref_output:
             raise AssertionError("non-plan reference was not rejected")
 
+        env = os.environ.copy()
+        env["IMAGE_GEN_PATH"] = str(workdir / "missing_image_gen.py")
+        no_agent = subprocess.run(
+            [
+                PYTHON,
+                str(ROOT / "scripts/technicalroute/generate_route_image.py"),
+                "run-ai-variant",
+                "--prompt", str(prompt),
+                "--out", str(out_dir),
+                "--refs-plan", str(fallback_refs / "route_ai_refs.json"),
+                "--filename", "route_ai_should_not_be_local.png",
+            ],
+            cwd=str(ROOT),
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=120,
+        )
+        if no_agent.returncode == 0:
+            raise AssertionError("run-ai-variant created a local fallback when image_gen.py was missing")
+        if "fallback is disabled in production" not in no_agent.stdout:
+            raise AssertionError("missing image agent did not fail with the production fallback gate")
+        if any(out_dir.glob("route_ai_should_not_be_local*.png")):
+            raise AssertionError("missing image agent still wrote a local route AI PNG")
+
         return "AI refs require seed-site literature search before Custom_gallery fallback"
 
     def check_no_full_slide_raster_gate(self) -> str:
@@ -790,6 +838,69 @@ class IntegrityCheck:
             raise AssertionError("quality checker did not report missing TechnicalRoute A/B chain")
         return "declared workflow pages require TechnicalRoute A/B output"
 
+    def check_technicalroute_stage_gate_blocks_next_phase(self) -> str:
+        project = Path(tempfile.mkdtemp(prefix="paper2ppt_route_stage_gate_"))
+        self.temp_paths.append(project)
+        route_dir = project / "technicalroute/route_01"
+        (project / "svg_output").mkdir(parents=True)
+        (route_dir / "output").mkdir(parents=True)
+        (route_dir / "content.yaml").write_text("archetype: workflow\nstages: []\n", encoding="utf-8")
+        (route_dir / "spec_lock.md").write_text(
+            "route_template_svg_path: technicalroute/route_01/output/route_template_01.svg\n",
+            encoding="utf-8",
+        )
+        route_svg = textwrap.dedent("""\
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720" data-route-version="A">
+          <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>
+          <g id="technicalroute-template" data-route-version="A">
+            <rect x="120" y="150" width="1040" height="380" fill="#F8FAFC" stroke="#CBD5E1"/>
+          </g>
+        </svg>
+        """)
+        (route_dir / "output/route_template_01.svg").write_text(route_svg, encoding="utf-8")
+        (project / "svg_output/01_route_template.svg").write_text(route_svg, encoding="utf-8")
+        gate_proc = subprocess.run(
+            [
+                PYTHON,
+                str(ROOT / "scripts/technicalroute/generate_route_image.py"),
+                "gate",
+                "--project",
+                str(project),
+                "--route-workdir",
+                str(route_dir),
+                "--after-svg-stem",
+                "01_route_template",
+            ],
+            cwd=str(ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=120,
+        )
+        if gate_proc.returncode == 0:
+            raise AssertionError("TechnicalRoute stage gate passed even though Version B was missing")
+        gate_output = gate_proc.stdout.lower()
+        if "version b ai route png is missing" not in gate_output:
+            raise AssertionError("TechnicalRoute stage gate did not report missing Version B PNG")
+
+        finalize_proc = subprocess.run(
+            [PYTHON, str(ROOT / "scripts/finalize_svg.py"), str(project), "-q"],
+            cwd=str(ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=120,
+        )
+        if finalize_proc.returncode == 0:
+            raise AssertionError("finalize_svg continued even though TechnicalRoute A/B gate failed")
+        if "TechnicalRoute stage gate failed" not in finalize_proc.stdout:
+            raise AssertionError("finalize_svg did not surface the TechnicalRoute stage gate failure")
+        return "missing TechnicalRoute Version B blocks gate and finalize"
+
     def check_route_ai_path_quality_gate(self) -> str:
         project = Path(tempfile.mkdtemp(prefix="paper2ppt_route_gate_"))
         self.temp_paths.append(project)
@@ -897,6 +1008,58 @@ class IntegrityCheck:
             raise AssertionError("quality checker did not report text box overlap/containment")
         return "overflowing and overlapping text boxes are blocked"
 
+    def check_export_quality_gate_blocks_invalid_svg(self) -> str:
+        project = Path(tempfile.mkdtemp(prefix="paper2ppt_export_gate_"))
+        self.temp_paths.append(project)
+        (project / "svg_output").mkdir(parents=True)
+        (project / "project.json").write_text(
+            json.dumps({"name": "paper2ppt_export_gate", "format": "ppt169"}),
+            encoding="utf-8",
+        )
+        (project / "svg_output/01_bad_overlap.svg").write_text(
+            textwrap.dedent("""\
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+              <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>
+              <rect id="card-a" x="120" y="120" width="360" height="180" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+              <text id="bad-a" x="150" y="180" font-family="Arial, sans-serif" font-size="24" fill="#111827" data-box-x="150" data-box-y="140" data-box-width="260" data-box-height="82" data-shape-x="120" data-shape-y="120" data-shape-width="360" data-shape-height="180">Invalid overlapping content A</text>
+              <text id="bad-b" x="154" y="184" font-family="Arial, sans-serif" font-size="24" fill="#111827" data-box-x="154" data-box-y="144" data-box-width="260" data-box-height="82" data-shape-x="120" data-shape-y="120" data-shape-width="360" data-shape-height="180">Invalid overlapping content B</text>
+            </svg>
+            """),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [
+                PYTHON,
+                str(ROOT / "scripts/svg_to_pptx.py"),
+                str(project),
+                "--only",
+                "native",
+                "-s",
+                "output",
+                "--no-notes",
+                "-q",
+            ],
+            cwd=str(ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=180,
+        )
+        if proc.returncode == 0:
+            raise AssertionError("PPTX export succeeded even though SVG quality errors were present")
+        if "SVG quality gate failed before PPTX export" not in proc.stdout:
+            raise AssertionError("PPTX export did not report the pre-export quality gate failure")
+        if list((project / "exports").glob("*.pptx")):
+            raise AssertionError("PPTX was exported after a failed quality gate")
+        reports = list((project / "exports").glob("*quality_report.md"))
+        if not reports:
+            raise AssertionError("failed quality gate did not write a Markdown quality report")
+        if "Detected overlapping text boxes" not in reports[-1].read_text(encoding="utf-8", errors="replace"):
+            raise AssertionError("quality report does not include the blocking text-box failure")
+        return "invalid SVG cannot bypass pre-export quality gate"
+
     def check_minimal_pptx_export(self) -> str:
         project = Path(tempfile.mkdtemp(prefix="paper2ppt_export_"))
         self.temp_paths.append(project)
@@ -942,6 +1105,11 @@ class IntegrityCheck:
         pptx_files = sorted((project / "exports").glob("*.pptx"))
         if not pptx_files:
             raise AssertionError("no PPTX exported")
+        quality_reports = sorted((project / "exports").glob("*quality_report.md"))
+        if not quality_reports:
+            raise AssertionError("PPTX export did not write a Markdown quality report")
+        if "Status: `PASS`" not in quality_reports[-1].read_text(encoding="utf-8", errors="replace"):
+            raise AssertionError("successful export quality report does not record PASS status")
         pptx = pptx_files[-1]
         self._run_cmd([
             PYTHON,
@@ -985,6 +1153,8 @@ class IntegrityCheck:
                 raise AssertionError("speaker notes DOCX should be a continuous manuscript without slide headings or page breaks")
             if "This note validates notesSlide" not in doc_xml:
                 raise AssertionError("speaker notes DOCX missing continuous note body")
+            if "第 1 页：This note validates notesSlide" not in doc_xml:
+                raise AssertionError("speaker notes DOCX missing slide-number paragraph prefix")
         return pptx.name
 
 
