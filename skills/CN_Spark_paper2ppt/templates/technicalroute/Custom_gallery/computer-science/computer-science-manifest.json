@@ -1,0 +1,257 @@
+[
+  {
+    "label": "全文技术路线",
+    "articleTitle": "Botfip-LLM: An enhanced multimodal scientific computing framework leveraging knowledge distillation from large language models",
+    "journalORmeeting": "Knowledge-Based Systems",
+    "year": 2025,
+    "authors": "Chen T, Xu P, Zheng H.",
+    "plotSummary": "refer to this option when an article needs a whole-paper technical route, experiment pipeline, data-processing flow, or sequential research workflow.",
+    "agentKeywords": [
+      "Technical roadmap",
+      "Sequential workflow",
+      "Research pipeline",
+      "技术路线",
+      "流程图"
+    ]
+  },
+  {
+    "label": "全文技术路线3",
+    "articleTitle": "Large language models and AI agents in disaster-resilient infrastructure: concepts, applications, pathways, and challenges",
+    "journalORmeeting": "Reliability Engineering & System Safety",
+    "year": 2026,
+    "authors": "Cui J, Zhai C, Wang Y, et al.",
+    "plotSummary": "refer to this option when an article needs a whole-paper technical route, experiment pipeline, data-processing flow, or sequential research workflow.",
+    "agentKeywords": [
+      "Technical roadmap",
+      "Sequential workflow",
+      "Research pipeline",
+      "技术路线",
+      "流程图"
+    ]
+  },
+  {
+    "label": "技术框架",
+    "articleTitle": "Large language models and AI agents in disaster-resilient infrastructure: concepts, applications, pathways, and challenges",
+    "journalORmeeting": "Reliability Engineering & System Safety",
+    "year": 2026,
+    "authors": "Cui J, Zhai C, Wang Y, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "技术框架2",
+    "articleTitle": "Large language models and AI agents in disaster-resilient infrastructure: concepts, applications, pathways, and challenges",
+    "journalORmeeting": "Reliability Engineering & System Safety",
+    "year": 2026,
+    "authors": "Cui J, Zhai C, Wang Y, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "文献综述参考文献总结图",
+    "articleTitle": "Affective computing in the era of large language models: A survey from the NLP perspective",
+    "journalORmeeting": "Knowledge-Based Systems",
+    "year": 2026,
+    "authors": "Zhang Y, Yang X, Xu X, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述技术发展历史图",
+    "articleTitle": "Large language models and AI agents in disaster-resilient infrastructure: concepts, applications, pathways, and challenges",
+    "journalORmeeting": "Reliability Engineering & System Safety",
+    "year": 2026,
+    "authors": "Cui J, Zhai C, Wang Y, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述技术路线",
+    "articleTitle": "Large language models and AI agents in disaster-resilient infrastructure: concepts, applications, pathways, and challenges",
+    "journalORmeeting": "Reliability Engineering & System Safety",
+    "year": 2026,
+    "authors": "Cui J, Zhai C, Wang Y, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述方法对比",
+    "articleTitle": "Affective computing in the era of large language models: A survey from the NLP perspective",
+    "journalORmeeting": "Knowledge-Based Systems",
+    "year": 2026,
+    "authors": "Zhang Y, Yang X, Xu X, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "模型机理图",
+    "articleTitle": "Large language models and AI agents in disaster-resilient infrastructure: concepts, applications, pathways, and challenges",
+    "journalORmeeting": "Reliability Engineering & System Safety",
+    "year": 2026,
+    "authors": "Cui J, Zhai C, Wang Y, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "模型机理图2",
+    "articleTitle": "Large language models and AI agents in disaster-resilient infrastructure: concepts, applications, pathways, and challenges",
+    "journalORmeeting": "Reliability Engineering & System Safety",
+    "year": 2026,
+    "authors": "Cui J, Zhai C, Wang Y, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "模型机理图3",
+    "articleTitle": "Affective computing in the era of large language models: A survey from the NLP perspective",
+    "journalORmeeting": "Knowledge-Based Systems",
+    "year": 2026,
+    "authors": "Zhang Y, Yang X, Xu X, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "模型机理图4",
+    "articleTitle": "Affective computing in the era of large language models: A survey from the NLP perspective",
+    "journalORmeeting": "Knowledge-Based Systems",
+    "year": 2026,
+    "authors": "Zhang Y, Yang X, Xu X, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "模型机理图total",
+    "articleTitle": "Large language models and AI agents in disaster-resilient infrastructure: concepts, applications, pathways, and challenges",
+    "journalORmeeting": "Reliability Engineering & System Safety",
+    "year": 2026,
+    "authors": "Cui J, Zhai C, Wang Y, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "系统工作流程图",
+    "articleTitle": "Large language models and AI agents in disaster-resilient infrastructure: concepts, applications, pathways, and challenges",
+    "journalORmeeting": "Reliability Engineering & System Safety",
+    "year": 2026,
+    "authors": "Cui J, Zhai C, Wang Y, et al.",
+    "plotSummary": "refer to this option when an article needs a whole-paper technical route, experiment pipeline, data-processing flow, or sequential research workflow.",
+    "agentKeywords": [
+      "Technical roadmap",
+      "Sequential workflow",
+      "Research pipeline",
+      "技术路线",
+      "流程图"
+    ]
+  },
+  {
+    "label": "系统架构图",
+    "articleTitle": "Large language models and AI agents in disaster-resilient infrastructure: concepts, applications, pathways, and challenges",
+    "journalORmeeting": "Reliability Engineering & System Safety",
+    "year": 2026,
+    "authors": "Cui J, Zhai C, Wang Y, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "系统架构图2",
+    "articleTitle": "Large language models and AI agents in disaster-resilient infrastructure: concepts, applications, pathways, and challenges",
+    "journalORmeeting": "Reliability Engineering & System Safety",
+    "year": 2026,
+    "authors": "Cui J, Zhai C, Wang Y, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "计算机硬件系统架构图",
+    "articleTitle": "Service reliability of intelligent computing cluster systems for large language models",
+    "journalORmeeting": "Reliability Engineering & System Safety",
+    "year": 2026,
+    "authors": "Zhang H, Zhang C, Wang Y, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  }
+]

@@ -1,0 +1,182 @@
+[
+  {
+    "label": "全文技术路线图",
+    "articleTitle": "Toward a circular plastic economy: A review of life cycle assessment studies on chemical recycling processes for fossil-based plastics",
+    "journalORmeeting": "Journal of Environmental Management",
+    "year": 2026,
+    "authors": "Sakib M N, Aigaje-Espinosa E K, Zaker Hosseiny F, et al.",
+    "plotSummary": "refer to this option when an article needs a whole-paper technical route, experiment pipeline, data-processing flow, or sequential research workflow.",
+    "agentKeywords": [
+      "Technical roadmap",
+      "Sequential workflow",
+      "Research pipeline",
+      "技术路线",
+      "流程图"
+    ]
+  },
+  {
+    "label": "化学分子式3D图",
+    "articleTitle": "Advances in copper-containing bimetallic catalysts for the electrocatalytic reduction of CO2 to chemicals: A review",
+    "journalORmeeting": "Nano Energy",
+    "year": 2026,
+    "authors": "Chai Z, Fang M, Luo S, et al.",
+    "plotSummary": "refer to this option when no exact sub-variant exists and the gallery needs the nearest-intent raster reference within the same or closest discipline.",
+    "agentKeywords": [
+      "Nearest intent",
+      "Gallery fallback",
+      "Style anchor",
+      "参考图",
+      "兜底"
+    ]
+  },
+  {
+    "label": "化学分子式实验图",
+    "articleTitle": "Advances in copper-containing bimetallic catalysts for the electrocatalytic reduction of CO2 to chemicals: A review",
+    "journalORmeeting": "Nano Energy",
+    "year": 2026,
+    "authors": "Chai Z, Fang M, Luo S, et al.",
+    "plotSummary": "refer to this option when no exact sub-variant exists and the gallery needs the nearest-intent raster reference within the same or closest discipline.",
+    "agentKeywords": [
+      "Nearest intent",
+      "Gallery fallback",
+      "Style anchor",
+      "参考图",
+      "兜底"
+    ]
+  },
+  {
+    "label": "化学实验过程图",
+    "articleTitle": "Advances in copper-containing bimetallic catalysts for the electrocatalytic reduction of CO2 to chemicals: A review",
+    "journalORmeeting": "Nano Energy",
+    "year": 2026,
+    "authors": "Chai Z, Fang M, Luo S, et al.",
+    "plotSummary": "refer to this option when no exact sub-variant exists and the gallery needs the nearest-intent raster reference within the same or closest discipline.",
+    "agentKeywords": [
+      "Nearest intent",
+      "Gallery fallback",
+      "Style anchor",
+      "参考图",
+      "兜底"
+    ]
+  },
+  {
+    "label": "化学成分展示图",
+    "articleTitle": "Advances in copper-containing bimetallic catalysts for the electrocatalytic reduction of CO2 to chemicals: A review",
+    "journalORmeeting": "Nano Energy",
+    "year": 2026,
+    "authors": "Chai Z, Fang M, Luo S, et al.",
+    "plotSummary": "refer to this option when an article needs to summarize literature topics, result categories, feature groups, empirical findings, or comparative evidence.",
+    "agentKeywords": [
+      "Result summary",
+      "Topic statistics",
+      "Evidence synthesis",
+      "结果总结",
+      "统计图"
+    ]
+  },
+  {
+    "label": "文献综述关系阐述图",
+    "articleTitle": "Optimizing environmental decisions on plastics as vectors of chemical pollutants in marine environments of Southeast Asia, South Asia, and East Asia: A comprehensive systematic review",
+    "journalORmeeting": "Journal of Sea Research",
+    "year": 2026,
+    "authors": "Hridoy Md A A M, Bordin C, Islam Md H, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述流程图",
+    "articleTitle": "Enhancing parboiled rice quality: A review on chemical additives and emerging processing technologies",
+    "journalORmeeting": "Food Research International",
+    "year": 2026,
+    "authors": "Figueiredo E L, de Azevedo P A, de Oliveira Monte M, 等.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述资料收集图",
+    "articleTitle": "Optimizing environmental decisions on plastics as vectors of chemical pollutants in marine environments of Southeast Asia, South Asia, and East Asia: A comprehensive systematic review",
+    "journalORmeeting": "Journal of Sea Research",
+    "year": 2026,
+    "authors": "Hridoy Md A A M, Bordin C, Islam Md H, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "机制原理图",
+    "articleTitle": "Toward a circular plastic economy: A review of life cycle assessment studies on chemical recycling processes for fossil-based plastics",
+    "journalORmeeting": "Journal of Environmental Management",
+    "year": 2026,
+    "authors": "Sakib M N, Aigaje-Espinosa E K, Zaker Hosseiny F, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "机制原理图2",
+    "articleTitle": "Optimizing environmental decisions on plastics as vectors of chemical pollutants in marine environments of Southeast Asia, South Asia, and East Asia: A comprehensive systematic review",
+    "journalORmeeting": "Journal of Sea Research",
+    "year": 2026,
+    "authors": "Hridoy Md A A M, Bordin C, Islam Md H, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "机制原理图3",
+    "articleTitle": "Multi-agent systems for chemical engineering: a review and perspective",
+    "journalORmeeting": "Current Opinion in Chemical Engineering",
+    "year": 2026,
+    "authors": "Rupprecht S, Gao Q, Karia T, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "机制原理图4",
+    "articleTitle": "Multi-agent systems for chemical engineering: a review and perspective",
+    "journalORmeeting": "Current Opinion in Chemical Engineering",
+    "year": 2026,
+    "authors": "Rupprecht S, Gao Q, Karia T, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  }
+]

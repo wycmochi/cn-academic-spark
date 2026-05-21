@@ -145,6 +145,7 @@ def write_formula_meta(
     font_size: float,
     mode: str,
     formula_id: str | None = None,
+    extra: dict | None = None,
 ) -> Path:
     meta_path = formula_meta_path(output_path)
     payload = {
@@ -161,6 +162,8 @@ def write_formula_meta(
         "dpi": dpi,
         "font_size": font_size,
     }
+    if extra:
+        payload.update(extra)
     meta_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return meta_path
 
@@ -420,15 +423,13 @@ def render_formula_block(block: dict, output_path: Path, *, dpi: int, font_size:
         wrapped = _wrap_text(draw, variable, body_font, max_body_width)
         wrapped_rows.extend(wrapped or [variable])
     row_count = max(1, len(wrapped_rows))
-    if compact:
-        canvas_height = int(block.get("height") or 120)
-        available_rows = max(1, int((canvas_height - row_y - 8) // max(1, row_gap)))
-        if len(wrapped_rows) > available_rows:
-            wrapped_rows = wrapped_rows[:available_rows]
-            if wrapped_rows:
-                wrapped_rows[-1] = wrapped_rows[-1].rstrip("。；;,.，") + "..."
-    else:
-        canvas_height = int(block.get("height") or max(230, row_y + row_count * row_gap + 30))
+    # Formula explanations must never be shortened with an ellipsis. If the
+    # requested compact slot is too short, grow the PNG canvas and let the SVG
+    # layout scale/split the rendered image instead of losing semantic content.
+    requested_height = int(block.get("height") or 0)
+    min_height = 120 if compact else 230
+    required_height = max(min_height, row_y + row_count * row_gap + 24)
+    canvas_height = max(requested_height or required_height, required_height)
 
     bg = block.get("background") or "transparent"
     if str(bg).lower() == "transparent":
@@ -475,6 +476,13 @@ def render_formula_block(block: dict, output_path: Path, *, dpi: int, font_size:
         font_size=font_size,
         mode="formula_block_png",
         formula_id=str(block.get("formula_id") or output_path.stem),
+        extra={
+            "requested_height_px": requested_height,
+            "required_height_px": required_height,
+            "variable_rows": wrapped_rows,
+            "variable_row_count": len(wrapped_rows),
+            "truncated": False,
+        },
     )
     return image.size
 

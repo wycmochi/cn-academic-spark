@@ -63,18 +63,25 @@ class IntegrityCheck:
         if not self.skip_smoke:
             checks.extend([
                 self.check_formula_png_route,
+                self.check_formula_block_no_truncation_gate,
                 self.check_technicalroute_ai_slide,
                 self.check_direct_ai_pptx_image_slide,
                 self.check_route_ai_svg_wrapper_blocked,
                 self.check_technicalroute_ai_ref_gate,
                 self.check_no_full_slide_raster_gate,
+                self.check_empty_content_container_gate,
                 self.check_inferred_textbox_shape_gate,
                 self.check_multiline_tspan_merge_gate,
                 self.check_technicalroute_declared_requirement_gate,
+                self.check_technicalroute_default_required_gate,
+                self.check_technicalroute_skip_marker_forbidden_gate,
                 self.check_technicalroute_stage_gate_blocks_next_phase,
                 self.check_route_ai_path_quality_gate,
+                self.check_semantic_text_completion_gate,
+                self.check_chinese_language_policy_gate,
                 self.check_vertical_bounds_quality_gate,
                 self.check_textbox_quality_gate,
+                self.check_hidden_academic_project_export_blocked,
                 self.check_export_quality_gate_blocks_invalid_svg,
                 self.check_minimal_pptx_export,
             ])
@@ -358,6 +365,49 @@ class IntegrityCheck:
             raise AssertionError("formula sanitizer did not normalize unsupported cases syntax")
         return output.name
 
+    def check_formula_block_no_truncation_gate(self) -> str:
+        workdir = Path(tempfile.mkdtemp(prefix="paper2ppt_formula_notruncate_"))
+        self.temp_paths.append(workdir)
+        block_json = workdir / "formula_block.json"
+        output = workdir / "images/formulas/formula_block_cost.png"
+        block_json.write_text(
+            json.dumps({
+                "formula_id": "formula_block_cost",
+                "formula_role": "广义出行成本",
+                "latex": r"G = T \times VoTT + M",
+                "definition_label": "式中：",
+                "variables": [
+                    {"symbol": "G", "meaning": "OD 间综合出行成本，包含时间价值和货币成本。"},
+                    {"symbol": "T", "meaning": "路径或方式组合对应的总出行时间。"},
+                    {"symbol": "VoTT", "meaning": "时间价值，用于把时间消耗转换为可比较的货币成本。"},
+                    {"symbol": "M", "meaning": "票价、燃油、停车、换乘等直接货币成本。"},
+                ],
+                "width": 900,
+                "height": 90,
+                "layout": "compact",
+            }, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        self._run_cmd([
+            PYTHON,
+            str(ROOT / "scripts/latex_formula_to_png.py"),
+            "--block-json",
+            str(block_json),
+            "--out",
+            str(output),
+        ])
+        meta = json.loads(output.with_suffix(".meta.json").read_text(encoding="utf-8-sig"))
+        if meta.get("truncated") is not False:
+            raise AssertionError("formula block metadata did not record truncated=false")
+        variable_rows = meta.get("variable_rows")
+        if not isinstance(variable_rows, list) or len(variable_rows) < 4:
+            raise AssertionError("formula block metadata lost variable explanation rows")
+        if any(str(row).rstrip().endswith(("...", "…")) for row in variable_rows):
+            raise AssertionError("formula renderer still truncates variable explanations with ellipses")
+        if int(meta.get("height_px") or 0) <= int(meta.get("requested_height_px") or 0):
+            raise AssertionError("formula renderer did not grow a too-short compact canvas")
+        return "formula block explanations grow canvas instead of truncating"
+
     def check_technicalroute_ai_slide(self) -> str:
         workdir = Path(tempfile.mkdtemp(prefix="paper2ppt_route_ai_"))
         self.temp_paths.append(workdir)
@@ -395,17 +445,36 @@ class IntegrityCheck:
         self.temp_paths.append(project)
         (project / "svg_output").mkdir(parents=True)
         (project / "images").mkdir(parents=True)
+        (project / "notes").mkdir(parents=True)
         (project / "project.json").write_text(
             json.dumps({"name": "paper2ppt_direct_ai_slide", "format": "ppt169"}),
             encoding="utf-8",
         )
+        (project / "design_spec.md").write_text(
+            "project_type: academic\n"
+            "user_requested_page_count: 1\n"
+            "requested_regular_page_count: 1\n",
+            encoding="utf-8",
+        )
+        (project / "spec_lock.md").write_text(
+            "user_requested_page_count: 1\n"
+            "requested_regular_page_count: 1\n",
+            encoding="utf-8",
+        )
+        (project / "ppt_outline_cn.md").write_text(
+            "用户页数指标：1 页；AI 技术路线参考图页不计入用户页数指标，最终导出 2 页。\n",
+            encoding="utf-8",
+        )
+        (project / "notes/01_route_template.md").write_text("第 1 页：Version A 技术路线。\n", encoding="utf-8")
         (project / "svg_output/01_route_template.svg").write_text(
             textwrap.dedent("""\
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
               <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>
-              <text x="64" y="58" font-size="30" font-family="Arial, sans-serif">Research Route: Editable Template Version</text>
+              <text x="64" y="58" font-size="30" font-family="Microsoft YaHei, Arial, sans-serif">研究路线：可编辑模板版</text>
               <g id="technicalroute-template" data-route-version="A">
                 <rect x="120" y="150" width="1040" height="380" fill="#F8FAFC" stroke="#CBD5E1"/>
+                <text x="170" y="300" font-size="24" font-family="Microsoft YaHei, Arial, sans-serif">路线模板</text>
+                <text x="170" y="350" font-size="16" font-family="Microsoft YaHei, Arial, sans-serif">可编辑路线正文用于验证 AI 参考图直插。</text>
               </g>
             </svg>
             """),
@@ -417,7 +486,8 @@ class IntegrityCheck:
         except ImportError as exc:
             raise AssertionError("Pillow is required for direct AI slide smoke PNG generation") from exc
         Image.new("RGB", (4400, 2475), "#0B3A66").save(route_png)
-        (route_png.parent / "prompt_ai_refs_gate.md").write_text(
+        prompt_gate = route_png.parent / "prompt_ai_refs_gate.md"
+        prompt_gate.write_text(
             "[REFERENCE SOURCE GATE - HARD]\n"
             "Allowed visual reference files come from route_ai_refs.json.\n"
             "Do NOT use Version A editable SVGs.\n"
@@ -452,6 +522,21 @@ class IntegrityCheck:
             }, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        refs_plan_path = route_style_refs / "route_ai_refs.json"
+        (route_png.parent / "route_ai_direct_generation_meta.json").write_text(
+            json.dumps({
+                "version": 1,
+                "generator": "image_gen.py",
+                "local_fallback": False,
+                "image_path": str(route_png),
+                "backend_prompt_path": str(prompt_gate),
+                "refs_plan_path": str(refs_plan_path),
+                "reference_flow": "academic_search_then_gallery_fallback",
+                "refs_plan_mode": "gallery_only_fallback",
+                "refs": [str(gallery_ref)],
+            }, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         (project / "svg_output/_direct_image_slides.json").write_text(
             json.dumps({
                 "version": 1,
@@ -461,7 +546,16 @@ class IntegrityCheck:
                     "after_svg_stem": "01_route_template",
                     "fit": "stretch",
                     "role": "technicalroute_ai_reference",
+                    "page_count_policy": "extra_reference_page_not_counted",
+                    "counts_against_user_page_count": False,
+                    "page_count_delta": 1,
+                    "narrative_policy": "insert_immediately_after_version_a_without_changing_regular_page_roster",
+                    "layout_policy": "direct_full_slide_picture_no_global_layout",
                 }],
+                "page_count_policy": {
+                    "technicalroute_ai": "extra_reference_page_not_counted",
+                    "final_slide_count_rule": "final_pptx_slides = user_requested_regular_pages + technicalroute_ai_direct_picture_pages",
+                },
             }, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
@@ -663,6 +757,29 @@ class IntegrityCheck:
         if "allowed source classes" not in rejected_ref_output:
             raise AssertionError("non-plan reference was not rejected")
 
+        override_proc = subprocess.run(
+            [
+                PYTHON,
+                str(ROOT / "scripts/technicalroute/generate_route_image.py"),
+                "run-ai-variant",
+                "--prompt", str(prompt),
+                "--out", str(out_dir),
+                "--refs-plan", str(fallback_refs / "route_ai_refs.json"),
+                "--backend", "openai",
+            ],
+            cwd=str(ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=120,
+        )
+        if override_proc.returncode == 0:
+            raise AssertionError("run-ai-variant allowed backend override instead of .env/process config")
+        if "must be selected through .env" not in override_proc.stdout:
+            raise AssertionError("backend override gate did not explain .env.example-based configuration")
+
         env = os.environ.copy()
         env["IMAGE_GEN_PATH"] = str(workdir / "missing_image_gen.py")
         no_agent = subprocess.run(
@@ -686,12 +803,37 @@ class IntegrityCheck:
         )
         if no_agent.returncode == 0:
             raise AssertionError("run-ai-variant created a local fallback when image_gen.py was missing")
-        if "fallback is disabled in production" not in no_agent.stdout:
+        if "local deterministic fallback is disabled" not in no_agent.stdout.lower():
             raise AssertionError("missing image agent did not fail with the production fallback gate")
         if any(out_dir.glob("route_ai_should_not_be_local*.png")):
             raise AssertionError("missing image agent still wrote a local route AI PNG")
 
-        return "AI refs require seed-site literature search before Custom_gallery fallback"
+        allow_local = subprocess.run(
+            [
+                PYTHON,
+                str(ROOT / "scripts/technicalroute/generate_route_image.py"),
+                "run-ai-variant",
+                "--prompt", str(prompt),
+                "--out", str(out_dir),
+                "--refs-plan", str(fallback_refs / "route_ai_refs.json"),
+                "--filename", "route_ai_allow_local_still_blocked.png",
+                "--allow-local-fallback",
+            ],
+            cwd=str(ROOT),
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=120,
+        )
+        if allow_local.returncode == 0:
+            raise AssertionError("--allow-local-fallback still created a fake route AI image")
+        if any(out_dir.glob("route_ai_allow_local_still_blocked*.png")):
+            raise AssertionError("--allow-local-fallback wrote a forbidden local route AI PNG")
+
+        return "AI refs require seed-site literature search before Custom_gallery fallback; backend/model uses .env; local fallback is blocked"
 
     def check_no_full_slide_raster_gate(self) -> str:
         project = Path(tempfile.mkdtemp(prefix="paper2ppt_raster_gate_"))
@@ -721,6 +863,37 @@ class IntegrityCheck:
         if "full-slide raster image" not in output and "slide-raster-image" not in output:
             raise AssertionError("quality checker did not report full-slide raster image")
         return "full-slide raster SVG pages are blocked before PPTX export"
+
+    def check_empty_content_container_gate(self) -> str:
+        project = Path(tempfile.mkdtemp(prefix="paper2ppt_empty_card_gate_"))
+        self.temp_paths.append(project)
+        (project / "svg_output").mkdir(parents=True)
+        (project / "svg_output/01_empty_card.svg").write_text(
+            textwrap.dedent("""\
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+              <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>
+              <rect id="findings-panel" x="760" y="150" width="380" height="420" rx="6" fill="#FFFFFF" stroke="#0070C0"/>
+              <text x="800" y="205" font-size="28" font-family="Microsoft YaHei, Arial, sans-serif" font-weight="700">发现</text>
+            </svg>
+            """),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [PYTHON, str(ROOT / "scripts/svg_quality_checker.py"), str(project)],
+            cwd=str(ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=120,
+        )
+        if proc.returncode == 0:
+            raise AssertionError("quality checker allowed a large generated content card with no body")
+        output = proc.stdout.lower()
+        if "heading but no body content" not in output and "content container appears blank" not in output:
+            raise AssertionError("quality checker did not report the empty generated content container")
+        return "large titled content cards cannot be empty"
 
     def check_inferred_textbox_shape_gate(self) -> str:
         project = Path(tempfile.mkdtemp(prefix="paper2ppt_textbox_shape_gate_"))
@@ -835,8 +1008,83 @@ class IntegrityCheck:
             raise AssertionError("quality checker allowed a declared route/workflow page without TechnicalRoute A/B")
         output = proc.stdout.lower()
         if "technicalroute_requirement_unfulfilled" not in output:
-            raise AssertionError("quality checker did not report missing TechnicalRoute A/B chain")
+           raise AssertionError("quality checker did not report missing TechnicalRoute A/B chain")
         return "declared workflow pages require TechnicalRoute A/B output"
+
+    def check_technicalroute_default_required_gate(self) -> str:
+        project = Path(tempfile.mkdtemp(prefix="paper2ppt_route_default_gate_"))
+        self.temp_paths.append(project)
+        (project / "svg_output").mkdir(parents=True)
+        (project / "ppt_outline_cn.md").write_text(
+            "中文学术汇报 | 论文 DOI: 10.0000/example\n"
+            "Pages: cover, agenda, method, results, conclusion\n",
+            encoding="utf-8",
+        )
+        (project / "svg_output/01_normal.svg").write_text(
+            textwrap.dedent("""\
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+              <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>
+              <text x="80" y="120" font-size="28" font-family="Arial, sans-serif">Academic report body.</text>
+            </svg>
+            """),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [PYTHON, str(ROOT / "scripts/svg_quality_checker.py"), str(project)],
+            cwd=str(ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=120,
+        )
+        if proc.returncode == 0:
+            raise AssertionError("quality checker allowed an academic deck without TechnicalRoute A/B")
+        output = proc.stdout.lower()
+        if "academic_default_technicalroute_required" not in output and "academic_project_default_technicalroute_required" not in output:
+            raise AssertionError("quality checker did not report the default academic TechnicalRoute gate")
+        return "academic decks require TechnicalRoute A/B by default"
+
+    def check_technicalroute_skip_marker_forbidden_gate(self) -> str:
+        project = Path(tempfile.mkdtemp(prefix="paper2ppt_route_skip_forbidden_"))
+        self.temp_paths.append(project)
+        (project / "svg_output").mkdir(parents=True)
+        (project / "ppt_outline_cn.md").write_text(
+            "中文学术汇报 | paper DOI: 10.0000/example\nPages: cover, methods, results\n",
+            encoding="utf-8",
+        )
+        (project / "spec_lock.md").write_text(
+            "technicalroute_required: false\n"
+            "technical_route_required: false\n"
+            "skip_technicalroute: true\n",
+            encoding="utf-8",
+        )
+        (project / "svg_output/01_normal.svg").write_text(
+            textwrap.dedent("""\
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+              <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>
+              <text x="80" y="120" font-size="28" font-family="Arial, sans-serif">Academic report body.</text>
+            </svg>
+            """),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [PYTHON, str(ROOT / "scripts/svg_quality_checker.py"), str(project)],
+            cwd=str(ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=120,
+        )
+        if proc.returncode == 0:
+            raise AssertionError("quality checker allowed generated skip_technicalroute markers")
+        output = proc.stdout.lower()
+        if "technicalroute_skip_marker_forbidden" not in output:
+            raise AssertionError("quality checker did not report forbidden TechnicalRoute skip markers")
+        return "generated technicalroute false/skip markers cannot bypass academic route gate"
 
     def check_technicalroute_stage_gate_blocks_next_phase(self) -> str:
         project = Path(tempfile.mkdtemp(prefix="paper2ppt_route_stage_gate_"))
@@ -941,6 +1189,81 @@ class IntegrityCheck:
             raise AssertionError("quality checker did not report missing AI route slide")
         return "missing route_ai_image_path embedding is blocked"
 
+    def check_semantic_text_completion_gate(self) -> str:
+        project = Path(tempfile.mkdtemp(prefix="paper2ppt_semantic_text_gate_"))
+        self.temp_paths.append(project)
+        (project / "svg_output").mkdir(parents=True)
+        (project / "svg_output/01_truncated_text.svg").write_text(
+            textwrap.dedent("""\
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+              <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>
+              <text id="bottom-insight" x="90" y="620" font-size="24" font-family="Arial, sans-serif"
+                    data-box-x="80" data-box-y="590" data-box-width="980" data-box-height="50">本文切入点 构建多模式、多尺度城际可达性框架,</text>
+            </svg>
+            """),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [PYTHON, str(ROOT / "scripts/svg_quality_checker.py"), str(project)],
+            cwd=str(ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=120,
+        )
+        if proc.returncode == 0:
+            raise AssertionError("quality checker allowed visible text ending with dangling punctuation")
+        output = proc.stdout.lower()
+        if "semantically truncated" not in output:
+            raise AssertionError("quality checker did not report dangling/truncated visible text")
+        return "dangling punctuation at the end of visible content text is blocked"
+
+    def check_chinese_language_policy_gate(self) -> str:
+        project = Path(tempfile.mkdtemp(prefix="paper2ppt_language_gate_"))
+        self.temp_paths.append(project)
+        (project / "svg_output").mkdir(parents=True)
+        (project / "ppt_outline_cn.md").write_text("中文学术汇报输出；英文论文正文页也需要中文讲述。", encoding="utf-8")
+        (project / "svg_output/01_cover.svg").write_text(
+            textwrap.dedent("""\
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+              <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>
+              <text x="90" y="210" font-size="38" font-family="Arial, sans-serif"
+                    data-box-x="90" data-box-y="170" data-box-width="900" data-box-height="70">High-speed rail impacts on intercity accessibility</text>
+            </svg>
+            """),
+            encoding="utf-8",
+        )
+        (project / "svg_output/02_body.svg").write_text(
+            textwrap.dedent("""\
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+              <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>
+              <text x="72" y="76" font-size="32" font-family="Arial, sans-serif"
+                    data-box-x="72" data-box-y="42" data-box-width="1040" data-box-height="48">1 Problem Definition: HSR Accessibility Needs Integrated Network Evaluation</text>
+              <text x="100" y="180" font-size="24" font-family="Arial, sans-serif"
+                    data-box-x="100" data-box-y="150" data-box-width="760" data-box-height="70">Transportation networks and land use jointly determine accessibility outcomes.</text>
+            </svg>
+            """),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [PYTHON, str(ROOT / "scripts/svg_quality_checker.py"), str(project)],
+            cwd=str(ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=120,
+        )
+        if proc.returncode == 0:
+            raise AssertionError("quality checker allowed English-only generated PPT text in a Chinese deck")
+        output = proc.stdout.lower()
+        if "cover_title_missing_chinese_translation" not in output or "non_chinese_generated_text" not in output:
+            raise AssertionError("quality checker did not report the Chinese output language policy violations")
+        return "Chinese academic decks block English-only cover/body generated text"
+
     def check_vertical_bounds_quality_gate(self) -> str:
         project = Path(tempfile.mkdtemp(prefix="paper2ppt_vertical_gate_"))
         self.temp_paths.append(project)
@@ -1008,6 +1331,54 @@ class IntegrityCheck:
             raise AssertionError("quality checker did not report text box overlap/containment")
         return "overflowing and overlapping text boxes are blocked"
 
+    def check_hidden_academic_project_export_blocked(self) -> str:
+        temp = Path(tempfile.mkdtemp(prefix="paper2ppt_hidden_project_"))
+        self.temp_paths.append(temp)
+        project = temp / ".codex" / "skills" / "CN_Spark_paper2ppt" / "projects" / "hidden_academic"
+        (project / "svg_output").mkdir(parents=True)
+        (project / "notes").mkdir(parents=True)
+        (project / "design_spec.md").write_text("project_type: academic\n", encoding="utf-8")
+        (project / "spec_lock.md").write_text("project_type: academic\n", encoding="utf-8")
+        (project / "ppt_outline_cn.md").write_text("中文学术汇报 | DOI: 10.0000/example\n", encoding="utf-8")
+        (project / "project.json").write_text(
+            json.dumps({"name": "hidden_academic", "format": "ppt169"}),
+            encoding="utf-8",
+        )
+        (project / "notes/01.md").write_text("第 1 页讲稿。\n", encoding="utf-8")
+        (project / "svg_output/01.svg").write_text(
+            textwrap.dedent("""\
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+              <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>
+              <text x="80" y="120" font-size="28" font-family="Arial, sans-serif">Academic body.</text>
+            </svg>
+            """),
+            encoding="utf-8",
+        )
+        proc = subprocess.run(
+            [
+                PYTHON,
+                str(ROOT / "scripts/svg_to_pptx.py"),
+                str(project),
+                "--only",
+                "native",
+                "-s",
+                "output",
+                "-q",
+            ],
+            cwd=str(ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=120,
+        )
+        if proc.returncode == 0:
+            raise AssertionError("PPTX export allowed an academic project under .codex/skills")
+        if "must not live under .codex/skills" not in proc.stdout:
+            raise AssertionError("hidden-project block did not explain the visible artifact requirement")
+        return "academic exports require a user-visible project tree"
+
     def check_export_quality_gate_blocks_invalid_svg(self) -> str:
         project = Path(tempfile.mkdtemp(prefix="paper2ppt_export_gate_"))
         self.temp_paths.append(project)
@@ -1073,8 +1444,8 @@ class IntegrityCheck:
             textwrap.dedent("""\
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
               <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>
-              <rect x="120" y="120" width="360" height="180" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/>
-              <text id="smoke-card-label" x="148" y="206" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#111827" data-box-x="148" data-box-y="148" data-box-width="304" data-box-height="124" data-shape-x="120" data-shape-y="120" data-shape-width="360" data-shape-height="180">Smoke Export</text>
+              <rect x="120" y="120" width="360" height="115" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/>
+              <text id="smoke-card-body" x="148" y="190" font-family="Arial, sans-serif" font-size="18" fill="#334155" data-box-x="148" data-box-y="164" data-box-width="304" data-box-height="44" data-shape-x="120" data-shape-y="120" data-shape-width="360" data-shape-height="115">Editable smoke body validates a stable card.</text>
               <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#64748B"/></marker></defs>
               <line x1="120" y1="340" x2="1160" y2="340" stroke="#A6A6A6" stroke-width="2" stroke-dasharray="8 6"/>
               <polyline points="140,470 320,470 360,510 540,510" fill="none" stroke="#64748B" stroke-width="3" marker-end="url(#arrow)"/>
@@ -1110,6 +1481,11 @@ class IntegrityCheck:
             raise AssertionError("PPTX export did not write a Markdown quality report")
         if "Status: `PASS`" not in quality_reports[-1].read_text(encoding="utf-8", errors="replace"):
             raise AssertionError("successful export quality report does not record PASS status")
+        artifact_manifests = sorted((project / "exports").glob("*intermediate_artifacts.md"))
+        if not artifact_manifests:
+            raise AssertionError("PPTX export did not write an intermediate artifact manifest")
+        if "svg_output" not in artifact_manifests[-1].read_text(encoding="utf-8", errors="replace"):
+            raise AssertionError("intermediate artifact manifest does not list svg_output")
         pptx = pptx_files[-1]
         self._run_cmd([
             PYTHON,

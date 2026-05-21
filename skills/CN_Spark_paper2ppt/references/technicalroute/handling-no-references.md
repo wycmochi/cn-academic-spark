@@ -28,6 +28,7 @@ Do not run `literature_search.py offline` for TechnicalRoute Version B. User-upl
 Then continue:
 - Version A: choose and assemble the editable template using `image-templatedraw.md`.
 - Version B: use only `literature_only` refs from seed-sites search, or `gallery_only_fallback` refs from Custom_gallery after the completed zero-result search is recorded.
+- Version B still adds one extra direct PPT picture page outside the user's requested page count; do not delete or merge a regular editable slide to make room for it.
 
 ## Fallback B - Atlas-Only From Internal Assets
 
@@ -47,6 +48,8 @@ python3 scripts/technicalroute/generate_route_image.py run-ai-variant --prompt <
 ```
 
 The prompt must include a gallery-only fallback clause: no usable literature raster references are available after the completed seed-sites search, so the model must use only the declared structure, the selected Custom_gallery raster anchors, deck color roles, and article-derived content.
+
+The fallback does not change the page-count contract: `_direct_image_slides.json` must still mark the Version B page with `page_count_policy: extra_reference_page_not_counted`, `counts_against_user_page_count: false`, and `page_count_delta: 1`.
 
 ## Fallback C - AI Output Remains Unusable
 

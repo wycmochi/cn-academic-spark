@@ -37,10 +37,11 @@
     },
     {
       "key": "technicalroute_gallery",
-      "index": "technicalroute/Custom_gallery/*/trans-manifest.json",
+      "index": "technicalroute/Custom_gallery/gallery_index.json",
       "directory": "technicalroute/Custom_gallery/",
       "selectionStage": "Step 5.5 - TechnicalRoute AI Reference",
       "downstream": [
+        "style_refs/route_ai_refs.json",
         "prompt_ai.md",
         "route_ai_image_path"
       ]

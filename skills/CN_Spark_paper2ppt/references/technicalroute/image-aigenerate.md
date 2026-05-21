@@ -3,6 +3,8 @@ document explanation(It doesn't affect the process, it only helps with understan
 
 This file defines Version B: the AI-generated PNG reference route diagram. Version B is generated alongside Version A, not only when template assembly fails. It is inserted into the PPTX as a direct full-slide picture page, not wrapped in a global SVG layout.
 
+Version B is a +1 reference slide outside the user's requested slide count. If the user asks for 18 PPT pages, the regular editable/report-content deck remains 18 pages and the final exported PPTX contains 19 slides after the Version B PNG is inserted immediately after Version A. This rule is mandatory and must be recorded in `_direct_image_slides.json` with `page_count_policy: extra_reference_page_not_counted`, `counts_against_user_page_count: false`, and `page_count_delta: 1`.
+
 ## Required Inputs
 
 - `<route_workdir>/contract.md`
@@ -214,7 +216,7 @@ Image generation and immediate PPT-page embedding:
 python3 scripts/technicalroute/generate_route_image.py run-ai-variant --prompt <route_workdir>/prompt_ai.md --aspect_ratio 16:9 --image_size 4K --filename route_ai_<id> --out <route_workdir>/output --refs-plan <route_workdir>/style_refs/route_ai_refs.json --direct-slide-manifest <project_path>/svg_output/_direct_image_slides.json --after-svg-stem <NN>_route_template
 ```
 
-The generated route AI page is a direct PPTX picture page. Do not wrap Version B in an SVG page, global layout, title, caption, footer, page number, or template. `run-ai-variant` writes `_direct_image_slides.json`; `scripts/svg_to_pptx.py` reads that manifest and adds the PNG directly to the deck. `create-ai-slide` is blocked by default and must not be used for production. The PNG must be normalized to at least 330ppi target pixels for the slide format.
+The generated route AI page is a direct PPTX picture page. Do not wrap Version B in an SVG page, global layout, title, caption, footer, page number, or template. `run-ai-variant` writes `_direct_image_slides.json`; `scripts/svg_to_pptx.py` reads that manifest and adds the PNG directly to the deck. `create-ai-slide` is blocked by default and must not be used for production. The PNG must be normalized to at least 330ppi target pixels for the slide format. The manifest entry must explicitly mark this slide as an extra non-counted reference page, so the final deck count equals `user_requested_page_count + number_of_technicalroute_ai_direct_picture_pages`.
 
 Forbidden AI references: manual `--refs`, mixed literature+gallery plans, SVG files, PPTX/PPT files, editable Version A route pages, screenshots of editable route pages, chart templates, assembled SVGs, exported slide images, and any reference file not listed in `route_ai_refs.json`.
 
@@ -238,6 +240,7 @@ Required sequence:
 1. Run `prepare-ai-refs` and verify `style_refs/route_ai_refs.json` exists.
 2. Run `run-ai-variant --refs-plan ... --direct-slide-manifest <project>/svg_output/_direct_image_slides.json --after-svg-stem <NN>_route_template` and verify the command prints both `OK: route_ai_image_path = ...` and `OK: route_ai_direct_slide_manifest = ...`.
 3. Confirm the generated image file exists and is not empty.
+4. Confirm `_direct_image_slides.json` records `page_count_policy: extra_reference_page_not_counted`, `counts_against_user_page_count: false`, and `page_count_delta: 1`; QA must fail if the regular SVG page count is changed to make room for Version B.
 4. Run the immediate TechnicalRoute stage gate:
 
 ```bash

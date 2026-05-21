@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 generate_route_image.py · 把 content.yaml + style_profile.md 拼成 prompt，再调用
 PPT engine 的 ``scripts/image_gen.py`` 做多后端生图。
@@ -74,6 +74,7 @@ IMAGE_GEN_PY = _resolve_image_gen()
 
 
 MIN_ROUTE_AI_PPI = 330
+ROUTE_AI_GENERATION_META_SUFFIX = "_generation_meta.json"
 _ROUTE_AI_SLIDE_INCHES = {
     "ppt169": (13.3333333333, 7.5),
     "ppt43": (10.0, 7.5),
@@ -441,167 +442,6 @@ def _find_generated_image(out_dir: Path, filename: str, before: set[Path] | None
     return candidates[0].resolve()
 
 
-def _fallback_output_path(out_dir: Path, filename: str) -> Path:
-    stem = Path(filename).stem if filename else "route_ai_local_fallback"
-    if not stem:
-        stem = "route_ai_local_fallback"
-    return (out_dir / f"{stem}.png").resolve()
-
-
-def _load_route_font(size: int, *, bold: bool = False):
-    from PIL import ImageFont
-
-    candidates = []
-    if bold:
-        candidates.extend([r"C:/Windows/Fonts/msyhbd.ttc", r"C:/Windows/Fonts/simhei.ttf"])
-    candidates.extend([
-        r"C:/Windows/Fonts/msyh.ttc",
-        r"C:/Windows/Fonts/simhei.ttf",
-        r"C:/Windows/Fonts/simsun.ttc",
-        "/System/Library/Fonts/PingFang.ttc",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ])
-    for candidate in candidates:
-        try:
-            path = Path(candidate)
-            if path.exists():
-                return ImageFont.truetype(str(path), size=size)
-        except Exception:
-            continue
-    return ImageFont.load_default()
-
-
-def _pil_text_width(draw, text: str, font) -> int:
-    if not text:
-        return 0
-    bbox = draw.textbbox((0, 0), text, font=font)
-    return int(bbox[2] - bbox[0])
-
-
-def _pil_wrap(draw, text: str, font, max_width: int, *, max_lines: int = 3) -> list[str]:
-    text = re.sub(r"\s+", " ", str(text or "").strip())
-    if not text:
-        return []
-    tokens = list(text) if re.search(r"[\u4e00-\u9fff]", text) else text.split(" ")
-    sep = "" if re.search(r"[\u4e00-\u9fff]", text) else " "
-    lines: list[str] = []
-    current = ""
-    for token in tokens:
-        candidate = token if not current else current + sep + token
-        if _pil_text_width(draw, candidate, font) <= max_width:
-            current = candidate
-            continue
-        if current:
-            lines.append(current)
-        current = token
-        if len(lines) >= max_lines:
-            break
-    if current and len(lines) < max_lines:
-        lines.append(current)
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-    if len(lines) == max_lines and _pil_text_width(draw, lines[-1], font) > max_width:
-        while lines[-1] and _pil_text_width(draw, lines[-1] + "…", font) > max_width:
-            lines[-1] = lines[-1][:-1]
-        lines[-1] += "…"
-    return lines
-
-
-def _prompt_snippets(prompt: str, count: int = 5) -> list[str]:
-    snippets: list[str] = []
-    seen: set[str] = set()
-    skip_prefixes = (
-        "A high-resolution", "Flat 2D", "Typography:", "Canvas:", "No ",
-        "[", "NEGATIVE", "Use ", "Do not", "Render ",
-    )
-    for raw in prompt.splitlines():
-        line = raw.strip(" \t-•*#0123456789.、:：")
-        if not line or len(line) < 6:
-            continue
-        if any(line.startswith(prefix) for prefix in skip_prefixes):
-            continue
-        if not re.search(r"[\u4e00-\u9fffA-Za-z]", line):
-            continue
-        line = re.sub(r"\s+", " ", line)
-        key = line.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        snippets.append(line[:90])
-        if len(snippets) >= count:
-            break
-    defaults = [
-        "问题提出与研究对象界定",
-        "指标构建、数据整理与变量识别",
-        "模型解释、机制检验与稳健性分析",
-        "结果归纳、异质性比较与规划启示",
-        "形成可汇报的全文技术路线图",
-    ]
-    while len(snippets) < count:
-        snippets.append(defaults[len(snippets)])
-    return snippets[:count]
-
-
-def _render_local_route_fallback(prompt: str, out_dir: Path, filename: str, reason: str) -> Path:
-    try:
-        from PIL import Image, ImageDraw
-    except Exception as exc:
-        raise RuntimeError("Local route fallback requires Pillow when image generation backend is unavailable.") from exc
-
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = _fallback_output_path(out_dir, filename)
-    width, height = 1280, 720
-    image = Image.new("RGBA", (width, height), "#FFFFFF")
-    draw = ImageDraw.Draw(image)
-    font_title = _load_route_font(34, bold=True)
-    font_subtitle = _load_route_font(17)
-    font_stage = _load_route_font(18, bold=True)
-    font_body = _load_route_font(14)
-    font_badge = _load_route_font(12)
-
-    draw.rectangle((0, 0, width, 92), fill="#0B3A66")
-    draw.rectangle((0, 0, 12, 92), fill="#D00000")
-    draw.text((34, 28), "AI全文技术路线图", fill="#FFFFFF", font=font_title)
-    subtitle = "本地兜底生成：根据 prompt_ai.md 摘取全文研究链路，确保 Version B 页面不断链"
-    draw.text((34, 102), subtitle, fill="#334155", font=font_subtitle)
-    draw.rounded_rectangle((965, 28, 1220, 62), radius=10, fill="#E8F1FA", outline="#B9D1EA", width=1)
-    draw.text((982, 38), f"fallback: {reason[:25]}", fill="#24527A", font=font_badge)
-
-    snippets = _prompt_snippets(prompt, 5)
-    labels = ["问题提出", "指标与数据", "模型解释", "结果验证", "规划启示"]
-    colors = ["#2563EB", "#0EA5E9", "#10B981", "#F59E0B", "#D00000"]
-    card_w, card_h = 204, 310
-    gap = 28
-    start_x = 62
-    y = 220
-    for idx, (label, snippet, color) in enumerate(zip(labels, snippets, colors), start=1):
-        x = start_x + (idx - 1) * (card_w + gap)
-        draw.rounded_rectangle((x, y, x + card_w, y + card_h), radius=16, fill="#FFFFFF", outline="#CBD5E1", width=2)
-        draw.rounded_rectangle((x, y, x + card_w, y + 58), radius=16, fill=color)
-        draw.rectangle((x, y + 42, x + card_w, y + 58), fill=color)
-        draw.ellipse((x + 16, y + 16, x + 46, y + 46), fill="#FFFFFF")
-        draw.text((x + 24, y + 20), str(idx), fill=color, font=font_stage)
-        draw.text((x + 58, y + 19), label, fill="#FFFFFF", font=font_stage)
-        lines = _pil_wrap(draw, snippet, font_body, card_w - 32, max_lines=6)
-        ty = y + 90
-        for line in lines:
-            draw.text((x + 16, ty), line, fill="#334155", font=font_body)
-            ty += 24
-        draw.rounded_rectangle((x + 18, y + card_h - 74, x + card_w - 18, y + card_h - 26), radius=10, fill="#F8FAFC", outline="#E2E8F0")
-        draw.text((x + 32, y + card_h - 58), "论文内容驱动", fill=color, font=font_body)
-        if idx < 5:
-            ax1 = x + card_w + 6
-            ay = y + card_h / 2
-            ax2 = ax1 + gap - 12
-            draw.line((ax1, ay, ax2, ay), fill="#94A3B8", width=3)
-            draw.polygon([(ax2, ay), (ax2 - 10, ay - 7), (ax2 - 10, ay + 7)], fill="#94A3B8")
-
-    draw.text((64, 666), "说明：图像后端或参考图链路不可用时生成此兜底 PNG；真实 AI 后端可用时会自动替换为模型生成图。", fill="#64748B", font=font_badge)
-    image.save(out_path, format="PNG")
-    return out_path
-
 
 def _infer_direct_slide_manifest(args: argparse.Namespace) -> Path | None:
     explicit = getattr(args, "direct_slide_manifest", "") or ""
@@ -660,6 +500,11 @@ def _record_direct_image_slide_if_possible(args: argparse.Namespace, image_path:
         "fit": "stretch",
         "role": "technicalroute_ai_reference",
         "format": getattr(args, "format", "ppt169") or "ppt169",
+        "page_count_policy": "extra_reference_page_not_counted",
+        "counts_against_user_page_count": False,
+        "page_count_delta": 1,
+        "narrative_policy": "insert_immediately_after_version_a_without_changing_regular_page_roster",
+        "layout_policy": "direct_full_slide_picture_no_global_layout",
     }
     if insert_after_index not in (None, ""):
         try:
@@ -675,8 +520,44 @@ def _record_direct_image_slide_if_possible(args: argparse.Namespace, image_path:
         )
     ]
     slides.append(entry)
+    data["page_count_policy"] = {
+        "technicalroute_ai": "extra_reference_page_not_counted",
+        "final_slide_count_rule": "final_pptx_slides = user_requested_regular_pages + technicalroute_ai_direct_picture_pages",
+        "example": "user requests 18 pages -> final deck has 19 slides when one Version B AI reference page is inserted",
+    }
     manifest_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"OK: route_ai_direct_slide_manifest = {manifest_path}")
+
+
+def _route_ai_generation_meta_path(image_path: Path) -> Path:
+    return image_path.with_name(f"{image_path.stem}{ROUTE_AI_GENERATION_META_SUFFIX}")
+
+
+def _record_route_ai_generation_metadata(
+    args: argparse.Namespace,
+    image_path: Path,
+    backend_prompt_path: Path,
+) -> Path:
+    plan_path = Path(getattr(args, "refs_plan", "") or "").expanduser().resolve()
+    metadata = {
+        "version": 1,
+        "generator": "image_gen.py",
+        "local_fallback": False,
+        "image_path": str(image_path.expanduser().resolve()),
+        "backend_prompt_path": str(backend_prompt_path.expanduser().resolve()),
+        "refs_plan_path": str(plan_path),
+        "reference_flow": getattr(args, "_refs_plan_reference_flow", "academic_search_then_gallery_fallback"),
+        "refs_plan_mode": getattr(args, "_refs_plan_mode", ""),
+        "refs": [str(Path(ref).expanduser().resolve()) for ref in getattr(args, "refs", []) or []],
+        "backend_selection": ".env/process environment via scripts/image_gen.py",
+        "page_count_policy": "extra_reference_page_not_counted",
+        "counts_against_user_page_count": False,
+        "page_count_delta": 1,
+    }
+    out_path = _route_ai_generation_meta_path(image_path)
+    out_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"OK: route_ai_generation_meta = {out_path}")
+    return out_path
 
 
 def _create_ai_slide_if_requested(args: argparse.Namespace, image_path: Path) -> int:
@@ -693,38 +574,15 @@ def _create_ai_slide_if_requested(args: argparse.Namespace, image_path: Path) ->
 
 
 def _finish_local_route_fallback(args: argparse.Namespace, prompt: str, out_dir: Path, reason: str) -> int:
-    if not getattr(args, "allow_local_fallback", False):
-        print(
-            f"Error: {reason}; TechnicalRoute Version B must be generated by image_gen.py "
-            "with the audited route_ai_refs.json references. The deterministic local PNG "
-            "fallback is disabled in production so a failed image agent cannot be mistaken "
-            "for the AI route page. Fix IMAGE_GEN_PATH/PAPER2PPT_ROOT/.env or rerun with "
-            "--allow-local-fallback only for local diagnostics.",
-            file=sys.stderr,
-        )
-        return 2
-    if getattr(args, "no_local_fallback", False):
-        print(f"Error: {reason}; local fallback is disabled by --no-local-fallback.", file=sys.stderr)
-        return 2
-    try:
-        generated = _render_local_route_fallback(prompt, out_dir, getattr(args, "filename", ""), reason)
-    except RuntimeError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 2
-    try:
-        generated = _ensure_route_ai_png_resolution(generated, getattr(args, "format", "ppt169") or "ppt169")
-    except RuntimeError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 2
     print(
-        f"Warning: {reason}. Created a deterministic local route PNG because "
-        "--allow-local-fallback was explicitly enabled for diagnostics.",
+        f"Error: {reason}; TechnicalRoute Version B must be generated by image_gen.py "
+        "with the audited route_ai_refs.json references. Local deterministic fallback is "
+        "disabled for production and diagnostics: a failed image agent must block Step 5.5 "
+        "instead of creating a fake route image. Fix IMAGE_GEN_PATH/PAPER2PPT_ROOT/.env, "
+        "provider credentials, or the selected route_ai_refs.json, then rerun run-ai-variant.",
         file=sys.stderr,
     )
-    print(f"OK: route_ai_image_path = {generated}")
-    _record_direct_image_slide_if_possible(args, generated)
-    slide_rc = _create_ai_slide_if_requested(args, generated)
-    return slide_rc
+    return 2
 
 
 def _is_forbidden_route_ai_reference_path(path: Path) -> bool:
@@ -888,6 +746,7 @@ def _load_refs_plan(args: argparse.Namespace) -> None:
     args.refs_manifest = str(refs_manifest_path) if refs_manifest_path else ""
     args.gallery_only = mode == "gallery_only_fallback"
     args._refs_plan_mode = mode
+    args._refs_plan_reference_flow = str(data.get("reference_flow") or "")
     args._refs_plan_sources = sources
     args._refs_plan_data = data
 
@@ -1015,6 +874,17 @@ def cmd_run(args: argparse.Namespace) -> int:
     prompt = _augment_prompt_with_refs_gate(prompt, args)
     backend_prompt_path = _write_backend_prompt(prompt_path, prompt, out_dir)
 
+    backend_name = (getattr(args, "backend", "") or "").strip()
+    model_name = (getattr(args, "model", "") or "").strip()
+    if backend_name or model_name:
+        print(
+            "Error: TechnicalRoute AI backend/model must be selected through .env "
+            "or the current process environment using the keys documented in "
+            ".env.example. Do not pass --backend/--model to run-ai-variant.",
+            file=sys.stderr,
+        )
+        return 2
+
     if not IMAGE_GEN_PY.exists():
         return _finish_local_route_fallback(
             args,
@@ -1111,9 +981,6 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
         return 2
 
-    backend_name = (getattr(args, "backend", "") or "").strip()
-    model_name = (getattr(args, "model", "") or "").strip()
-
     before = {item.resolve() for item in out_dir.iterdir() if item.is_file()}
     cmd = [
         sys.executable,
@@ -1127,10 +994,6 @@ def cmd_run(args: argparse.Namespace) -> int:
         "-o",
         str(out_dir),
     ]
-    if backend_name:
-        cmd.extend(["--backend", backend_name])
-    if model_name:
-        cmd.extend(["--model", model_name])
     if args.filename:
         cmd.extend(["--filename", args.filename])
     if refs:
@@ -1172,6 +1035,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
     print(f"OK: route_ai_image_path = {generated}")
+    _record_route_ai_generation_metadata(args, generated, backend_prompt_path)
     _record_direct_image_slide_if_possible(args, generated)
     return _create_ai_slide_if_requested(args, generated)
 
@@ -1599,6 +1463,53 @@ def _png_dimensions(path: Path) -> tuple[int, int] | None:
         return None
 
 
+def _route_ai_success_metadata_ok(route_ai: Path) -> tuple[bool, str]:
+    """Require proof that the PNG came from image_gen.py, not local fallback."""
+    candidates = [
+        _route_ai_generation_meta_path(route_ai),
+        route_ai.parent / "route_ai_generation_meta.json",
+    ]
+    candidates.extend(sorted(route_ai.parent.glob(f"*{ROUTE_AI_GENERATION_META_SUFFIX}")))
+    seen: set[Path] = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        if resolved in seen or not resolved.is_file():
+            continue
+        seen.add(resolved)
+        try:
+            data = json.loads(resolved.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        raw_image = str(data.get("image_path") or "").strip()
+        if raw_image:
+            try:
+                if Path(raw_image).expanduser().resolve() != route_ai.resolve():
+                    continue
+            except OSError:
+                continue
+        if data.get("local_fallback") is True:
+            return False, f"{resolved.name} marks local_fallback=true"
+        if str(data.get("generator") or "") != "image_gen.py":
+            return False, f"{resolved.name} does not record generator=image_gen.py"
+        backend_prompt = Path(str(data.get("backend_prompt_path") or "")).expanduser()
+        refs_plan = Path(str(data.get("refs_plan_path") or "")).expanduser()
+        if not backend_prompt.is_file():
+            return False, f"{resolved.name} backend_prompt_path is missing"
+        if not refs_plan.is_file():
+            return False, f"{resolved.name} refs_plan_path is missing"
+        if str(data.get("reference_flow") or "") != "academic_search_then_gallery_fallback":
+            return False, f"{resolved.name} reference_flow is invalid"
+        if str(data.get("refs_plan_mode") or "") not in {"literature_only", "gallery_only_fallback"}:
+            return False, f"{resolved.name} refs_plan_mode is invalid"
+        return True, str(resolved)
+    return False, "missing route_ai generation metadata"
+
+
 def _route_svg_has_version_a(path: Path) -> bool:
     text = _read_text_lossy(path).lower()
     return (
@@ -1668,6 +1579,14 @@ def _validate_route_workdir_gate(
         messages.append("Version B AI route PNG is missing. Run generate_route_image.py run-ai-variant after prepare-ai-refs.")
     else:
         record["route_ai_image_path"] = str(route_ai)
+        meta_ok, meta_detail = _route_ai_success_metadata_ok(route_ai)
+        if meta_ok:
+            record["route_ai_generation_meta"] = meta_detail
+        else:
+            messages.append(
+                "Version B AI route PNG lacks image_gen.py success metadata "
+                f"({meta_detail}). Delete any local fallback PNG and rerun run-ai-variant."
+            )
         dims = _png_dimensions(route_ai)
         required_w, required_h = _route_ai_min_pixels(fmt)
         if dims is None:
@@ -1728,6 +1647,18 @@ def _validate_route_workdir_gate(
                     messages.append(f"after_svg_stem does not point to an existing SVG page: {after_svg.name}")
                 elif not _route_svg_has_version_a(after_svg):
                     messages.append(f"after_svg_stem page is not a Version A TechnicalRoute SVG: {after_svg.name}")
+            policy = str(entry.get("page_count_policy") or "").strip()
+            counts_flag = entry.get("counts_against_user_page_count")
+            try:
+                delta = int(entry.get("page_count_delta"))
+            except (TypeError, ValueError):
+                delta = 0
+            if policy != "extra_reference_page_not_counted" or counts_flag is not False or delta != 1:
+                messages.append(
+                    "technicalroute_ai manifest entry must declare page_count_policy="
+                    "extra_reference_page_not_counted, counts_against_user_page_count=false, "
+                    "and page_count_delta=1 so a user request for 18 regular slides exports as 19 total slides."
+                )
 
     return not messages, messages, record
 
@@ -2076,12 +2007,12 @@ def main(argv: Iterable[str] | None = None) -> int:
         p.add_argument(
             "--backend",
             default="",
-            help="Optional temporary IMAGE_BACKEND override; normally omit so image_gen.py uses .env/process environment.",
+            help="Blocked for TechnicalRoute production: set IMAGE_BACKEND in .env/process environment instead.",
         )
         p.add_argument(
             "--model",
             default="",
-            help="Optional temporary model override; normally omit so provider-specific .env/process environment selects it.",
+            help="Blocked for TechnicalRoute production: set provider-specific *_MODEL in .env/process environment instead.",
         )
         p.add_argument("--refs", nargs="*", default=[], help="Deprecated/manual refs are rejected; use --refs-plan from prepare-ai-refs.")
         p.add_argument(
@@ -2121,16 +2052,15 @@ def main(argv: Iterable[str] | None = None) -> int:
             "--allow-local-fallback",
             action="store_true",
             help=(
-                "Diagnostics only: create a deterministic local PNG if image_gen.py cannot "
-                "produce the route image. Production deck generation should leave this off."
+                "Deprecated and ignored. TechnicalRoute Version B fails closed when "
+                "image_gen.py cannot produce the route image; local fallback PNGs are forbidden."
             ),
         )
         p.add_argument(
             "--no-local-fallback",
             action="store_true",
             help=(
-                "Deprecated compatibility flag. Local fallback is already disabled unless "
-                "--allow-local-fallback is explicitly set."
+                "Deprecated compatibility flag. Local fallback is always disabled."
             ),
         )
         p.set_defaults(func=cmd_run)
@@ -2203,3 +2133,4 @@ def main(argv: Iterable[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

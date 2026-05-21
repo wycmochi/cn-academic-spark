@@ -21,7 +21,7 @@ import base64
 import json
 import math
 import html
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import List, Dict, Tuple
 from collections import defaultdict
 from xml.etree import ElementTree as ET
@@ -547,7 +547,58 @@ class SVGQualityChecker:
                 f"Detected {len(text_matches)} potentially overly long single-line text(s) (consider using tspan for wrapping)"
             )
 
+        self._check_text_semantic_completion(content, result)
         self._check_textbox_contract(content, result)
+
+    def _check_text_semantic_completion(self, content: str, result: Dict) -> None:
+        """Block visible text that looks clipped before the sentence finished."""
+        try:
+            root = ET.fromstring(content)
+        except ET.ParseError:
+            return
+
+        def _local(node: ET.Element) -> str:
+            return node.tag.rsplit('}', 1)[-1] if isinstance(node.tag, str) else str(node.tag)
+
+        def _text(node: ET.Element) -> str:
+            return re.sub(r"\s+", " ", html.unescape("".join(node.itertext()))).strip()
+
+        def _is_layout_or_fragment(node: ET.Element, text: str) -> bool:
+            marker = " ".join(str(node.attrib.get(k, "")) for k in (
+                "id", "class", "data-role", "data-page-number", "data-footer",
+                "data-citation", "data-allow-fragment", "data-semantic-fragment",
+            )).lower()
+            if any(token in marker for token in (
+                "page-number", "pagenum", "sldnum", "footer", "citation",
+                "reference", "bibliography", "source", "doi", "logo", "school",
+                "data-allow-fragment", "semantic-fragment",
+            )):
+                return True
+            compact = text.strip()
+            if re.fullmatch(r"\d{1,2}(?:\s*/\s*\d{1,2})?", compact):
+                return True
+            if len(compact) <= 6:
+                return True
+            return False
+
+        dangling_punctuation = {",", "，", "、", ";", "；", ":", "："}
+        dangling_suffixes = ("...", "…")
+        for node in root.iter():
+            if _local(node) != "text":
+                continue
+            text = _text(node)
+            if not text or _is_layout_or_fragment(node, text):
+                continue
+            stripped = text.rstrip()
+            if not stripped:
+                continue
+            if stripped.endswith(dangling_suffixes) or stripped[-1] in dangling_punctuation:
+                result['errors'].append(
+                    "Visible text appears semantically truncated: a content text box ends "
+                    f"with dangling punctuation/ellipsis ({stripped[-12:]!r}). Finish the "
+                    "sentence, remove the dangling punctuation, or mark intentional labels "
+                    "with data-allow-fragment=\"true\"."
+                )
 
     def _check_textbox_contract(self, content: str, result: Dict):
         """Detect fragile text authoring that turns into bad PPT text boxes."""
@@ -780,6 +831,67 @@ class SVGQualityChecker:
                 "layout": any(token in attrs for token in ("background", "bg", "watermark")),
                 "formula": "data-formula-png" in attrs,
             })
+
+        def _contained(box: tuple[float, float, float, float], outer: tuple[float, float, float, float], inset: float = 0.0) -> bool:
+            x, y, w, h = box
+            ox, oy, ow, oh = outer
+            return (
+                x >= ox + inset
+                and y >= oy + inset
+                and x + w <= ox + ow - inset
+                and y + h <= oy + oh - inset
+            )
+
+        def _mostly_inside(box: tuple[float, float, float, float], outer: tuple[float, float, float, float]) -> bool:
+            return _contained(box, outer, -4.0) or self._rect_overlap_ratio(box, outer) >= 0.35
+
+        # Empty content-card guard. A large visible panel/card with only a
+        # heading (for example "发现") and no body text/image is a failed
+        # generation, even if geometry and font rules technically pass.
+        for rect_name, rect_box in visible_rects:
+            rx, ry, rw, rh = rect_box
+            if rw < 180 or rh < 130 or rw * rh < canvas_w * canvas_h * 0.045:
+                continue
+            if ry < canvas_h * 0.14 or ry + rh > canvas_h * 0.94:
+                continue
+            rect_has_image = any(
+                not image_item["layout"]
+                and _mostly_inside(image_item["box"], rect_box)  # type: ignore[arg-type]
+                for image_item in image_boxes
+            )
+            if rect_has_image:
+                continue
+            contained_text = [
+                item for item in text_boxes
+                if not item["layout"]
+                and _mostly_inside(item["box"], rect_box)  # type: ignore[arg-type]
+            ]
+            if not contained_text:
+                result['errors'].append(
+                    f"Large content container appears blank ({rect_name}). Fill it with "
+                    "source-grounded explanation, evidence bullets, a figure/table, or remove the empty shape."
+                )
+                continue
+            body_text = []
+            for item in contained_text:
+                node = item["node"]
+                assert isinstance(node, ET.Element)
+                text = str(item["text"]).strip()
+                box = item["box"]
+                assert isinstance(box, tuple)
+                font_size = _font_size(node)
+                _, ty, _, _ = box
+                near_panel_top = ty < ry + max(56, rh * 0.18)
+                short_heading = len(text) <= 24 and ty < ry + max(88, rh * 0.28)
+                is_title_like = near_panel_top or (font_size >= 24 and short_heading)
+                if len(text) >= 12 and not is_title_like:
+                    body_text.append(text)
+            if not body_text and rh >= 180:
+                samples = " / ".join(str(item["text"])[:16] for item in contained_text[:3])
+                result['errors'].append(
+                    f"Large content container has a heading but no body content ({rect_name}; {samples!r}). "
+                    "Do not leave generated cards/panels empty; add complete explanatory text or split/remove the panel."
+                )
 
         # Explicit box contract: either all four attrs are present, or none.
         for node in text_nodes:
@@ -1590,6 +1702,21 @@ class SVGQualityChecker:
                                     )
                                 else:
                                     normalized = str(meta.get("normalized_latex") or "")
+                                    variable_rows = meta.get("variable_rows")
+                                    has_truncated_row = (
+                                        isinstance(variable_rows, list)
+                                        and any(
+                                            str(row).rstrip().endswith(("...", "…"))
+                                            for row in variable_rows
+                                        )
+                                    )
+                                    if meta.get("truncated") is True or has_truncated_row:
+                                        result['errors'].append(
+                                            "Formula block PNG metadata shows truncated variable explanation. "
+                                            "Rerender with scripts/latex_formula_to_png.py --block-json after "
+                                            "rereading the paper; grow or split the formula block instead of "
+                                            f"ending formula explanations with ellipses. Metadata: {meta_path}"
+                                        )
                                     if (
                                         meta.get("schema") != "cn_spark_formula_png_meta_v1"
                                         or meta.get("renderer") != "matplotlib.mathtext"
@@ -2067,6 +2194,7 @@ class SVGQualityChecker:
         self._check_native_svg_source_safety(dir_path, svg_files)
         self._check_technicalroute_requirement_declared(dir_path, svg_files)
         self._check_technicalroute_dual_output(svg_files)
+        self._check_technicalroute_page_count_policy(dir_path, svg_files)
         self._check_technicalroute_ai_svg_wrapper_forbidden(svg_files)
         self._check_route_ai_reference_plan_integrity(dir_path)
         self._check_ai_image_assets_inserted(dir_path, svg_files)
@@ -2074,6 +2202,7 @@ class SVGQualityChecker:
         self._check_unique_page_numbers(svg_files)
         self._check_cover_metadata_only(svg_files)
         self._check_cover_title_semantic_contract(svg_files)
+        self._check_chinese_output_language_policy(dir_path, svg_files)
         self._check_anchor_page_stacking(svg_files)
         self._check_summary_thanks_separation(svg_files)
 
@@ -2240,6 +2369,50 @@ class SVGQualityChecker:
     def _direct_route_ai_ok(self, project_root: Path) -> bool:
         return any(Path(entry["image_path"]).is_file() for entry in self._direct_route_ai_entries(project_root))
 
+    def _project_contract_text(self, project_root: Path) -> str:
+        candidates = [
+            project_root / "design_spec.md",
+            project_root / "spec_lock.md",
+            project_root / "ppt_outline_cn.md",
+            project_root / "outline" / "design_spec.md",
+            project_root / "outline" / "ppt_outline_cn.md",
+            project_root / "outline" / "pptoutline.md",
+        ]
+        chunks: list[str] = []
+        for candidate in candidates:
+            if candidate.is_file() and candidate.stat().st_size <= 1_000_000:
+                try:
+                    chunks.append(candidate.read_text(encoding="utf-8-sig", errors="replace"))
+                except OSError:
+                    pass
+        return "\n".join(chunks)
+
+    def _requested_regular_page_count(self, project_root: Path) -> int | None:
+        text = self._project_contract_text(project_root)
+        if not text:
+            return None
+        patterns = [
+            r"\buser_requested_page_count\s*[:=]\s*(\d{1,3})\b",
+            r"\brequested_regular_page_count\s*[:=]\s*(\d{1,3})\b",
+            r"\brequested_editable_page_count\s*[:=]\s*(\d{1,3})\b",
+            r"\bregular_page_count_target\s*[:=]\s*(\d{1,3})\b",
+            r"\brequested_slide_count\s*[:=]\s*(\d{1,3})\b",
+            r"\buser_requested_slides\s*[:=]\s*(\d{1,3})\b",
+            r"用户页数指标\s*[:：]\s*(\d{1,3})\s*页?",
+            r"用户要求(?:的)?(?:\s*PPT|\s*ppt)?页数\s*[:：]\s*(\d{1,3})\s*页?",
+            r"请求(?:生成|制作)?\s*(\d{1,3})\s*页\s*(?:PPT|ppt)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text, flags=re.IGNORECASE)
+            if match:
+                try:
+                    value = int(match.group(1))
+                except ValueError:
+                    continue
+                if 1 <= value <= 200:
+                    return value
+        return None
+
     @staticmethod
     def _route_ai_backend_prompt_gate_ok(project_root: Path, entry: dict) -> bool:
         """Confirm Version B came through run-ai-variant's refs-gated prompt.
@@ -2281,6 +2454,56 @@ class SVGQualityChecker:
         return False
 
     @staticmethod
+    def _route_ai_generation_metadata_ok(project_root: Path, entry: dict) -> bool:
+        """Confirm the direct Version B PNG records a real image_gen.py success."""
+        image_path = Path(str(entry.get("image_path") or "")).expanduser()
+        candidates: list[Path] = []
+        if image_path.is_file():
+            candidates.extend([
+                image_path.with_name(f"{image_path.stem}_generation_meta.json"),
+                image_path.parent / "route_ai_generation_meta.json",
+            ])
+            candidates.extend(image_path.parent.glob("*_generation_meta.json"))
+        candidates.extend(project_root.glob("technicalroute/**/output/*_generation_meta.json"))
+
+        seen: set[Path] = set()
+        for candidate in candidates:
+            try:
+                resolved = candidate.resolve()
+            except OSError:
+                continue
+            if resolved in seen or not resolved.is_file():
+                continue
+            seen.add(resolved)
+            try:
+                data = json.loads(resolved.read_text(encoding="utf-8-sig"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            if data.get("local_fallback") is True:
+                continue
+            if str(data.get("generator") or "") != "image_gen.py":
+                continue
+            raw_image = str(data.get("image_path") or "").strip()
+            if raw_image:
+                try:
+                    if Path(raw_image).expanduser().resolve() != image_path.resolve():
+                        continue
+                except OSError:
+                    continue
+            backend_prompt = Path(str(data.get("backend_prompt_path") or "")).expanduser()
+            refs_plan = Path(str(data.get("refs_plan_path") or "")).expanduser()
+            if not backend_prompt.is_file() or not refs_plan.is_file():
+                continue
+            if str(data.get("reference_flow") or "") != "academic_search_then_gallery_fallback":
+                continue
+            if str(data.get("refs_plan_mode") or "") not in {"literature_only", "gallery_only_fallback"}:
+                continue
+            return True
+        return False
+
+    @staticmethod
     def _is_forbidden_route_ai_ref_path(path: Path) -> bool:
         norm = str(path).replace("\\", "/").lower()
         forbidden_tokens = (
@@ -2304,6 +2527,57 @@ class SVGQualityChecker:
             "screen_shot",
         )
         return any(token in norm for token in forbidden_tokens)
+
+    def _check_technicalroute_page_count_policy(self, dir_path: Path, svg_files: List[Path]) -> None:
+        """Require Version B to be a +1 reference page outside the user target."""
+        project_root = self._project_root_from_dir(dir_path)
+        direct_entries = self._direct_route_ai_entries(project_root)
+        if not direct_entries:
+            return
+
+        for entry in direct_entries:
+            image_name = Path(str(entry.get("image_path") or "")).name or "technicalroute_ai"
+            policy = str(entry.get("page_count_policy") or "").strip()
+            counts_flag = entry.get("counts_against_user_page_count")
+            try:
+                delta = int(entry.get("page_count_delta"))
+            except (TypeError, ValueError):
+                delta = 0
+            if policy != "extra_reference_page_not_counted" or counts_flag is not False or delta != 1:
+                self._project_issues.append((
+                    "error",
+                    "technicalroute_ai_page_count_policy_missing",
+                    f"{image_name}: _direct_image_slides.json must mark Version B as "
+                    "page_count_policy=extra_reference_page_not_counted, "
+                    "counts_against_user_page_count=false, page_count_delta=1. "
+                    "The AI generated route image is an extra reference page: user asks for 18 pages -> final deck has 19 slides."
+                ))
+
+        requested = self._requested_regular_page_count(project_root)
+        if requested is None:
+            self._project_issues.append((
+                "error",
+                "technicalroute_requested_page_count_missing",
+                "Project contains a TechnicalRoute Version B direct image page but does not record "
+                "`user_requested_page_count` / `requested_regular_page_count` in design_spec.md, "
+                "spec_lock.md, or ppt_outline_cn.md. Record the user's requested regular slide count "
+                "so QA can verify the final deck adds exactly one AI reference page."
+            ))
+            return
+
+        regular_svg_count = len(svg_files)
+        ai_extra_count = len(direct_entries)
+        final_count_after_direct = regular_svg_count + ai_extra_count
+        expected_final_count = requested + ai_extra_count
+        if regular_svg_count != requested or final_count_after_direct != expected_final_count:
+            self._project_issues.append((
+                "error",
+                "technicalroute_ai_page_count_mismatch",
+                f"Page-count contract failed: user_requested_page_count={requested}, "
+                f"regular SVG pages={regular_svg_count}, TechnicalRoute Version B direct image pages={ai_extra_count}, "
+                f"final deck would have {final_count_after_direct} slides. Build exactly {requested} regular/editable "
+                f"slides and then insert the {ai_extra_count} AI reference page(s), so final total = {expected_final_count}."
+            ))
 
     def _check_route_ai_reference_plan_integrity(self, dir_path: Path) -> None:
         """Require route AI picture pages to have an auditable refs plan.
@@ -2356,6 +2630,37 @@ class SVGQualityChecker:
             except ValueError:
                 return False
 
+        def _normalized_path_text(path: Path | str) -> str:
+            return str(path).replace("\\", "/")
+
+        def _is_allowed_skill_rel(path: Path | str, rel_suffix: str) -> bool:
+            norm = _normalized_path_text(path).lower()
+            suffix = rel_suffix.replace("\\", "/").lower().lstrip("/")
+            return norm == suffix or norm.endswith("/" + suffix)
+
+        def _remap_gallery_ref(path: Path) -> Path:
+            """Map historical installed-skill Custom_gallery paths to this checker root.
+
+            Demo projects may record refs from an installed Codex skill path
+            while this checker is running from the source repo. Keep the gate
+            strict by accepting only the same Custom_gallery-relative suffix.
+            """
+            if path.is_file():
+                return path.resolve()
+            original = _normalized_path_text(path)
+            lower = original.lower()
+            marker = "/templates/technicalroute/custom_gallery/"
+            if marker not in lower:
+                return path
+            rel_text = original[lower.index(marker) + len(marker):]
+            rel_parts = [part for part in PurePosixPath(rel_text).parts if part not in {"", "."}]
+            if not rel_parts:
+                return path
+            candidate = (gallery_root / Path(*rel_parts)).resolve()
+            if candidate.is_file():
+                return candidate
+            return path
+
         for plan_path, plan in plans:
             mode = str(plan.get("mode") or "")
             refs = plan.get("refs") or []
@@ -2368,6 +2673,15 @@ class SVGQualityChecker:
                         "has no refs-gated backend prompt beside the generated image. Run "
                         "generate_route_image.py run-ai-variant with --refs-plan; do not create "
                         "Version B through local fallback, SVG wrapping, or manual image insertion."
+                    ))
+                if not self._route_ai_generation_metadata_ok(project_root, entry):
+                    self._project_issues.append((
+                        "error",
+                        "technicalroute_ai_generation_meta_missing",
+                        f"{Path(entry['image_path']).name}: direct TechnicalRoute AI picture slide "
+                        "does not have image_gen.py success metadata. A refs-gated prompt alone is "
+                        "not proof that the backend generated the image; local fallback PNGs and "
+                        "manually inserted images must fail this gate."
                     ))
             if plan.get("reference_flow") != "academic_search_then_gallery_fallback":
                 self._project_issues.append((
@@ -2391,13 +2705,34 @@ class SVGQualityChecker:
                 continue
             seed_raw = str(plan.get("seed_sites_path") or "")
             gallery_raw = str(plan.get("gallery_index_path") or "")
-            if seed_raw and Path(seed_raw).expanduser().resolve() != seed_sites:
+            plan_gallery_root = gallery_root
+            if seed_raw:
+                seed_path = Path(seed_raw).expanduser()
+            else:
+                seed_path = seed_sites
+            if seed_raw and not (
+                _is_allowed_skill_rel(seed_path, "references/technicalroute/seed_sites.json")
+                and seed_sites.is_file()
+            ):
                 self._project_issues.append((
                     "error",
                     "technicalroute_ai_seed_sites_wrong",
                     f"{plan_path.name}: seed_sites_path must be the skill references/technicalroute/seed_sites.json."
                 ))
-            if gallery_raw and Path(gallery_raw).expanduser().resolve() != gallery_index:
+            if gallery_raw:
+                gallery_path = Path(gallery_raw).expanduser()
+                if (
+                    _is_allowed_skill_rel(gallery_path, "templates/technicalroute/Custom_gallery/gallery_index.json")
+                    and gallery_index.is_file()
+                ):
+                    plan_gallery_root = gallery_path.resolve().parent if gallery_path.is_file() else gallery_root
+                else:
+                    self._project_issues.append((
+                        "error",
+                        "technicalroute_ai_gallery_index_wrong",
+                        f"{plan_path.name}: gallery_index_path must be the skill Custom_gallery/gallery_index.json."
+                    ))
+            elif gallery_index:
                 self._project_issues.append((
                     "error",
                     "technicalroute_ai_gallery_index_wrong",
@@ -2417,6 +2752,7 @@ class SVGQualityChecker:
                 ref_path = Path(str(raw_ref)).expanduser()
                 if not ref_path.is_absolute():
                     ref_path = (plan_path.parent / ref_path).resolve()
+                ref_path = _remap_gallery_ref(ref_path)
                 suffix = ref_path.suffix.lower()
                 if suffix not in raster_suffixes:
                     self._project_issues.append((
@@ -2440,7 +2776,7 @@ class SVGQualityChecker:
                         "Route AI references may come only from seed-site literature rasters or Custom_gallery."
                     ))
                     continue
-                in_gallery = _under(ref_path, gallery_root)
+                in_gallery = _under(ref_path, plan_gallery_root)
                 if mode == "gallery_only_fallback" and not in_gallery:
                     self._project_issues.append((
                         "error",
@@ -2647,13 +2983,20 @@ class SVGQualityChecker:
                 if direct_path.is_absolute() and direct_path.exists():
                     asset_path = direct_path.resolve()
                 else:
-                    self._project_issues.append((
-                        'error',
-                        'ai_image_missing_on_disk',
-                        f"{basename}: spec/design declares an AI image path, but the file does not exist. "
-                        "Run the AI image generation step and verify route_ai_image_path before creating PPTX."
-                    ))
-                    continue
+                    matches = [
+                        path for path in project_root.rglob(basename)
+                        if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
+                    ]
+                    if matches:
+                        asset_path = matches[0].resolve()
+                    else:
+                        self._project_issues.append((
+                            'error',
+                            'ai_image_missing_on_disk',
+                            f"{basename}: spec/design declares an AI image path, but the file does not exist. "
+                            "Run the AI image generation step and verify route_ai_image_path before creating PPTX."
+                        ))
+                        continue
             if is_route_ai and not (has_embedded_route_slide or has_direct_route_slide):
                 self._project_issues.append((
                     'error',
@@ -2859,6 +3202,178 @@ class SVGQualityChecker:
                 "advisor, date, source, and DOI should be metadata below the title, not a second title fragment."
             ))
 
+    @staticmethod
+    def _has_cjk(text: str) -> bool:
+        return re.search(r"[\u4e00-\u9fff]", text) is not None
+
+    @staticmethod
+    def _english_words(text: str) -> list[str]:
+        allowed = {
+            "AI", "ALE", "API", "COVID", "CNY", "DOI", "GDP", "GIS", "GR",
+            "HSR", "OD", "OLS", "PDF", "PPT", "PPTX", "TRD", "VoTT", "XGBoost",
+        }
+        words = re.findall(r"[A-Za-z][A-Za-z][A-Za-z\-]*", text)
+        return [word for word in words if word.upper() not in allowed]
+
+    def _project_requires_chinese_output(self, project_root: Path) -> bool:
+        """CN academic decks speak Chinese even when the source paper is English."""
+        markers = [
+            project_root / "ppt_outline_cn.md",
+            project_root / "design_spec.md",
+            project_root / "spec_lock.md",
+            project_root / "notes" / "total.md",
+        ]
+        if (project_root / "ppt_outline_cn.md").is_file():
+            return True
+        combined = ""
+        for path in markers:
+            if not path.is_file():
+                continue
+            try:
+                combined += "\n" + path.read_text(encoding="utf-8-sig", errors="replace")
+            except OSError:
+                continue
+        lower = combined.lower()
+        if any(token in lower for token in (
+            "output_language: en", "output-language: en", "language: en",
+            "deck_language: en", "english_only: true",
+        )):
+            return False
+        return bool(combined and (self._has_cjk(combined) or "cn_spark" in lower or "academic" in lower))
+
+    def _check_chinese_output_language_policy(self, dir_path: Path, svg_files: List[Path]) -> None:
+        """Generated PPT text must be Chinese for this CN academic skill.
+
+        English source papers are allowed, but only the cover may show the
+        original English paper title; body slide titles, cards, callouts, and
+        explanatory text must be translated. Formula variables, DOI/citations,
+        and text baked into source-figure image crops are outside this SVG text
+        gate.
+        """
+        project_root = self._project_root_from_dir(dir_path)
+        if not self._project_requires_chinese_output(project_root):
+            return
+
+        def _local(node: ET.Element) -> str:
+            return node.tag.rsplit('}', 1)[-1] if '}' in node.tag else node.tag
+
+        def _node_text(node: ET.Element) -> str:
+            return " ".join(html.unescape("".join(node.itertext())).split())
+
+        def _node_float(node: ET.Element, name: str, default: float = 0.0) -> float:
+            return self._attr_float(node, name, default)
+
+        def _node_font_size(node: ET.Element, default: float = 0.0) -> float:
+            sizes: list[float] = []
+            for item in node.iter():
+                raw = item.attrib.get("font-size")
+                if raw is None:
+                    continue
+                try:
+                    sizes.append(float(str(raw).replace("px", "").strip()))
+                except ValueError:
+                    continue
+            return max(sizes) if sizes else default
+
+        def _is_exempt(node: ET.Element, text: str, width: float, height: float) -> bool:
+            marker = " ".join(str(node.attrib.get(k, "")) for k in (
+                "id", "class", "data-role", "data-page-number", "data-footer",
+                "data-citation", "data-source-figure", "data-formula-png",
+                "data-allow-english", "data-paper-title-original",
+            )).lower()
+            if any(token in marker for token in (
+                "page-number", "pagenum", "sldnum", "footer", "citation",
+                "reference", "bibliography", "source", "doi", "formula",
+                "variable", "logo", "school", "journal", "author",
+                "data-allow-english", "paper-title-original",
+            )):
+                return True
+            compact = text.strip()
+            if not compact:
+                return True
+            if re.fullmatch(r"\d{1,2}(?:\s*/\s*\d{1,2})?", compact):
+                return True
+            lower = compact.lower()
+            if "doi" in lower or re.search(r"\b(?:fig|figure|table)\.?\s*\d+", lower):
+                # Figure labels may retain Fig./Table only when paired with Chinese text.
+                return self._has_cjk(compact)
+            y = _node_float(node, "y")
+            font_size = _node_font_size(node, 14.0)
+            if y > height * 0.84 and font_size <= 14:
+                return True
+            return False
+
+        def _is_english_dominant(text: str) -> bool:
+            words = self._english_words(text)
+            if len(words) < 3:
+                return False
+            cjk_count = len(re.findall(r"[\u4e00-\u9fff]", text))
+            alpha_count = len(re.findall(r"[A-Za-z]", text))
+            if cjk_count == 0:
+                return True
+            return alpha_count > max(24, cjk_count * 1.6) and len(words) >= 5
+
+        for index, svg_file in enumerate(svg_files):
+            content, _visible_text = self._read_svg_text_for_project_check(svg_file)
+            try:
+                root = ET.fromstring(content)
+            except ET.ParseError:
+                continue
+            width, height = self._svg_viewbox_size(root)
+            text_nodes = [node for node in root.iter() if _local(node) == "text"]
+            if index == 0:
+                long_english_title = False
+                english_title_font_max = 0.0
+                chinese_title_font_max = 0.0
+                for node in text_nodes:
+                    text = _node_text(node)
+                    if not text or _is_exempt(node, text, width, height):
+                        continue
+                    y = _node_float(node, "y")
+                    font_size = _node_font_size(node, 0.0)
+                    if y > height * 0.68 or font_size < 22:
+                        continue
+                    if self._has_cjk(text):
+                        cjk_count = len(re.findall(r"[\u4e00-\u9fff]", text))
+                        if cjk_count >= 8:
+                            chinese_title_font_max = max(chinese_title_font_max, font_size)
+                    if _is_english_dominant(text):
+                        long_english_title = True
+                        english_title_font_max = max(english_title_font_max, font_size)
+                has_prominent_chinese_title = (
+                    chinese_title_font_max >= 22
+                    and (
+                        english_title_font_max <= 0
+                        or chinese_title_font_max >= english_title_font_max * 0.72
+                    )
+                )
+                if long_english_title and not has_prominent_chinese_title:
+                    self._project_issues.append((
+                        "error",
+                        "cover_title_missing_chinese_translation",
+                        f"{svg_file.name}: cover shows a long English paper title without a Chinese title. "
+                        "For English source papers, add a Chinese translated title on the cover and keep "
+                        "the original English title as the secondary/original-title metadata."
+                    ))
+                continue
+
+            for node in text_nodes:
+                text = _node_text(node)
+                if not text or _is_exempt(node, text, width, height):
+                    continue
+                if not _is_english_dominant(text):
+                    continue
+                sample = text[:80]
+                self._project_issues.append((
+                    "error",
+                    "non_chinese_generated_text",
+                    f"{svg_file.name}: generated slide text is English-dominant ({sample!r}). "
+                    "Translate slide titles, body cards, callouts, captions, and explanations into Chinese. "
+                    "Only source-figure pixels, formula variables, DOI/citations, and explicitly marked "
+                    "original-title metadata may remain English."
+                ))
+                break
+
     def _check_technicalroute_ai_svg_wrapper_forbidden(self, svg_files: List[Path]) -> None:
         """Forbid legacy SVG wrappers for AI route images.
 
@@ -2949,8 +3464,67 @@ class SVGQualityChecker:
                             "Remove the empty frame or use an intentional text overlay marked as overlay/scrim."
                         ))
 
+    def _technicalroute_disabled_by_project_text(self, combined: str, combined_lower: str) -> bool:
+        disabled_terms = [
+            "technicalroute_required: false",
+            "technicalroute_required=false",
+            "technicalroute: false",
+            "technical_route_required: false",
+            "technical_route_required=false",
+            "skip_technicalroute: true",
+            "skip technicalroute",
+            "no_technicalroute: true",
+            "no technicalroute",
+            "不需要技术路线",
+            "无需技术路线",
+            "跳过技术路线",
+            "不生成技术路线",
+        ]
+        return any(term in combined_lower or term in combined for term in disabled_terms)
+
+    def _academic_default_requires_technicalroute(
+        self,
+        project_root: Path,
+        combined: str,
+        combined_lower: str,
+    ) -> str:
+        """Academic decks require TechnicalRoute A/B; generated skip markers cannot disable it."""
+        academic_files = [
+            project_root / "design_spec.md",
+            project_root / "spec_lock.md",
+            project_root / "ppt_outline_cn.md",
+            project_root / "outline" / "design_spec.md",
+            project_root / "outline" / "ppt_outline_cn.md",
+            project_root / "outline" / "pptoutline.md",
+        ]
+        has_academic_project_file = any(path.is_file() for path in academic_files)
+        if not has_academic_project_file:
+            return ""
+        academic_terms = [
+            "cn-academic-spark",
+            "academic",
+            "journal club",
+            "course report",
+            "paper",
+            "doi",
+            "论文",
+            "学术汇报",
+            "课题组",
+            "组会",
+            "开题",
+            "答辩",
+            "文献综述",
+            "课程报告",
+        ]
+        if any(term in combined_lower or term in combined for term in academic_terms):
+            return "academic_default_technicalroute_required"
+        # New projects generated by this skill always have at least one outline
+        # or design-spec file. Missing route declarations are treated as a
+        # skipped Step 5.5, not as an exemption.
+        return "academic_project_default_technicalroute_required"
+
     def _check_technicalroute_requirement_declared(self, dir_path: Path, svg_files: List[Path]) -> None:
-        """If the deck declares a route/workflow page, require TechnicalRoute A/B outputs.
+        """If the deck is academic or declares a route/workflow page, require TechnicalRoute A/B outputs.
 
         Executor mistakes often create a local hand-drawn "Research Workflow"
         slide and skip Step 5.5 entirely. That produces no route workdir, no
@@ -2963,6 +3537,9 @@ class SVGQualityChecker:
             project_root / "design_spec.md",
             project_root / "spec_lock.md",
             project_root / "ppt_outline_cn.md",
+            project_root / "outline" / "design_spec.md",
+            project_root / "outline" / "ppt_outline_cn.md",
+            project_root / "outline" / "pptoutline.md",
             project_root / "notes" / "total.md",
         ]
         notes_dir = project_root / "notes"
@@ -2993,6 +3570,19 @@ class SVGQualityChecker:
 
         combined = "\n".join(text_chunks)
         combined_lower = combined.lower()
+        disabled_by_project = self._technicalroute_disabled_by_project_text(combined, combined_lower)
+        academic_default_reason = self._academic_default_requires_technicalroute(project_root, combined, combined_lower)
+        if disabled_by_project and academic_default_reason:
+            self._project_issues.append((
+                "error",
+                "technicalroute_skip_marker_forbidden",
+                "Academic CN_Spark projects cannot bypass TechnicalRoute A/B by writing "
+                "technicalroute_required:false, technical_route_required:false, or "
+                "skip_technicalroute:true into generated project files. Generate Version A "
+                "editable route and Version B image_gen.py route output instead."
+            ))
+        elif disabled_by_project:
+            return
         trigger_terms = [
             "technical_route",
             "research_framework",
@@ -3016,11 +3606,15 @@ class SVGQualityChecker:
             "方法流程",
             "论文流程",
             "全文方法链条",
+            "机制图",
+            "原理图",
             "流程图",
         ]
         matched = next((term for term in trigger_terms if term in combined_lower or term in combined), "")
         if not matched:
-            return
+            matched = academic_default_reason
+            if not matched:
+                return
 
         combined_svg = "\n".join(
             svg.read_text(encoding="utf-8", errors="replace")

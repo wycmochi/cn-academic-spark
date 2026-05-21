@@ -14,6 +14,47 @@
     ]
   },
   {
+    "label": "review-process",
+    "articleTitle": "Large models for intelligent transportation systems and autonomous vehicles: A survey",
+    "journalORmeeting": "Advanced Engineering Informatics",
+    "year": 2024,
+    "authors": "Gan L, Chu W, Li G, et al.",
+    "plotSummary": "refer to this option when the user requests a review article or the material is a review article",
+    "agentKeywords": [
+      "Review article",
+      "Survey process",
+      "Comprehensive overview"
+    ]
+  },
+  {
+    "label": "review-structure",
+    "articleTitle": "Large models for intelligent transportation systems and autonomous vehicles: A survey",
+    "journalORmeeting": "Advanced Engineering Informatics",
+    "year": 2024,
+    "authors": "Gan L, Chu W, Li G, et al.",
+    "plotSummary": "refer to this option when the user requests a review article or the material is a review article",
+    "agentKeywords": [
+      "Review article",
+      "Survey structure",
+      "Comprehensive overview"
+    ]
+  },
+  {
+    "label": "交通仿真图",
+    "articleTitle": "Environmental impacts and emission reduction methods of vehicles equipped with driving automation systems: An operational-level review",
+    "journalORmeeting": "Transportation Research Part C: Emerging Technologies",
+    "year": 2025,
+    "authors": "Jiang H, Xia K, Zhao Y, et al.",
+    "plotSummary": "refer to this option when no exact sub-variant exists and the gallery needs the nearest-intent raster reference within the same or closest discipline.",
+    "agentKeywords": [
+      "Nearest intent",
+      "Gallery fallback",
+      "Style anchor",
+      "参考图",
+      "兜底"
+    ]
+  },
+  {
     "label": "全文思路",
     "articleTitle": "Examining the causal impacts of the built environment on cycling activities using time-series street view imagery",
     "journalORmeeting": "Transportation Research Part A: Policy and Practice",
@@ -25,6 +66,21 @@
       "Multi-source analysis",
       "multiple modeling techniques",
       "multi-sourece data"
+    ]
+  },
+  {
+    "label": "全文技术路线2",
+    "articleTitle": "CurricuVLM: Towards safe autonomous driving via personalized safety-critical curriculum learning with vision-language models",
+    "journalORmeeting": "Transportation Research Part C: Emerging Technologies",
+    "year": 2026,
+    "authors": "Sheng Z, Huang Z, Qu Y, et al.",
+    "plotSummary": "refer to this option when an article needs a whole-paper technical route, experiment pipeline, data-processing flow, or sequential research workflow.",
+    "agentKeywords": [
+      "Technical roadmap",
+      "Sequential workflow",
+      "Research pipeline",
+      "技术路线",
+      "流程图"
     ]
   },
   {
@@ -54,29 +110,93 @@
     ]
   },
   {
-    "label": "review-structure",
-    "articleTitle": "Large models for intelligent transportation systems and autonomous vehicles: A survey",
-    "journalORmeeting": "Advanced Engineering Informatics",
-    "year": 2024,
-    "authors": "Gan L, Chu W, Li G, et al.",
-    "plotSummary": "refer to this option when the user requests a review article or the material is a review article",
+    "label": "文献综述主题总结",
+    "articleTitle": "Environmental impacts and emission reduction methods of vehicles equipped with driving automation systems: An operational-level review",
+    "journalORmeeting": "Transportation Research Part C: Emerging Technologies",
+    "year": 2025,
+    "authors": "Jiang H, Xia K, Zhao Y, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
     "agentKeywords": [
       "Review article",
-      "Survey structure",
-      "Comprehensive overview"
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
     ]
   },
   {
-    "label": "review-process",
-    "articleTitle": "Large models for intelligent transportation systems and autonomous vehicles: A survey",
-    "journalORmeeting": "Advanced Engineering Informatics",
-    "year": 2024,
-    "authors": "Gan L, Chu W, Li G, et al.",
-    "plotSummary": "refer to this option when the user requests a review article or the material is a review article",
+    "label": "文献综述主题联系图",
+    "articleTitle": "Dry bulk terminal operations: A critical review of models and optimization methods",
+    "journalORmeeting": "Transportation Research Part C: Emerging Technologies",
+    "year": 2025,
+    "authors": "Cao Z, Sun Q, Wang S.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
     "agentKeywords": [
       "Review article",
-      "Survey process",
-      "Comprehensive overview"
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述技术流程图",
+    "articleTitle": "Environmental impacts and emission reduction methods of vehicles equipped with driving automation systems: An operational-level review",
+    "journalORmeeting": "Transportation Research Part C: Emerging Technologies",
+    "year": 2025,
+    "authors": "Jiang H, Xia K, Zhao Y, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述模型原理总结图",
+    "articleTitle": "A review of knowledge graph construction using large language models in transportation: Problems, methods, and challenges",
+    "journalORmeeting": "Transportation Research Part C: Emerging Technologies",
+    "year": 2026,
+    "authors": "Ling Y, Qin Z, Ma Z.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "机制原理图",
+    "articleTitle": "CurricuVLM: Towards safe autonomous driving via personalized safety-critical curriculum learning with vision-language models",
+    "journalORmeeting": "Transportation Research Part C: Emerging Technologies",
+    "year": 2026,
+    "authors": "Sheng Z, Huang Z, Qu Y, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "知识图谱构建流程图",
+    "articleTitle": "A review of knowledge graph construction using large language models in transportation: Problems, methods, and challenges",
+    "journalORmeeting": "Transportation Research Part C: Emerging Technologies",
+    "year": 2026,
+    "authors": "Ling Y, Qin Z, Ma Z.",
+    "plotSummary": "refer to this option when an article needs a whole-paper technical route, experiment pipeline, data-processing flow, or sequential research workflow.",
+    "agentKeywords": [
+      "Technical roadmap",
+      "Sequential workflow",
+      "Research pipeline",
+      "技术路线",
+      "流程图"
     ]
   }
 ]

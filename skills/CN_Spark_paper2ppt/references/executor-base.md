@@ -163,11 +163,12 @@ Before drawing each page, look up its entry in `page_charts` to decide which cha
 - **Template structure**: if templates exist, inherit the visual framework
 - **Content bounds**: use `spec_lock.md canvas.safe_margin`, `title_zone_height`, `footer_zone_height`, and any user-template `editableContentRegion` to center the content inside the actual writable box, not inside the full slide. Body shapes, images, tables, and text boxes must stay above the first footer/citation/bottom-banner/page-number protected element; if a table/list would enter that zone, split the slide or reduce row/gap spacing before export.
 - **Editable authoring only**: never solve layout instability by rasterizing a whole slide. `svg_output/*.svg` must be authored as SVG text, shapes, lines, charts, icons, and bounded source images. A full-canvas `<image id="slide-raster-image">` is forbidden because it exports to a non-editable PPT picture. The only full-slide bitmap exception is TechnicalRoute Version B, and normal execution must insert it through `_direct_image_slides.json` as a direct PPTX picture slide, not as an SVG page.
+- **TechnicalRoute page-count contract**: treat the user's requested page count as the regular/editable report-page target. TechnicalRoute Version B is always one extra direct picture reference page. Record `user_requested_page_count` / `requested_regular_page_count`; if the user asks for 18 pages, author 18 SVG pages and let `_direct_image_slides.json` add the Version B page so the exported PPTX has 19 slides.
 - **Main-agent ownership**: SVG generation must run in the main agent (not sub-agents) — pages share upstream context for cross-page visual continuity
 - **Generation rhythm**: lock global design context first, then generate pages sequentially in one continuous context. No batched groups (e.g., 5 at a time).
 - **Phased batch generation** (recommended):
   1. **Visual Construction Phase**: generate all SVG pages sequentially for visual consistency. Use layout judgment for chart marks during the draft. **MUST embed plot-area markers** per §3.1 below on every chart page — coordinate calibration is a post-generation step (see [`conditional-workflows/verify-charts.md`](../conditional-workflows/verify-charts.md)) that depends on these markers.
-  2. **Quality Check Gate**: run `python3 scripts/svg_quality_checker.py <project_path>` on `svg_output/`. Any `error` (banned features, full-slide raster images, viewBox mismatch, spec_lock drift, non-PPT-safe font, etc.) MUST be fixed on the offending page before proceeding — regenerate and re-check. Address `warning`s when straightforward. Do NOT defer to after `finalize_svg.py` — finalize rewrites SVG and masks some violations.
+  2. **Quality Check Gate**: run `python3 scripts/svg_quality_checker.py <project_path>` on `svg_output/`. Any `error` (banned features, full-slide raster images, viewBox mismatch, spec_lock drift, non-PPT-safe font, canvas overflow, text/shape overlap, text-box gap violations, English-dominant generated body text, missing TechnicalRoute A/B files, missing `image_gen.py` success metadata, invalid TechnicalRoute reference plan, missing direct AI slide manifest, or source image sizing problems) MUST be fixed on the offending page before proceeding — regenerate and re-check. Address `warning`s when straightforward. Do NOT defer to after `finalize_svg.py` — finalize rewrites SVG and masks some violations. Do not run `finalize_svg.py` or `svg_to_pptx.py` while this checker still reports any error.
   3. **Logic Construction Phase**: after SVGs pass the quality check, batch-generate speaker notes for narrative continuity.
 
 ### 3.0 Text Box Stability Contract
@@ -228,6 +229,11 @@ export.
 If text does not fit the declared box, reduce wording, add explicit line-break
 `<tspan>` rows, reduce font size within the ramp, or choose a larger slot. Do
 not allow text to extend outside the visible card/shape or beyond the slide.
+Visible content text must be semantically complete. Do not end a body text box,
+bottom banner, card explanation, or callout with dangling punctuation such as
+`,` / `，` / `、` / `；` / `：` or with an ellipsis. If the intended wording is a
+label fragment, mark it explicitly with `data-allow-fragment="true"`; otherwise
+finish the sentence or shorten it without leaving clipped syntax.
 
 Do not assign chrome-only roles such as `data-role="logo"`, `school`,
 `page-number`, `footer`, `citation`, or `reference` to ordinary titles,
@@ -248,6 +254,21 @@ font family, fill, and weight. Do not split a source title into a large title
 plus a differently colored or differently typed subtitle. Report type,
 presenter, advisor, institution, date, source, and DOI are metadata blocks below
 the title, not a second title fragment.
+
+Chinese output language gate: this skill produces Chinese academic decks by
+default. If the source package or user request is Chinese, every generated PPT
+text object must be Chinese. If the source paper is English, the cover must show
+a coherent Chinese translated paper title and may keep the original English
+paper title only as secondary/original-title metadata, marked with
+`data-role="paper-title-original"` or `data-paper-title-original="true"`. After
+the cover, generated slide titles, section labels, callouts, cards, bullets,
+explanations, bottom banners, and speaker-facing text must be Chinese. English
+is allowed only inside source figure pixels, formula variables, DOI/citation
+footers, journal names, author names, abbreviations such as HSR/OD/XGBoost/ALE,
+and explicitly marked original-title metadata. Do not leave body slide titles
+such as `Problem Definition`, `Research Background`, or `Method` in English;
+translate them before writing the SVG. `svg_quality_checker.py` treats
+English-dominant generated cover/body text as an export-blocking error.
 
 Content blocks must carry the standard external shadow unless the imported
 user template already provides an equivalent effect. Define the filter once per
@@ -510,6 +531,15 @@ Auto-split `notes/total.md` into per-page files in `notes/`.
 
 **Post-processing & Export** (same canonical pipeline as [shared-standards.md §5](shared-standards.md)):
 
+Pre-export hard gate: immediately before this block, rerun
+`python3 scripts/svg_quality_checker.py <project_path>`. Continue only when the
+checker exits successfully and reports no `error`. This final gate covers layout
+bounds, text-box containment, minimum 3pt text-box gaps, title semantic grouping,
+Chinese output language policy, formula rendering, source-image sizing,
+TechnicalRoute A/B completeness, and Version B `image_gen.py` success metadata.
+If it fails, fix the SVG or TechnicalRoute artifact and rerun the checker; do
+not export a PPTX from a failing project.
+
 ```bash
 # 1. Split speaker notes
 python3 scripts/total_md_split.py <project_path>
@@ -524,6 +554,13 @@ python3 scripts/finalize_svg.py <project_path>
 python3 scripts/svg_to_pptx.py <project_path>
 # Output:
 #   exports/<project_name>_<timestamp>.pptx           ← main native pptx
-#   backup/<timestamp>/<project_name>_svg.pptx        ← SVG snapshot
-#   backup/<timestamp>/svg_output/                    ← Executor SVG source backup
+#   exports/<project_name>_<timestamp>_quality_report.md
+#   exports/<project_name>_<timestamp>_speaker_notes.docx
+#   exports/<project_name>_<timestamp>_intermediate_artifacts.md/.json
 ```
+
+For academic CN_Spark projects, `<project_path>` must be the user-visible
+project folder. Do not place generated projects under `.codex/skills` or any
+skill installation directory; `svg_to_pptx.py` blocks that route so the user can
+inspect `design_spec.md`, `spec_lock.md`, `ppt_outline_cn.md`, `svg_output/`,
+`notes/`, `images/`, `technicalroute/`, QA reports, and exports together.

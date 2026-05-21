@@ -162,6 +162,150 @@ def _run_svg_quality_gate(
         print(f"  SVG quality report: {report_path}")
 
 
+def _project_inside_codex_skill(project_path: Path) -> bool:
+    parts = [part.lower() for part in project_path.resolve().parts]
+    return any(
+        parts[index] == ".codex" and index + 1 < len(parts) and parts[index + 1] == "skills"
+        for index in range(len(parts) - 1)
+    )
+
+
+def _project_has_academic_artifacts(project_path: Path) -> bool:
+    markers = [
+        project_path / "design_spec.md",
+        project_path / "spec_lock.md",
+        project_path / "ppt_outline_cn.md",
+        project_path / "outline" / "design_spec.md",
+        project_path / "outline" / "ppt_outline_cn.md",
+        project_path / "outline" / "pptoutline.md",
+    ]
+    return any(path.is_file() for path in markers)
+
+
+def _enforce_visible_project_artifacts(
+    project_path: Path,
+    *,
+    allow_skill_internal_project: bool,
+) -> None:
+    if not _project_has_academic_artifacts(project_path):
+        return
+
+    if _project_inside_codex_skill(project_path) and not allow_skill_internal_project:
+        print(
+            "Error: Academic CN_Spark project artifacts must not live under .codex/skills. "
+            "Create the project under the user's chosen output directory so design_spec.md, "
+            "spec_lock.md, svg_output/, notes/, technicalroute/, quality reports, and exports "
+            "remain visible and reviewable.",
+            file=sys.stderr,
+        )
+        print(f"  Project path: {project_path.resolve()}", file=sys.stderr)
+        sys.exit(1)
+
+    required_paths = [
+        project_path / "design_spec.md",
+        project_path / "spec_lock.md",
+        project_path / "ppt_outline_cn.md",
+        project_path / "svg_output",
+        project_path / "notes",
+    ]
+    missing = [path.name for path in required_paths if not path.exists()]
+    if missing:
+        print(
+            "Error: Academic CN_Spark project is missing visible intermediate artifacts: "
+            + ", ".join(missing),
+            file=sys.stderr,
+        )
+        print(
+            "Keep the full project tree beside the final PPTX instead of exporting only "
+            "traffic_group_report_*.pptx / quality_report.md / speaker_notes.docx.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+def _project_artifact_snapshot(project_path: Path) -> list[dict[str, object]]:
+    tracked = [
+        "design_spec.md",
+        "spec_lock.md",
+        "ppt_outline_cn.md",
+        "project.json",
+        "svg_output",
+        "svg_final",
+        "notes",
+        "images",
+        "images/formulas",
+        "technicalroute",
+        "exports",
+    ]
+    artifacts: list[dict[str, object]] = []
+    for rel in tracked:
+        path = project_path / rel
+        item: dict[str, object] = {
+            "path": str(path),
+            "relative_path": rel,
+            "exists": path.exists(),
+            "kind": "directory" if path.is_dir() else "file",
+        }
+        if path.is_dir():
+            item["file_count"] = sum(1 for child in path.rglob("*") if child.is_file())
+        elif path.is_file():
+            item["size_bytes"] = path.stat().st_size
+        artifacts.append(item)
+    return artifacts
+
+
+def _write_intermediate_artifact_manifest(
+    project_path: Path,
+    *,
+    primary_output: Path,
+    quality_report_path: Path,
+    notes_docx_path: Path | None,
+    direct_image_slides: list[dict],
+    verbose: bool,
+) -> None:
+    manifest_json = primary_output.parent / f"{primary_output.stem}_intermediate_artifacts.json"
+    manifest_md = primary_output.parent / f"{primary_output.stem}_intermediate_artifacts.md"
+    payload = {
+        "schema": "cn_spark_intermediate_artifact_manifest_v1",
+        "project_path": str(project_path.resolve()),
+        "pptx": str(primary_output.resolve()),
+        "quality_report": str(quality_report_path.resolve()),
+        "speaker_notes_docx": str(notes_docx_path.resolve()) if notes_docx_path else "",
+        "direct_image_slides": direct_image_slides,
+        "artifacts": _project_artifact_snapshot(project_path),
+    }
+    manifest_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    tree_lines = []
+    for item in payload["artifacts"]:
+        status = "OK" if item["exists"] else "MISSING"
+        suffix = ""
+        if item.get("file_count") is not None:
+            suffix = f" ({item['file_count']} files)"
+        elif item.get("size_bytes") is not None:
+            suffix = f" ({item['size_bytes']} bytes)"
+        tree_lines.append(f"- `{item['relative_path']}`: {status}{suffix}")
+    manifest_md.write_text(
+        "\n".join([
+            "# CN Spark Intermediate Artifacts",
+            "",
+            f"- Project: `{project_path.resolve()}`",
+            f"- PPTX: `{primary_output.resolve()}`",
+            f"- Quality report: `{quality_report_path.resolve()}`",
+            f"- Speaker notes DOCX: `{notes_docx_path.resolve() if notes_docx_path else 'not generated'}`",
+            f"- Direct image slides: `{len(direct_image_slides)}`",
+            "",
+            "## Project Tree",
+            "",
+            *tree_lines,
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    if verbose:
+        print(f"  Intermediate artifact manifest: {manifest_md}")
+
+
 def _load_direct_image_slides(project_path: Path, manifest_arg: str | None, *, verbose: bool) -> list[dict]:
     candidates: list[Path] = []
     if manifest_arg:
@@ -299,6 +443,9 @@ Recorded narration:
     parser.add_argument('-q', '--quiet', action='store_true', help='Quiet mode')
     parser.add_argument('--no-auto-repair-layout', action='store_true',
                         help='Disable conservative svg_output text-box repair before export quality gate')
+    parser.add_argument('--allow-skill-internal-project', action='store_true',
+                        help='Developer-only escape hatch: allow academic projects under .codex/skills. '
+                             'Normal CN_Spark runs must keep intermediate artifacts in the user project folder.')
     parser.add_argument('--direct-image-slides', type=str, default=None,
                         help='Optional JSON manifest for direct PPTX picture slides. Default: <project>/svg_output/_direct_image_slides.json when present.')
 
@@ -369,6 +516,10 @@ Recorded narration:
     if not project_path.exists():
         print(f"Error: Path does not exist: {project_path}")
         sys.exit(1)
+    _enforce_visible_project_artifacts(
+        project_path,
+        allow_skill_internal_project=args.allow_skill_internal_project,
+    )
 
     try:
         project_info = get_project_info(str(project_path))
@@ -464,11 +615,13 @@ Recorded narration:
     enable_notes = bool(args.embed_notes and not args.no_notes)
     export_notes_docx = not args.no_notes
     notes: dict[str, str] = {}
+    notes_docx_path: Path | None = None
     if enable_notes or export_notes_docx:
         notes = find_notes_files(project_path, ref_files)
     if export_notes_docx and notes:
         try:
             docx_path = write_notes_docx(project_path)
+            notes_docx_path = Path(docx_path)
             if verbose:
                 print(f"  Speaker notes DOCX: {docx_path}")
         except Exception as exc:
@@ -707,5 +860,15 @@ Recorded narration:
                         print(f"  [warn] svg_output backup skipped: {exc}")
             elif verbose:
                 print(f"  [info] svg_output/ not found, backup skipped")
+
+    if success and gen_native:
+        _write_intermediate_artifact_manifest(
+            project_path,
+            primary_output=native_path,
+            quality_report_path=quality_report_path,
+            notes_docx_path=notes_docx_path,
+            direct_image_slides=direct_image_slides,
+            verbose=verbose,
+        )
 
     sys.exit(0 if success else 1)

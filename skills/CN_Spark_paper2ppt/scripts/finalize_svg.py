@@ -72,7 +72,19 @@ def safe_print(text: str) -> None:
 
 
 _TECHNICALROUTE_TRIGGER_RE = re.compile(
-    r"technicalroute|technical_route|embed_technicalroute|route_ai|技术路线|全文技术路线|全文方法链条|研究框架",
+    r"technicalroute|technical_route|embed_technicalroute|route_ai|"
+    r"technical route|research workflow|method workflow|workflow|pipeline|"
+    r"技术路线|全文技术路线|全文方法链条|研究路线|研究框架|方法流程|论文流程|机制图|原理图|流程图",
+    re.IGNORECASE,
+)
+
+_TECHNICALROUTE_DISABLE_RE = re.compile(
+    r"technicalroute_required\s*[:=]\s*false|"
+    r"technical_route_required\s*[:=]\s*false|"
+    r"technicalroute\s*:\s*false|"
+    r"skip_technicalroute\s*[:=]\s*true|"
+    r"no_technicalroute\s*[:=]\s*true|"
+    r"不需要技术路线|无需技术路线|跳过技术路线|不生成技术路线",
     re.IGNORECASE,
 )
 
@@ -84,6 +96,9 @@ def _project_declares_technicalroute(project_dir: Path) -> bool:
         project_dir / "design_spec.md",
         project_dir / "spec_lock.md",
         project_dir / "ppt_outline_cn.md",
+        project_dir / "outline" / "design_spec.md",
+        project_dir / "outline" / "ppt_outline_cn.md",
+        project_dir / "outline" / "pptoutline.md",
         project_dir / "content.yaml",
         project_dir / "svg_output" / "_direct_image_slides.json",
     ]
@@ -93,6 +108,7 @@ def _project_declares_technicalroute(project_dir: Path) -> bool:
     svg_output = project_dir / "svg_output"
     if svg_output.is_dir():
         candidates.extend(sorted(svg_output.glob("*.svg"))[:60])
+    texts: list[str] = []
     for candidate in candidates:
         if not candidate.is_file():
             continue
@@ -100,8 +116,26 @@ def _project_declares_technicalroute(project_dir: Path) -> bool:
             text = candidate.read_text(encoding="utf-8-sig", errors="replace")
         except OSError:
             continue
+        texts.append(text)
         if _TECHNICALROUTE_TRIGGER_RE.search(text):
             return True
+    combined = "\n".join(texts)
+    academic_project_files = (
+        project_dir / "design_spec.md",
+        project_dir / "spec_lock.md",
+        project_dir / "ppt_outline_cn.md",
+        project_dir / "outline" / "design_spec.md",
+        project_dir / "outline" / "ppt_outline_cn.md",
+        project_dir / "outline" / "pptoutline.md",
+    )
+    if _TECHNICALROUTE_DISABLE_RE.search(combined) and not any(path.is_file() for path in academic_project_files):
+        return False
+    if any(path.is_file() for path in academic_project_files):
+        # New academic projects must pass Step 5.5 by default. Generated
+        # project files are not allowed to opt out by writing
+        # technicalroute_required:false / skip_technicalroute:true, because
+        # that was the main path that let agents bypass the Version A/B gate.
+        return True
     return False
 
 

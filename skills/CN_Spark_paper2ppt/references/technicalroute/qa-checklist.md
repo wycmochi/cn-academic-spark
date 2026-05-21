@@ -86,10 +86,13 @@ Compare Version B with selected `gallery_refs` and `style_refs`:
 ## Embedding QA
 
 - Version A and Version B are inserted into consecutive PPT pages.
+- Version B is a +1 reference page outside the user's requested page count. For example, `user_requested_page_count: 18` means 18 regular/editable SVG pages plus one direct Version B picture page, so the final PPTX has 19 slides.
 - Page titles are different and include the version meaning.
 - Both pages inherit parent footer, page number, bottom banner rules, and citation policy.
 - Both output paths are recorded in project assets or route `spec_lock.md`.
 - `_direct_image_slides.json` contains a `technicalroute_ai` entry whose `image_path` points to the Version B PNG; SVG wrappers for Version B are blocked by default and must not be used in production execution.
+- The `technicalroute_ai` manifest entry contains `page_count_policy: extra_reference_page_not_counted`, `counts_against_user_page_count: false`, and `page_count_delta: 1`.
+- `design_spec.md`, `spec_lock.md`, or `ppt_outline_cn.md` records `user_requested_page_count` / `requested_regular_page_count`, and deck QA verifies `final_pptx_slide_count = user_requested_page_count + technicalroute_ai_direct_picture_pages`.
 - `svg_to_pptx.py` reads `_direct_image_slides.json` and inserts the Version B PNG directly into the PPTX as a picture slide.
 - Final deck checklist marks both pages as TechnicalRoute pages.
 - Non-TechnicalRoute visual coverage rules do not mistakenly require extra images on these route pages.
@@ -122,6 +125,7 @@ python3 scripts/svg_quality_checker.py <project_path>/svg_final
 The gate must fail if any of the following is true:
 - a Version A editable TechnicalRoute page exists without a consecutive Version B AI reference page;
 - `_direct_image_slides.json` is missing, lacks a `technicalroute_ai` entry, or points to a missing/low-resolution PNG;
+- `_direct_image_slides.json` lacks the Version B page-count policy, or the regular SVG page count no longer matches the user's requested page count;
 - the AI image href is not `data:image/png;base64,...`, has invalid base64, or does not decode to PNG bytes;
 - `run-ai-variant` failed, was skipped, silently dropped usable `style_refs`, or used `Custom_gallery` before the seed-site literature search was completed.
 

@@ -1,0 +1,167 @@
+[
+  {
+    "label": "全文技术路线",
+    "articleTitle": "Respiratory viral infections prime accelerated lung cancer growth",
+    "journalORmeeting": "Cell",
+    "year": 2026,
+    "authors": "Qian W, Wei X, Barros A J, et al.",
+    "plotSummary": "refer to this option when an article needs a whole-paper technical route, experiment pipeline, data-processing flow, or sequential research workflow.",
+    "agentKeywords": [
+      "Technical roadmap",
+      "Sequential workflow",
+      "Research pipeline",
+      "技术路线",
+      "流程图"
+    ]
+  },
+  {
+    "label": "实验流程图",
+    "articleTitle": "Transplantation of encapsulated mitochondria alleviates dysfunction in mitochondrial and Parkinson’s disease models",
+    "journalORmeeting": "Cell",
+    "year": 2026,
+    "authors": "Du S, Long Q, Zhou Y, et al.",
+    "plotSummary": "refer to this option when an article needs a whole-paper technical route, experiment pipeline, data-processing flow, or sequential research workflow.",
+    "agentKeywords": [
+      "Technical roadmap",
+      "Sequential workflow",
+      "Research pipeline",
+      "技术路线",
+      "流程图"
+    ]
+  },
+  {
+    "label": "文献综述方法总结",
+    "articleTitle": "Spatiotemporal omics for biology and medicine",
+    "journalORmeeting": "Cell",
+    "year": 2024,
+    "authors": "Liu L, Chen A, Li Y, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述方法总结2",
+    "articleTitle": "Spatiotemporal omics for biology and medicine",
+    "journalORmeeting": "Cell",
+    "year": 2024,
+    "authors": "Liu L, Chen A, Li Y, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述结果总结",
+    "articleTitle": "Spatiotemporal omics for biology and medicine",
+    "journalORmeeting": "Cell",
+    "year": 2024,
+    "authors": "Liu L, Chen A, Li Y, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述结果总结2",
+    "articleTitle": "Spatiotemporal omics for biology and medicine",
+    "journalORmeeting": "Cell",
+    "year": 2024,
+    "authors": "Liu L, Chen A, Li Y, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述结果总结3",
+    "articleTitle": "Spatiotemporal omics for biology and medicine",
+    "journalORmeeting": "Cell",
+    "year": 2024,
+    "authors": "Liu L, Chen A, Li Y, et al.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "药物作用机制图",
+    "articleTitle": "Navigating the clinical progress of antibody-drug conjugates: Emerging opportunities and remaining challenges",
+    "journalORmeeting": "Cell",
+    "year": 2026,
+    "authors": "Conilh L, Metrangolo V, Crescioli S, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "药物作用机制图2",
+    "articleTitle": "Navigating the clinical progress of antibody-drug conjugates: Emerging opportunities and remaining challenges",
+    "journalORmeeting": "Cell",
+    "year": 2026,
+    "authors": "Conilh L, Metrangolo V, Crescioli S, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "药物作用机制图3",
+    "articleTitle": "Navigating the clinical progress of antibody-drug conjugates: Emerging opportunities and remaining challenges",
+    "journalORmeeting": "Cell",
+    "year": 2026,
+    "authors": "Conilh L, Metrangolo V, Crescioli S, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "进化演变图",
+    "articleTitle": "Spatiotemporal omics for biology and medicine",
+    "journalORmeeting": "Cell",
+    "year": 2024,
+    "authors": "Liu L, Chen A, Li Y, et al.",
+    "plotSummary": "refer to this option when an article needs to summarize literature topics, result categories, feature groups, empirical findings, or comparative evidence.",
+    "agentKeywords": [
+      "Result summary",
+      "Topic statistics",
+      "Evidence synthesis",
+      "结果总结",
+      "统计图"
+    ]
+  }
+]

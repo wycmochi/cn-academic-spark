@@ -1,0 +1,77 @@
+[
+  {
+    "label": "实验技术路线",
+    "articleTitle": "Adaptability evaluation of rice varieties for rainfed dryland cultivation in mountainous areas and GIS-based prediction of production potentials",
+    "journalORmeeting": "Smart Agricultural Technology",
+    "year": 2026,
+    "authors": "Gu X, Li P, Li D, et al.",
+    "plotSummary": "refer to this option when an article needs a whole-paper technical route, experiment pipeline, data-processing flow, or sequential research workflow.",
+    "agentKeywords": [
+      "Technical roadmap",
+      "Sequential workflow",
+      "Research pipeline",
+      "技术路线",
+      "流程图"
+    ]
+  },
+  {
+    "label": "技术路线-涉及机器学习",
+    "articleTitle": "Optimization of maize–soybean intercropping in the North China plain: XGBoost-driven integrated agronomic practices pathways",
+    "journalORmeeting": "Agricultural Systems",
+    "year": 2026,
+    "authors": "Yang S, Li H, Liu Q, et al.",
+    "plotSummary": "refer to this option when an article needs a whole-paper technical route, experiment pipeline, data-processing flow, or sequential research workflow.",
+    "agentKeywords": [
+      "Technical roadmap",
+      "Sequential workflow",
+      "Research pipeline",
+      "技术路线",
+      "流程图"
+    ]
+  },
+  {
+    "label": "文献主题数量统计-1",
+    "articleTitle": "Climate change mitigation in rice fields: A global synthesis of agronomic interventions",
+    "journalORmeeting": "Journal of Environmental Management",
+    "year": 2026,
+    "authors": "Johnson J M, Radanielson A M, Saito K.",
+    "plotSummary": "refer to this option when an article needs to summarize literature topics, result categories, feature groups, empirical findings, or comparative evidence.",
+    "agentKeywords": [
+      "Result summary",
+      "Topic statistics",
+      "Evidence synthesis",
+      "结果总结",
+      "统计图"
+    ]
+  },
+  {
+    "label": "文献主题数量统计-2",
+    "articleTitle": "Climate change mitigation in rice fields: A global synthesis of agronomic interventions",
+    "journalORmeeting": "Journal of Environmental Management",
+    "year": 2026,
+    "authors": "Johnson J M, Radanielson A M, Saito K.",
+    "plotSummary": "refer to this option when an article needs to summarize literature topics, result categories, feature groups, empirical findings, or comparative evidence.",
+    "agentKeywords": [
+      "Result summary",
+      "Topic statistics",
+      "Evidence synthesis",
+      "结果总结",
+      "统计图"
+    ]
+  },
+  {
+    "label": "研究区域与数据来源",
+    "articleTitle": "Optimization of maize–soybean intercropping in the North China plain: XGBoost-driven integrated agronomic practices pathways",
+    "journalORmeeting": "Agricultural Systems",
+    "year": 2026,
+    "authors": "Yang S, Li H, Liu Q, et al.",
+    "plotSummary": "refer to this option when an article needs to explain the study area, data sources, variables, or research objects before modeling.",
+    "agentKeywords": [
+      "Study area",
+      "Data source",
+      "Research object",
+      "研究区域",
+      "数据来源"
+    ]
+  }
+]

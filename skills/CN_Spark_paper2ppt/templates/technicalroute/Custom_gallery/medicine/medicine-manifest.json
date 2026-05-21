@@ -1,0 +1,152 @@
+[
+  {
+    "label": "作用原理图",
+    "articleTitle": "Hallmarks of aging: An expanding universe",
+    "journalORmeeting": "Cell",
+    "year": 2023,
+    "authors": "López-Otín C, Blasco M A, Partridge L, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "作用机制图",
+    "articleTitle": "Hallmarks of cancer stemness",
+    "journalORmeeting": "Cell Stem Cell",
+    "year": 2024,
+    "authors": "Loh J J, Ma S.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "文献综述方法总结图",
+    "articleTitle": "Hallmarks of cancer stemness",
+    "journalORmeeting": "Cell Stem Cell",
+    "year": 2024,
+    "authors": "Loh J J, Ma S.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述概念总结图",
+    "articleTitle": "Hallmarks of cancer stemness",
+    "journalORmeeting": "Cell Stem Cell",
+    "year": 2024,
+    "authors": "Loh J J, Ma S.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "文献综述概念总结图2",
+    "articleTitle": "Hallmarks of cancer stemness",
+    "journalORmeeting": "Cell Stem Cell",
+    "year": 2024,
+    "authors": "Loh J J, Ma S.",
+    "plotSummary": "refer to this option when the material is a literature review or requires a survey-style synthesis of research themes, methods, evidence, references, or historical development.",
+    "agentKeywords": [
+      "Review article",
+      "Survey synthesis",
+      "Literature structure",
+      "文献综述",
+      "研究总结"
+    ]
+  },
+  {
+    "label": "概念阐述图",
+    "articleTitle": "Hallmarks of aging: An expanding universe",
+    "journalORmeeting": "Cell",
+    "year": 2023,
+    "authors": "López-Otín C, Blasco M A, Partridge L, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "细胞特征总结图",
+    "articleTitle": "Hallmarks of cancer stemness",
+    "journalORmeeting": "Cell Stem Cell",
+    "year": 2024,
+    "authors": "Loh J J, Ma S.",
+    "plotSummary": "refer to this option when an article needs to summarize literature topics, result categories, feature groups, empirical findings, or comparative evidence.",
+    "agentKeywords": [
+      "Result summary",
+      "Topic statistics",
+      "Evidence synthesis",
+      "结果总结",
+      "统计图"
+    ]
+  },
+  {
+    "label": "结果总结图",
+    "articleTitle": "Hallmarks of aging: An expanding universe",
+    "journalORmeeting": "Cell",
+    "year": 2023,
+    "authors": "López-Otín C, Blasco M A, Partridge L, et al.",
+    "plotSummary": "refer to this option when an article needs to summarize literature topics, result categories, feature groups, empirical findings, or comparative evidence.",
+    "agentKeywords": [
+      "Result summary",
+      "Topic statistics",
+      "Evidence synthesis",
+      "结果总结",
+      "统计图"
+    ]
+  },
+  {
+    "label": "过程机制图1",
+    "articleTitle": "Hallmarks of aging: An expanding universe",
+    "journalORmeeting": "Cell",
+    "year": 2023,
+    "authors": "López-Otín C, Blasco M A, Partridge L, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  },
+  {
+    "label": "过程机制图2",
+    "articleTitle": "Hallmarks of aging: An expanding universe",
+    "journalORmeeting": "Cell",
+    "year": 2023,
+    "authors": "López-Otín C, Blasco M A, Partridge L, et al.",
+    "plotSummary": "refer to this option when an article needs a mechanism diagram, model-principle diagram, conceptual mechanism, system architecture, or causal/process explanation.",
+    "agentKeywords": [
+      "Mechanism diagram",
+      "Model principle",
+      "Conceptual framework",
+      "机制图",
+      "原理图"
+    ]
+  }
+]

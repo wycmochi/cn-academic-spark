@@ -75,8 +75,10 @@ target_pages:
     target_bbox: "x,y,w,h"
   version_b:
     title: ""
-    svg_path: ""
-    target_bbox: "x,y,w,h"
+    direct_image_path: ""
+    direct_slide_manifest: ""
+    after_svg_stem: ""
+    page_count_policy: "extra_reference_page_not_counted"
 bottom_banner_text: ""
 citation_footer: ""
 ```
@@ -84,6 +86,8 @@ citation_footer: ""
 Rules:
 - `target_pages.version_a` and `target_pages.version_b` represent consecutive PPT pages.
 - Do not use one page for both versions.
+- `target_pages.version_b` is a direct full-slide PNG picture page, not an SVG page. It is inserted through `_direct_image_slides.json` immediately after Version A.
+- Version B is an extra reference page outside the user's requested page count. If `user_requested_page_count: 18`, the regular editable SVG page count stays 18 and the final PPTX contains 19 slides after Version B insertion.
 - Page titles follow the main SKILL title rule unless the page is a section divider or appendix.
 - `citation_footer` is inherited from the parent academic deck when the diagram uses paper evidence or cited third-party concepts.
 
