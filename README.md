@@ -136,7 +136,7 @@ cp -R skills/CN_Spark_paper2ppt ~/.claude/skills/
 - 课程报告、政策报告、案例分析。
 - 用户提供的 PPTX 模板。
 
-### Key Rules Enforced
+### 关键约束
 
 - 输出必须是真实可编辑 `.pptx`，不是 Markdown 大纲，也不是整页截图。
 - 主流程是 `Source -> Outline -> Design Spec -> SVG -> DrawingML PPTX`。
@@ -179,6 +179,8 @@ CN_Academic_PPT_Spark_Skill/
                 |-- templates/
                 `-- Custom_gallery/
 ```
+
+### workflow示例
 
 1. 读取用户材料，将 PDF / Word / Markdown / PPTX / Excel 等来源转换为项目化 Markdown 和资源清单。
 2. 判断汇报类型与论文类型，生成 `ppt_outline_cn.md`、`design_spec.md` 和 `spec_lock.md`。
@@ -248,18 +250,6 @@ projects/<project_name>/
    ├─ <project_name>_<timestamp>.pptx
    └─ <project_name>_speaker_notes.docx
 ```
-
-## 关键约束
-
-- 输出目标是可编辑 `.pptx`，不是整套截图。
-- 主流程为 `Source -> Outline -> Design Spec -> SVG -> DrawingML PPTX`。
-- TechnicalRoute AI 生图版必须独立于可编辑 SVG 版本，不能参考 Version A、`pipeline_with_stages.svg`、PPTX、SVG 模板或导出的 slide 截图。
-- TechnicalRoute AI 生图版必须先用学术检索参考图；检索完成且无可用图时，才允许使用 Custom_gallery 兜底。
-- TechnicalRoute AI 生图版是额外参考页，不计入用户指定页数；例如用户要求 18 页时，最终可为 18 页常规汇报页 + 1 页 AI 参考图页。
-- 演讲稿 DOCX 是独立文件，PPTX 内不嵌入 notes 包；每个讲稿段落默认带 `第 N 页：` 前缀。
-- 论文内关键图、表、公式应尽量进入正文页，并保持图片等比例缩放；同页多图尽量尺寸一致。
-- 除文献引用和页码外，正文可见字体应不小于 12pt。
-
 
 ## 致谢
 
